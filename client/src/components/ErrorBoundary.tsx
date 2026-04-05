@@ -4,13 +4,14 @@ interface State {
   hasError: boolean;
 }
 
-export default class ErrorBoundary extends React.Component
-  { children: React.ReactNode },
-  State
-> {
+interface Props {
+  children: React.ReactNode;
+}
+
+export default class ErrorBoundary extends React.Component<Props, State> {
   state: State = { hasError: false };
 
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(): State {
     return { hasError: true };
   }
 
@@ -19,7 +20,9 @@ export default class ErrorBoundary extends React.Component
       return (
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Algo deu errado.</h1>
+            <h1 className="text-2xl font-bold text-red-600">
+              Algo deu errado.
+            </h1>
             <button
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
               onClick={() => this.setState({ hasError: false })}
