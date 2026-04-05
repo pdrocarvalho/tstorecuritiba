@@ -1,0 +1,57 @@
+version: "3.9"
+
+# =============================================================================
+# SERVIÇOS
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Banco de dados MySQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: tstore_estoque
+      MYSQL_USER: tstore_user
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tstore_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Aplicação Node.js
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://tstore_user:${MYSQL_PASSWORD:-tstore_password}@db:3306/tstore_estoque
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_SHEETS_API_KEY: ${GOOGLE_SHEETS_API_KEY}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+
+volumes:
+  mysql_data:
+    driver: local

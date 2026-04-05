@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+
+# Variáveis de ambiente — NUNCA subir para o GitHub
+.env
+.env.local
+.env.production
+
+# Banco de dados local
+*.db
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Sistema operacional Windows
+Thumbs.db
+Desktop.ini
+
+# Mac (se colaborar com alguém de Mac)
+.DS_Store
+
+# Editor — configurações pessoais não vão para o repo
+.vscode/settings.json
+.idea/
+
+# Cobertura de testes
+coverage/
