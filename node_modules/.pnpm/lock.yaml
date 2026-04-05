@@ -14,6 +14,9 @@ importers:
       '@trpc/server':
         specifier: ^11.0.0
         version: 11.16.0(typescript@5.9.3)
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
       drizzle-orm:
         specifier: ^0.30.0
         version: 0.30.10(@types/react@18.3.28)(mysql2@3.20.0(@types/node@22.19.17))
@@ -36,6 +39,9 @@ importers:
         specifier: ^3.22.0
         version: 3.25.76
     devDependencies:
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
       '@types/express':
         specifier: ^4.17.0
         version: 4.17.25
@@ -61,7 +67,7 @@ importers:
         specifier: ^10.4.0
         version: 10.4.27(postcss@8.5.8)
       drizzle-kit:
-        specifier: ^0.20.0
+        specifier: 0.20.18
         version: 0.20.18
       eslint:
         specifier: ^8.57.0
@@ -992,6 +998,9 @@ packages:
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
 
+  '@types/cors@2.8.19':
+    resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
+
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
@@ -1282,6 +1291,10 @@ packages:
   copy-anything@4.0.5:
     resolution: {integrity: sha512-7Vv6asjS4gMOuILabD3l739tsaxFQmC+a7pLZm02zyvs8p977bL3zEgq3yDk5rn9B0PbYgIv++jmHcuUab4RhA==}
     engines: {node: '>=18'}
+
+  cors@2.8.6:
+    resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
+    engines: {node: '>= 0.10'}
 
   crc-32@1.2.2:
     resolution: {integrity: sha512-ROmzCKrTnOwybPcJApAA6WBWij23HVfGVNKqqrZpuyZOHqK2CwHSvpGuyt/UNNvaIjEd8X5IFGp4Mh+Ie1IHJQ==}
@@ -3123,6 +3136,10 @@ snapshots:
     dependencies:
       '@types/node': 22.19.17
 
+  '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 22.19.17
+
   '@types/estree@1.0.8': {}
 
   '@types/express-serve-static-core@4.19.8':
@@ -3435,6 +3452,11 @@ snapshots:
   copy-anything@4.0.5:
     dependencies:
       is-what: 5.5.0
+
+  cors@2.8.6:
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
 
   crc-32@1.2.2: {}
 

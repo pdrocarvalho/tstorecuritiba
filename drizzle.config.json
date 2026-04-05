@@ -1,0 +1,8 @@
+{
+  "schema": "./drizzle/schema.ts",
+  "out": "./drizzle/migrations",
+  "driver": "mysql2",
+  "dbCredentials": {
+    "uri": "mysql://tstore_user:tstore_password@localhost:3306/tstore_estoque"
+  }
+}
