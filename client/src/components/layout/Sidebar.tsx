@@ -125,18 +125,18 @@ export default function Sidebar() {
                 {isExpanded && (
                   <div className="mt-2 ml-4 space-y-1 border-l-2 border-gray-200 pl-4">
                     {menu.submenu.map((item) => (
-                      <Link key={item.path} href={item.path}>
-                        <a
-                          className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
-                            isActive(item.path)
-                              ? "bg-blue-100 text-blue-600 font-medium"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                          onClick={() => setIsMobileOpen(false)}
-                        >
-                          {item.label}
-                        </a>
-                      </Link>
+                      <Link
+  key={item.path}
+  href={item.path}
+  className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
+    isActive(item.path)
+      ? "bg-blue-100 text-blue-600 font-medium"
+      : "text-gray-700 hover:bg-gray-100"
+  }`}
+  onClick={() => setIsMobileOpen(false)}
+>
+  {item.label}
+</Link>
                     ))}
                   </div>
                 )}
