@@ -7,7 +7,8 @@
  * Para usar OAuth2 em produção, substitua o transport por OAuth2.
  */
 
-import nodemailer from "nodemailer";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nodemailer = require("nodemailer");
 import type { EmailPayload } from "../engines/notification.engine";
 
 // =============================================================================

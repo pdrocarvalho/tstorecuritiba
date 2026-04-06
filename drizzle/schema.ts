@@ -114,3 +114,11 @@ export const syncLogs = pgTable("sync_logs", {
 
 export type SyncLog = typeof syncLogs.$inferSelect;
 export type InsertSyncLog = typeof syncLogs.$inferInsert;
+export type OrderStatus = "Faturado" | "Previsto" | "Chegou";
+export type NotificationStatus =
+  | "PENDING_FATURADO"
+  | "PENDING_PREVISTO"
+  | "PENDING_CHEGOU"
+  | "SENT_FATURADO"
+  | "SENT_PREVISTO"
+  | "SENT_CHEGOU";
