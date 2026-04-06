@@ -1,11 +1,4 @@
 import { createTRPCReact } from "@trpc/react-query";
-
-export interface AppRouter {
-  notifications: {
-    getPending: {
-      query: () => Promise<any[]>;
-    };
-  };
-}
+import type { AppRouter } from "../../../server/routers/index";
 
 export const trpc = createTRPCReact<AppRouter>();
