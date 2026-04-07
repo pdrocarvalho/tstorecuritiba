@@ -7,6 +7,9 @@ interface User {
   role: string;
 }
 
+// NOVA LINHA: Variável inteligente para a API
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +21,8 @@ export function useAuth() {
       return;
     }
 
-    fetch("http://localhost:3000/api/auth/me", {
+    // ALTERADO: Usa a variável API_URL
+    fetch(`${API_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

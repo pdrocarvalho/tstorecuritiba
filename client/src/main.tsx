@@ -9,10 +9,14 @@ import App from "./App";
 
 const queryClient = new QueryClient();
 
+// NOVA LINHA: Lê a variável da Vercel ou usa o localhost por defeito
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "http://localhost:3000/trpc",
+      // ALTERADO: Usa a variável API_URL em vez do texto fixo
+      url: `${API_URL}/trpc`,
     }),
   ],
 });
