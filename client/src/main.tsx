@@ -9,13 +9,15 @@ import App from "./App";
 
 const queryClient = new QueryClient();
 
-// NOVA LINHA: Lê a variável da Vercel ou usa o localhost por defeito
+// Lógica para detectar a URL da API
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+// LOG DE DEPURAÇÃO: Ajuda-nos a ver no F12 qual URL o sistema carregou
+console.log("🚀 Sistema T Store iniciado com API em:", API_URL);
 
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      // ALTERADO: Usa a variável API_URL em vez do texto fixo
       url: `${API_URL}/trpc`,
     }),
   ],

@@ -26,12 +26,23 @@ interface LoginResponse {
   role: string;
 }
 
+// NOVA LINHA: Adicionamos a variável de ambiente aqui
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
 async function loginRequest(credentials: LoginFormState): Promise<LoginResponse> {
-  const response = await fetch("http://localhost:3000/api/auth/login", {
+  // ALTERADO: Usamos a variável API_URL
+  const response = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(credentials),
   });
+
+  if (!response.ok) {
+    throw new Error("Credenciais inválidas.");
+  }
+
+  return response.json();
+}
 
   if (!response.ok) {
     throw new Error("Credenciais inválidas.");
