@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { router, publicProcedure } from "./_core/trpc";
+import { appRouter } from "./routers"; // <-- A MÁGICA ESTÁ AQUI! Importamos as rotas reais
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,21 +12,23 @@ app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
+// Utilizadores em memória (Apenas para fase de testes)
 const TEST_USERS = [
   { id: 1, email: "admin@tstore.com", password: "admin123", role: "admin", name: "Admin" },
   { id: 2, email: "consultor@tstore.com", password: "consultor123", role: "user", name: "Consultor" },
 ];
 
-// Health check
+// Health check (Para o Render saber que estamos online)
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Login
+// Endpoint de Login
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const user = TEST_USERS.find((u) => u.email === email && u.password === password);
   if (!user) return res.status(401).json({ message: "Credenciais inválidas." });
+  
   const token = jwt.sign(
     { id: user.id, email: user.email, role: user.role, name: user.name },
     JWT_SECRET,
@@ -35,7 +37,7 @@ app.post("/api/auth/login", (req, res) => {
   return res.json({ token, role: user.role, name: user.name });
 });
 
-// Auth me
+// Endpoint de Validação de Sessão (Me)
 app.get("/api/auth/me", (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: "Não autenticado." });
@@ -48,28 +50,10 @@ app.get("/api/auth/me", (req, res) => {
   }
 });
 
-// tRPC router
-const appRouter = router({
-  notifications: router({
-    getPending: publicProcedure.query(async () => {
-      return [];
-    }),
-  }),
-  admin: router({
-    getConfig: publicProcedure.query(async () => {
-      return null;
-    }),
-    configSheets: publicProcedure.mutation(async () => {
-      return { success: true };
-    }),
-    syncNow: publicProcedure.mutation(async () => {
-      return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0 };
-    }),
-  }),
-});
-
+// Exporta o tipo para o Frontend saber quais rotas existem
 export type AppRouter = typeof appRouter;
 
+// Regista as rotas reais do tRPC no Express
 app.use(
   "/trpc",
   createExpressMiddleware({
@@ -78,5 +62,5 @@ app.use(
 );
 
 app.listen(PORT, () => {
-  console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
+  console.log(`✅ Servidor rodando na porta ${PORT}`);
 });
