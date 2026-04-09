@@ -88,11 +88,17 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await logoutMutation.mutateAsync();
+      
+      // A CORREÇÃO: Limpar o armazenamento antes de sair!
+      localStorage.removeItem("token");
+      localStorage.removeItem("userRole");
+      
       toast.success("Logout realizado com sucesso.");
       window.location.href = ROUTES.home;
     } catch {
-      // Como fallback de segurança, limpamos o local storage e forçamos a saída
+      // Fallback
       localStorage.removeItem("token");
+      localStorage.removeItem("userRole");
       window.location.href = ROUTES.home;
     }
   };

@@ -1,67 +1,45 @@
 /**
  * client/src/pages/Login.tsx
- *
- * Tela de login com autenticação JWT.
- * Armazena o token no localStorage e redireciona para o dashboard.
  */
-
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ROUTES } from "@/constants";
+import { GoogleLogin } from "@react-oauth/google";
 
-interface LoginFormState {
-  email: string;
-  password: string;
-}
-
-interface LoginResponse {
-  token: string;
-  role: string;
-}
-
-// Lemos a variável da Vercel
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-async function loginRequest(credentials: LoginFormState): Promise<LoginResponse> {
-  const response = await fetch(`${API_URL}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(credentials),
-  });
-
-  if (!response.ok) {
-    throw new Error("Credenciais inválidas.");
-  }
-
-  return response.json();
-}
-
 export default function Login() {
-  const [form, setForm] = useState<LoginFormState>({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [, setLocation] = useLocation();
 
-  const handleChange = (field: keyof LoginFormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Função que corre quando o Google aprova o utilizador
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     setLoading(true);
-
     try {
-      const { token, role } = await loginRequest(form);
-      localStorage.setItem("token", token);
-      localStorage.setItem("userRole", role);
-      toast.success("Login realizado com sucesso!");
+      // Enviamos a chave que o Google nos deu para o NOSSO Backend validar
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: credentialResponse.credential }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Erro de autenticação");
+      }
+
+      const data = await res.json();
+      
+      // Guardamos o nosso token e entramos no sistema
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("userRole", data.role);
+      toast.success(`Bem-vindo, ${data.name.split(" ")[0]}!`);
       setLocation(ROUTES.dashboard);
-    } catch (error) {
-      toast.error("Erro ao fazer login. Verifique suas credenciais.");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
     }
@@ -69,73 +47,36 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-      <Card className="w-full max-w-md p-8 shadow-lg">
+      <Card className="w-full max-w-md p-8 shadow-lg flex flex-col items-center animate-in zoom-in-95 duration-500">
+        
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">ESTOQUE</h1>
-          <p className="text-gray-500 mt-1">T Store Curitiba</p>
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">ESTOQUE</h1>
+          <p className="text-sm font-bold text-blue-600 mt-1 uppercase tracking-widest">T Store Curitiba</p>
         </div>
 
-        {/* Formulário */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700 mb-1 block">
-              E-mail
-            </span>
-            <Input
-              type="email"
-              value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              placeholder="seu@email.com"
-              required
-              disabled={loading}
-              autoComplete="email"
+        {loading ? (
+          <div className="flex flex-col items-center py-6">
+            <Loader2 className="animate-spin text-blue-600 w-10 h-10 mb-4" />
+            <p className="text-gray-600 font-medium">Validando acessos...</p>
+          </div>
+        ) : (
+          <div className="w-full flex flex-col items-center py-2">
+            <p className="text-gray-500 text-sm mb-6 text-center">
+              Faça login com a sua conta autorizada para aceder ao sistema.
+            </p>
+            
+            {/* O Mágico Botão do Google */}
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                toast.error("O login com o Google falhou ou foi cancelado.");
+              }}
+              useOneTap
+              shape="pill"
+              theme="filled_blue"
+              size="large"
             />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700 mb-1 block">
-              Senha
-            </span>
-            <Input
-              type="password"
-              value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
-              placeholder="••••••••"
-              required
-              disabled={loading}
-              autoComplete="current-password"
-            />
-          </label>
-
-          <Button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin mr-2 w-4 h-4" />
-                Entrando...
-              </>
-            ) : (
-              "Entrar"
-            )}
-          </Button>
-        </form>
-
-        {/* Credenciais de teste — remover em produção */}
-        {process.env.NODE_ENV !== "production" && (
-          <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-xs font-semibold text-amber-800 mb-2">
-              🔑 Credenciais de Teste
-            </p>
-            <p className="text-xs text-amber-700">
-              Admin: admin@tstore.com / admin123
-            </p>
-            <p className="text-xs text-amber-700">
-              Consultor: consultor@tstore.com / consultor123
-            </p>
           </div>
         )}
       </Card>
