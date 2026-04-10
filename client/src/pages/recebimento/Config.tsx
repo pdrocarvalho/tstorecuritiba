@@ -1,7 +1,5 @@
 /**
  * client/src/pages/recebimento/Config.tsx
- *
- * Configuração da integração com Google Sheets e sincronização manual.
  */
 
 import { useState } from "react";
@@ -42,8 +40,9 @@ export default function RecebimentoConfig() {
       toast.success("Configuração salva com sucesso!");
       setSheetsUrl("");
       configQuery.refetch();
-    } catch {
-      toast.error("Erro ao salvar configuração. Tente novamente.");
+    } catch (error: any) {
+      // ⚠️ A MÁGICA ESTÁ AQUI: Vai exibir o erro real!
+      toast.error(error.message || "Erro ao salvar configuração.");
     }
   };
 
@@ -51,8 +50,8 @@ export default function RecebimentoConfig() {
     try {
       await syncMutation.mutateAsync();
       toast.success("Sincronização concluída!");
-    } catch {
-      toast.error("Erro ao sincronizar. Verifique a configuração do Sheets.");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao sincronizar.");
     }
   };
 

@@ -2,18 +2,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, like } from "drizzle-orm";
 import {
-  users,
-  consultores,
-  clientes,
-  produtos,
-  pedidosRastreio,
-  syncLogs,
-  googleSheetsConfig,
-  syncHistory,
-  type InsertUser,
-  type InsertProduto,
-  type InsertPedidoRastreio,
-  type InsertSyncLog,
+  users, consultores, clientes, produtos, pedidosRastreio,
+  syncLogs, googleSheetsConfig, syncHistory,
+  type InsertUser, type InsertProduto, type InsertPedidoRastreio, type InsertSyncLog,
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -25,11 +16,16 @@ export async function getDb() {
     return null;
   }
   try {
-    // ⚠️ MÁGICA DA CONEXÃO: Supabase e Render exigem SSL! 
-    const isSupabase = process.env.DATABASE_URL.includes("supabase");
+    // Limpa parâmetros extras (como sslmode) para o Render não dar conflito com o código
+    let connString = process.env.DATABASE_URL;
+    if (connString.includes("?")) {
+      connString = connString.split("?")[0];
+    }
+    
+    const isSupabase = connString.includes("supabase");
     
     const pool = new Pool({ 
-      connectionString: process.env.DATABASE_URL,
+      connectionString: connString,
       ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
     });
     _db = drizzle(pool);
@@ -113,13 +109,18 @@ export async function getGoogleSheetsConfig() {
 
 export async function saveGoogleSheetsConfig(sheetsUrl: string, configuredBy: number): Promise<boolean> {
   const db = await requireDb("sheetsConfig");
-  const existing = await getGoogleSheetsConfig();
-  if (existing) {
-    await db.update(googleSheetsConfig).set({ sheetsUrl }).where(eq(googleSheetsConfig.id, existing.id));
-  } else {
-    await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy });
+  try {
+    const existing = await getGoogleSheetsConfig();
+    if (existing) {
+      await db.update(googleSheetsConfig).set({ sheetsUrl }).where(eq(googleSheetsConfig.id, existing.id));
+    } else {
+      await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy });
+    }
+    return true;
+  } catch (error: any) {
+    console.error("[DB] Erro ao salvar configuração do Sheets:", error);
+    throw new Error(error.message);
   }
-  return true;
 }
 
 export async function recordSyncHistory(params: {
