@@ -5,6 +5,7 @@
  */
 
 import { useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { Printer, Upload, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import { ROUTES } from "@/constants";
 import type { Pedido, ProdutosFiltros } from "@/types";
 
 // =============================================================================
@@ -78,6 +80,7 @@ export default function RecebimentoProdutos() {
   const [filtros, setFiltros] = useState<ProdutosFiltros>(INITIAL_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
+  const [, setLocation] = useLocation();
 
   const { data: pedidos = [] } = trpc.notifications.getPending.useQuery();
   const produtosFiltrados = filtraPedidos(pedidos as Pedido[], filtros);
@@ -90,11 +93,9 @@ export default function RecebimentoProdutos() {
     if (tableRef.current) printTable(tableRef.current.outerHTML);
   };
 
+  // Redireciona para a página de configurações corretamente
   const handleVincularSheets = () => {
-    const url = prompt("Cole a URL do Google Sheets:");
-    if (!url) return;
-    // TODO: chamar trpc.admin.configSheets.mutate({ sheetsUrl: url })
-    toast.info("Funcionalidade em breve.");
+    setLocation(ROUTES.recebimento.config);
   };
 
   return (
