@@ -25,10 +25,16 @@ export async function getDb() {
     return null;
   }
   try {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    // ⚠️ MÁGICA DA CONEXÃO: Supabase e Render exigem SSL! 
+    const isSupabase = process.env.DATABASE_URL.includes("supabase");
+    
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
+    });
     _db = drizzle(pool);
   } catch (error) {
-    console.warn("[DB] Falha ao conectar:", error);
+    console.error("[DB] Falha crítica ao conectar:", error);
     _db = null;
   }
   return _db;
@@ -42,8 +48,7 @@ async function requireDb(context: string) {
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("[DB:users] openId é obrigatório.");
-  const db = await getDb();
-  if (!db) return;
+  const db = await requireDb("users");
   await db.insert(users).values(user).onConflictDoUpdate({
     target: users.openId,
     set: { name: user.name, email: user.email, lastSignedIn: new Date() },
@@ -51,8 +56,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
+  const db = await requireDb("users");
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0] ?? undefined;
 }
@@ -67,17 +71,17 @@ export async function upsertProduto(produto: InsertProduto): Promise<void> {
 
 export async function getPedidosByStatus(status: string) {
   const db = await requireDb("pedidos");
-  return db.select().from(pedidosRastreio).where(eq(pedidosRastreio.orderStatus, status as any));
+  return await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.orderStatus, status as any));
 }
 
 export async function getPedidosPendentes() {
   const db = await requireDb("pedidos");
-  return db.select().from(pedidosRastreio).where(like(pedidosRastreio.notificationSentStatus, "PENDING_%"));
+  return await db.select().from(pedidosRastreio).where(like(pedidosRastreio.notificationSentStatus, "PENDING_%"));
 }
 
 export async function insertPedidoRastreio(pedido: InsertPedidoRastreio) {
   const db = await requireDb("pedidos");
-  return db.insert(pedidosRastreio).values(pedido);
+  return await db.insert(pedidosRastreio).values(pedido);
 }
 
 export async function updatePedidoRastreio(id: number, updates: Partial<InsertPedidoRastreio>): Promise<void> {
@@ -87,24 +91,28 @@ export async function updatePedidoRastreio(id: number, updates: Partial<InsertPe
 
 export async function getConsultores() {
   const db = await requireDb("consultores");
-  return db.select().from(consultores);
+  return await db.select().from(consultores);
 }
 
 export async function getClientes() {
   const db = await requireDb("clientes");
-  return db.select().from(clientes);
+  return await db.select().from(clientes);
 }
 
 export async function getGoogleSheetsConfig() {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select().from(googleSheetsConfig).limit(1);
-  return result[0] ?? null;
+  try {
+    const result = await db.select().from(googleSheetsConfig).limit(1);
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("[DB] Erro ao buscar configuração do Sheets:", error);
+    return null;
+  }
 }
 
 export async function saveGoogleSheetsConfig(sheetsUrl: string, configuredBy: number): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
+  const db = await requireDb("sheetsConfig");
   const existing = await getGoogleSheetsConfig();
   if (existing) {
     await db.update(googleSheetsConfig).set({ sheetsUrl }).where(eq(googleSheetsConfig.id, existing.id));
@@ -123,8 +131,7 @@ export async function recordSyncHistory(params: {
   status: "sucesso" | "erro";
   mensagemErro?: string;
 }): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
+  const db = await requireDb("syncHistory");
   await db.insert(syncHistory).values(params);
   return true;
 }
