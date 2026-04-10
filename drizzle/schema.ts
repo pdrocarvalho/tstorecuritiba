@@ -68,6 +68,12 @@ export const pedidosRastreio = pgTable("pedidos_rastreio", {
   notificationSentStatus: varchar("notification_sent_status", { length: 50 }).default("PENDING_FATURADO").notNull(),
   consultorId: integer("consultor_id"),
   clienteId: integer("cliente_id"),
+
+  // --- AS NOSSAS NOVAS COLUNAS PARA OS KPIs ---
+  remetente: varchar("remetente", { length: 255 }),
+  notaFiscal: varchar("nota_fiscal", { length: 255 }),
+  mundo: varchar("mundo", { length: 255 }),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -1,11 +1,12 @@
 import { publicProcedure, router } from "../_core/trpc";
-import { getPendingNotifications, updateNotificationStatus } from "../engines/sync.engine";
+import { getAllPedidosWithDescricao, getPendingNotifications, updateNotificationStatus } from "../engines/sync.engine";
 import { generatePendingEmails } from "../engines/notification.engine";
 import { sendBulkEmails } from "../services/gmail.service";
 
 export const notificationRouter = router({
   getPending: publicProcedure.query(async () => {
-    return getPendingNotifications();
+    // Agora enviamos TODOS os produtos para a listagem/dashboard em vez de apenas os pendentes!
+    return getAllPedidosWithDescricao();
   }),
 
   sendPending: publicProcedure.mutation(async () => {
@@ -15,6 +16,7 @@ export const notificationRouter = router({
     }
     const emails = await generatePendingEmails();
     const emailsSent = await sendBulkEmails(emails);
+    
     for (const pedido of pendentes) {
       const newStatus = pedido.notificationSentStatus.replace("PENDING_", "SENT_");
       await updateNotificationStatus(pedido.id, newStatus);
