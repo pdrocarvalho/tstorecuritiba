@@ -107,18 +107,24 @@ export async function getGoogleSheetsConfig() {
   }
 }
 
-export async function saveGoogleSheetsConfig(sheetsUrl: string, configuredBy: number): Promise<boolean> {
+export async function saveGoogleSheetsConfig(
+  sheetsUrl: string, 
+  configuredBy: number, 
+  fileName?: string // Novo parâmetro opcional
+): Promise<boolean> {
   const db = await requireDb("sheetsConfig");
   try {
     const existing = await getGoogleSheetsConfig();
     if (existing) {
-      await db.update(googleSheetsConfig).set({ sheetsUrl }).where(eq(googleSheetsConfig.id, existing.id));
+      await db.update(googleSheetsConfig)
+        .set({ sheetsUrl, fileName: fileName ?? existing.fileName, updatedAt: new Date() })
+        .where(eq(googleSheetsConfig.id, existing.id));
     } else {
-      await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy });
+      await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy, fileName });
     }
     return true;
   } catch (error: any) {
-    console.error("[DB] Erro ao salvar configuração do Sheets:", error);
+    console.error("[DB] Erro ao salvar configuração:", error);
     throw new Error(error.message);
   }
 }

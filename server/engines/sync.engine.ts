@@ -1,10 +1,19 @@
 /**
  * server/engines/sync.engine.ts
+ *
+ * Motor de sincronização de pedidos com leitura inteligente do cabeçalho
+ * e captura do nome do arquivo.
  */
 
 import { eq, like } from "drizzle-orm";
 import { google } from "googleapis";
-import { insertPedidoRastreio, updatePedidoRastreio, upsertProduto, getDb } from "../db";
+import { 
+  insertPedidoRastreio, 
+  updatePedidoRastreio, 
+  upsertProduto, 
+  getDb, 
+  saveGoogleSheetsConfig 
+} from "../db";
 import { pedidosRastreio, produtos } from "../../drizzle/schema";
 import type { OrderStatus, NotificationStatus } from "../../drizzle/schema";
 
@@ -41,19 +50,22 @@ function pendingStatusFor(status: OrderStatus): NotificationStatus {
   return map[status];
 }
 
+// Lida com várias formatações de data do Excel
 function parseDate(dateStr: string | undefined | null): Date | null {
   if (!dateStr || dateStr.toString().trim() === "") return null;
   const str = dateStr.toString().trim();
+  
   if (str.includes("/")) {
     const parts = str.split("/");
     if (parts.length >= 3) {
       const day = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1;
-      const yearPart = parts[2].split(" ")[0];
+      const yearPart = parts[2].split(" ")[0]; 
       const year = yearPart.length === 2 ? 2000 + parseInt(yearPart, 10) : parseInt(yearPart, 10);
       return new Date(year, month, day, 12, 0, 0);
     }
   }
+  
   const date = new Date(str);
   if (!isNaN(date.getTime())) return date;
   return null;
@@ -63,6 +75,7 @@ function getGoogleAuth() {
   const client_email = process.env.GOOGLE_SERVICE_EMAIL;
   const private_key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (!client_email || !private_key) throw new Error("Credenciais do Google ausentes.");
+  
   return new google.auth.GoogleAuth({
     credentials: { client_email, private_key },
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
@@ -76,32 +89,53 @@ function extractSpreadsheetId(url: string): string | null {
 
 export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<SyncResult> {
   const result: SyncResult = { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] };
+
   const db = await getDb();
-  if (!db) { result.erros.push("BD indisponível"); return result; }
-  
+  if (!db) {
+    result.erros.push("Banco de dados indisponível.");
+    return result;
+  }
+
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-  if (!spreadsheetId) { result.erros.push("URL inválida"); return result; }
+  if (!spreadsheetId) {
+    result.erros.push("URL do Google Sheets inválida.");
+    return result;
+  }
 
   try {
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
+
+    // 1. Descobrir os metadados da planilha (Título do arquivo)
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const fileName = spreadsheet.data.properties?.title || "Arquivo Google Sheets";
     const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
 
-    if (!firstSheetName) throw new Error("Planilha não encontrada.");
+    // Atualiza o nome do arquivo no nosso banco de dados automaticamente para o LED verde
+    await saveGoogleSheetsConfig(sheetsUrl, 1, fileName);
+
+    if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
+
     const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
     const rows = response.data.values;
-    if (!rows || rows.length === 0) { result.erros.push("Planilha vazia"); return result; }
+    
+    if (!rows || rows.length === 0) {
+      result.erros.push("A planilha está vazia.");
+      return result;
+    }
 
+    // 2. Procura Inteligente do Cabeçalho (lê as primeiras 15 linhas)
     let headerRowIndex = -1;
     let idxSku = -1, idxVolumes = -1, idxDescricao = -1;
     let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
 
     for (let i = 0; i < Math.min(rows.length, 15); i++) {
+      // Normaliza o texto removendo quebras de linha e espaços duplos
       const currentHeaders = rows[i].map((h: any) => h ? h.toString().toUpperCase().replace(/\n/g, " ").trim() : "");
       
-      const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
-      // ⚠️ O SEGREDO: Match exato na palavra "VOLUMES" para não esbarrar no "QTDE. POR CAIXA"
+      const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF" || h === "SKU" || h.includes("REFERÊNCIA"));
+      
+      // MÁGICA: Tem de ser exatamente "VOLUMES" para não confundir com a coluna "QTDE. POR CAIXA"
       const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
       
       if (tempSku !== -1 && tempVol !== -1) {
@@ -113,24 +147,28 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
         idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
         idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
-        idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
-        break; 
+        idxMundo = currentHeaders.findIndex((h: string) => h === "MUNDO");
+        break; // Encontrou o cabeçalho, pára de procurar!
       }
     }
 
     if (headerRowIndex === -1) {
-      result.erros.push("Cabeçalho não encontrado. Certifique-se que 'REF.' e 'VOLUMES' existem.");
+      result.erros.push("Cabeçalho não encontrado. Certifique-se que as colunas 'REF.' e 'VOLUMES' existem.");
       return result;
     }
 
+    // 3. Processar apenas os dados reais (ignorando tudo acima do cabeçalho)
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const rowData = rows[i];
       if (!rowData || rowData.length === 0) continue;
 
       const sku = rowData[idxSku]?.toString().trim();
+      
+      // Remove letras e espaços da quantidade (ex: "10 cx" vira 10)
       const rawVolumes = rowData[idxVolumes]?.toString().replace(/\D/g, "");
       const volumes = rawVolumes ? parseInt(rawVolumes, 10) : 0;
 
+      // Se não tiver SKU ou Volume, a linha é ignorada
       if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
       const row: ParsedRow = {
@@ -149,9 +187,11 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
 
         const existingRows = await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.produtoSku, row.sku));
+        // O volume atua como nosso "diferenciador" caso exista o mesmo SKU várias vezes
         const existing = existingRows.find((p) => p.quantidade === row.volumes);
 
         if (!existing) {
+          // PRODUTO NOVO
           await insertPedidoRastreio({
             produtoSku: row.sku,
             quantidade: row.volumes,
@@ -169,6 +209,7 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
           continue;
         }
 
+        // PRODUTO JÁ EXISTE: Vamos verificar se mudou de fase
         const hadEntrega = !!existing.dataEntrega;
         const hadPrevisao = !!existing.previsaoEntrega;
         let transitioned = false;
@@ -184,6 +225,7 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
           transitioned = true;
         }
 
+        // Atualiza a base de dados com as informações mais recentes
         await updatePedidoRastreio(existing.id, {
           previsaoEntrega: row.previsao,
           dataEntrega: row.entrega,
@@ -199,13 +241,13 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       }
     }
   } catch (error: any) {
-    console.error("Erro na API:", error);
+    console.error("Erro na API do Google Sheets:", error);
     result.erros.push(`Falha ao ler planilha: ${error.message}`);
   }
   return result;
 }
 
-// NOVA FUNÇÃO: Traz TUDO para o Dashboard para que os teus itens nunca desapareçam da listagem
+// Traz TODOS os pedidos para o Dashboard e Listagem funcionarem sempre (independente dos e-mails)
 export async function getAllPedidosWithDescricao() {
   const db = await getDb();
   if (!db) return [];
@@ -234,7 +276,7 @@ export async function getAllPedidosWithDescricao() {
   }
 }
 
-// FUNÇÃO ANTIGA: Continua a existir apenas para o motor de envio de E-mails saber quem tem de avisar
+// Filtra apenas quem tem avisos de E-mail pendentes
 export async function getPendingNotifications() {
   const db = await getDb();
   if (!db) return [];

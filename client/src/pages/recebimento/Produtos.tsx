@@ -1,7 +1,8 @@
 /**
  * client/src/pages/recebimento/Produtos.tsx
  *
- * Lista de produtos com filtros e impressão em A4.
+ * Lista de produtos com filtros, impressão em A4 e
+ * indicador de status da planilha (LED Verde).
  */
 
 import { useRef, useState } from "react";
@@ -12,7 +13,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import { ROUTES } from "@/constants";
 import type { Pedido, ProdutosFiltros } from "@/types";
@@ -82,6 +82,11 @@ export default function RecebimentoProdutos() {
   const tableRef = useRef<HTMLTableElement>(null);
   const [, setLocation] = useLocation();
 
+  // Busca as configurações para saber o status do arquivo (O LED Verde)
+  const configQuery = trpc.admin.getConfig.useQuery();
+  const isOnline = !!configQuery.data?.sheetsUrl;
+  const fileName = configQuery.data?.fileName || "Planilha não vinculada";
+
   const { data: pedidos = [] } = trpc.notifications.getPending.useQuery();
   const produtosFiltrados = filtraPedidos(pedidos as Pedido[], filtros);
 
@@ -93,7 +98,6 @@ export default function RecebimentoProdutos() {
     if (tableRef.current) printTable(tableRef.current.outerHTML);
   };
 
-  // Redireciona para a página de configurações corretamente
   const handleVincularSheets = () => {
     setLocation(ROUTES.recebimento.config);
   };
@@ -101,6 +105,15 @@ export default function RecebimentoProdutos() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        
+        {/* Status do Arquivo (O LED Verde) */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-300'}`} />
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+            {isOnline ? `Status Online: ${fileName}` : "Status: Offline (Vincule uma planilha)"}
+          </span>
+        </div>
+
         {/* Cabeçalho */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>

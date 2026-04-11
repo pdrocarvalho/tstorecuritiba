@@ -84,6 +84,7 @@ export type InsertPedidoRastreio = typeof pedidosRastreio.$inferInsert;
 export const googleSheetsConfig = pgTable("google_sheets_config", {
   id: serial("id").primaryKey(),
   sheetsUrl: varchar("sheets_url", { length: 500 }).notNull(),
+  fileName: varchar("file_name", { length: 255 }), // <-- NOVA COLUNA
   configuredBy: integer("configured_by").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
