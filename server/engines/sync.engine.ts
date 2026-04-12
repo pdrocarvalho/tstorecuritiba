@@ -24,7 +24,7 @@ export interface SyncResult {
 interface ParsedRow {
   sku: string;
   volumes: number;
-  qtdePorCaixa: number; // Multiplicador
+  qtdePorCaixa: number;
   descricao: string;
   previsao: Date | null;
   entrega: Date | null;
@@ -107,24 +107,28 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     let idxSku = -1, idxVolumes = -1, idxQtdePorCaixa = -1, idxDescricao = -1;
     let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
 
-    // Procura o cabeçalho na Linha 1 conforme as 17 colunas informadas
     for (let i = 0; i < Math.min(rows.length, 5); i++) {
-      const currentHeaders = rows[i].map((h: any) => h ? h.toString().toUpperCase().replace(/\n/g, " ").trim() : "");
+      // Limpeza agressiva: remove aspas simples, aspas duplas, quebras de linha e normaliza espaços
+      const currentHeaders = rows[i].map((h: any) => 
+        h ? h.toString().toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : ""
+      );
       
-      const tempSku = currentHeaders.findIndex((h: string) => h === "REF.");
+      const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
       const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
-      const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE. POR CAIXA"));
+      
+      // NOVA MÁGICA: Em vez de procurar a frase exata, procura as palavras-chave juntas
+      const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
 
       if (tempSku !== -1 && tempVol !== -1) {
         headerRowIndex = i;
         idxSku = tempSku;
         idxVolumes = tempVol;
         idxQtdePorCaixa = tempQtdeCaixa;
-        idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO"));
+        idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
         idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
         idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
-        idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO"));
-        idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA"));
+        idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO") || h.includes("PREVISAO"));
+        idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
         idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
         break; 
       }
@@ -141,7 +145,10 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
 
       const sku = rowData[idxSku]?.toString().trim();
       const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
-      const qtdePorCaixa = parseInt(rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "") || "1", 10);
+      
+      // Extrai o número da caixa, se falhar ou estiver vazio assume 1
+      const rawQtdeCaixa = rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "");
+      const qtdePorCaixa = rawQtdeCaixa ? parseInt(rawQtdeCaixa, 10) : 1;
 
       if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
@@ -162,6 +169,7 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
 
         const existingRows = await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.produtoSku, row.sku));
+        // Encontra o registo combinando o Volume e a Nota Fiscal para não misturar pedidos iguais de notas diferentes
         const existing = existingRows.find((p) => p.quantidade === row.volumes && p.notaFiscal === row.notaFiscal);
 
         if (!existing) {
@@ -198,6 +206,8 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
           transitioned = true;
         }
 
+        // Esta linha garante que, mesmo que o produto já estivesse no sistema,
+        // a quantidade por caixa vai ser atualizada agora!
         await updatePedidoRastreio(existing.id, {
           quantidade: row.volumes,
           qtdePorCaixa: row.qtdePorCaixa,
@@ -230,7 +240,7 @@ export async function getAllPedidosWithDescricao() {
         id: pedidosRastreio.id,
         produtoSku: pedidosRastreio.produtoSku,
         quantidade: pedidosRastreio.quantidade,
-        qtdePorCaixa: pedidosRastreio.qtdePorCaixa, // <-- INCLUIR NO SELECT
+        qtdePorCaixa: pedidosRastreio.qtdePorCaixa,
         previsaoEntrega: pedidosRastreio.previsaoEntrega,
         dataEntrega: pedidosRastreio.dataEntrega,
         orderStatus: pedidosRastreio.orderStatus,
@@ -285,30 +295,7 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
     await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus });
     return true;
   } catch (error) {
-    console.error("[SyncEngine] Erro ao atualizar status de notificação:", error);
+    console.error("[SyncEngine] Erro ao atualizar status:", error);
     return false;
-  }
-}
-
-export async function testarLeituraRobo(sheetsUrl: string) {
-  try {
-    const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-    if (!spreadsheetId) return { sucesso: false, mensagem: "URL inválida." };
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-    const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
-    if (!firstSheetName) return { sucesso: false, mensagem: "Aba não encontrada." };
-    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
-    const rows = response.data.values;
-    if (!rows || rows.length === 0) return { sucesso: false, mensagem: "Vazia." };
-    return {
-      sucesso: true,
-      aba: firstSheetName,
-      totalLinhas: rows.length,
-      linha1: rows[0] || [],
-    };
-  } catch (error: any) {
-    return { sucesso: false, mensagem: error.message };
   }
 }
