@@ -5,25 +5,32 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 
-import Home from "./pages/Home";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
 import UploadExcel from "./pages/UploadExcel";
-import RecebimentoProdutos from "./pages/recebimento/Produtos";
-import RecebimentoKPIs from "./pages/recebimento/KPIs";
-import RecebimentoConfig from "./pages/recebimento/Config";
 import NotFound from "./pages/NotFound";
+
+// Módulo de Recebimento (As nossas novas páginas)
+import RecebimentoDashboard from "./pages/recebimento/Dashboard"; // O nosso novo Painel / Visão Geral
+import RecebimentoProdutos from "./pages/recebimento/Produtos";     // Listagem de Recebimento Futuro
+import RecebimentoHistorico from "./pages/recebimento/Historico";   // O Histórico
+import RecebimentoConfig from "./pages/recebimento/Config";         // Configurações e Robô
 
 function AppRouter() {
   return (
     <Switch>
-      <Route path={ROUTES.home} component={Home} />
+      {/* A Rota Home ("/") agora carrega a nossa Visão Geral inteligente */}
+      <Route path={ROUTES.home} component={RecebimentoDashboard} />
+      
+      {/* Outras rotas globais */}
       <Route path="/login" component={Login} />
-      <Route path={ROUTES.dashboard} component={Dashboard} />
       <Route path={ROUTES.upload} component={UploadExcel} />
+      
+      {/* Rotas das Abas do Menu */}
       <Route path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
-      <Route path={ROUTES.recebimento.kpis} component={RecebimentoKPIs} />
+      <Route path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
       <Route path={ROUTES.recebimento.config} component={RecebimentoConfig} />
+      
+      {/* Rota 404 para links inválidos */}
       <Route component={NotFound} />
     </Switch>
   );
