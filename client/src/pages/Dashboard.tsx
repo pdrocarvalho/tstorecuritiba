@@ -1,165 +1,183 @@
 /**
- * client/src/pages/Dashboard.tsx
+ * client/src/pages/recebimento/Dashboard.tsx
  *
- * Painel principal com estatísticas de pedidos e tabela filtrável.
+ * Visão Geral Estratégica (Painel)
+ * Focado apenas em itens de Recebimento Futuro (sem data de entrega)
  */
 
-import { useState } from "react";
+import { useMemo } from "react";
+import { Package, Truck, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { formatDate } from "@/lib/utils";
-import { ORDER_STATUS_BADGE_CLASS, ORDER_STATUS_COLOR } from "@/constants";
-import type { OrderStatus, Pedido } from "@/types";
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
+} from "recharts";
+import type { Pedido } from "@/types";
 
-// =============================================================================
-// TIPOS
-// =============================================================================
+const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const CORES_STATUS = ['#6366f1', '#f97316'];
 
-type FilterValue = "todos" | OrderStatus;
+export default function RecebimentoDashboard() {
+  // Trazemos todos os dados
+  const { data: todosPedidos = [], isLoading } = trpc.notifications.getPending.useQuery();
 
-// =============================================================================
-// COMPONENTES INTERNOS
-// =============================================================================
+  // 🧠 LÓGICA DE NEGÓCIO: Processamento dos KPIs
+  const kpis = useMemo(() => {
+    // 1. Filtrar apenas o que ainda não chegou
+    const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
 
-interface StatCardProps {
-  label: string;
-  value: number;
-  colorClass: string;
-}
+    // 2. Calcular Totais
+    let totalUnidades = 0;
+    const notasSet = new Set<string>();
+    let atrasados = 0;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0); // Zera as horas para comparar apenas os dias
 
-function StatCard({ label, value, colorClass }: StatCardProps) {
-  return (
-    <Card className="p-6 shadow-sm border-gray-100">
-      <h3 className="text-gray-500 text-sm font-semibold uppercase tracking-wider">{label}</h3>
-      <p className={`text-4xl font-black mt-2 ${colorClass}`}>{value}</p>
-    </Card>
-  );
-}
+    const contagemMundo: Record<string, number> = {};
+    const contagemRemetente: Record<string, number> = {};
+    const contagemStatus: Record<string, number> = {};
 
-interface FilterButtonProps {
-  label: string;
-  value: FilterValue;
-  current: FilterValue;
-  onClick: (value: FilterValue) => void;
-}
+    futuros.forEach((p) => {
+      const unidadesReais = p.quantidade * (p.qtdePorCaixa || 1);
+      
+      // Totais
+      totalUnidades += unidadesReais;
+      if (p.notaFiscal) notasSet.add(p.notaFiscal);
 
-function FilterButton({ label, value, current, onClick }: FilterButtonProps) {
-  return (
-    <Button
-      variant={current === value ? "default" : "outline"}
-      onClick={() => onClick(value)}
-      size="sm"
-      className={current === value ? "bg-blue-600 hover:bg-blue-700 shadow-md text-white" : "text-gray-600"}
-    >
-      {label}
-    </Button>
-  );
-}
+      // Atrasos (Data de Previsão é anterior a hoje)
+      if (p.previsaoEntrega) {
+        const previsao = new Date(p.previsaoEntrega);
+        if (previsao < hoje) atrasados++;
+      }
 
-// =============================================================================
-// PÁGINA
-// =============================================================================
+      // Agrupamento para Gráfico de Mundo
+      const mundo = p.mundo || "Sem Mundo";
+      contagemMundo[mundo] = (contagemMundo[mundo] || 0) + unidadesReais;
 
-export default function Dashboard() {
-  const [activeFilter, setActiveFilter] = useState<FilterValue>("todos");
+      // Agrupamento para Gráfico de Remetente
+      const remetente = p.remetente || "Desconhecido";
+      contagemRemetente[remetente] = (contagemRemetente[remetente] || 0) + unidadesReais;
 
-  const { data: pedidos = [], isLoading } = trpc.notifications.getPending.useQuery();
+      // Agrupamento para Gráfico de Status
+      const status = p.orderStatus;
+      contagemStatus[status] = (contagemStatus[status] || 0) + unidadesReais;
+    });
 
-  const filteredPedidos = pedidos.filter((p: Pedido) => {
-    if (activeFilter === "todos") return true;
-    return p.orderStatus === activeFilter;
-  });
+    // 3. Formatar para os Gráficos
+    const grafMundo = Object.entries(contagemMundo).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const grafRemetente = Object.entries(contagemRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const grafStatus = Object.entries(contagemStatus).map(([name, value]) => ({ name, value }));
 
-  const stats = {
-    faturado: pedidos.filter((p: Pedido) => p.orderStatus === "Faturado").length,
-    previsto: pedidos.filter((p: Pedido) => p.orderStatus === "Previsto").length,
-    chegou: pedidos.filter((p: Pedido) => p.orderStatus === "Chegou").length,
-  };
+    return {
+      totalUnidades,
+      notasEmTransito: notasSet.size,
+      atrasados,
+      grafMundo,
+      grafRemetente,
+      grafStatus
+    };
+  }, [todosPedidos]);
 
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-[60vh]">
-          <Loader2 className="animate-spin w-10 h-10 text-blue-600" />
-        </div>
+        <div className="flex items-center justify-center h-full">A carregar indicadores...</div>
       </MainLayout>
     );
   }
 
   return (
     <MainLayout>
-      <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Visão Global</h1>
-          <p className="text-gray-600 mt-1">Acompanhamento dos pedidos de recebimento futuro</p>
+          <h1 className="text-3xl font-bold text-gray-900">Visão Geral</h1>
+          <p className="text-gray-600 mt-1">Indicadores estratégicos do Recebimento Futuro</p>
         </div>
 
-        {/* Estatísticas */}
+        {/* 🏆 CARDS PRINCIPAIS (KPIs) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatCard label="Faturados" value={stats.faturado} colorClass={ORDER_STATUS_COLOR.Faturado} />
-          <StatCard label="Previstos" value={stats.previsto} colorClass={ORDER_STATUS_COLOR.Previsto} />
-          <StatCard label="Chegaram" value={stats.chegou} colorClass={ORDER_STATUS_COLOR.Chegou} />
+          <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total a Receber</p>
+              <h3 className="text-3xl font-extrabold text-gray-900">{kpis.totalUnidades}</h3>
+              <p className="text-xs text-gray-500 mt-1">unidades no total</p>
+            </div>
+            <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
+              <Package size={28} />
+            </div>
+          </Card>
+
+          <Card className="p-6 border-l-4 border-l-emerald-500 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Notas em Trânsito</p>
+              <h3 className="text-3xl font-extrabold text-gray-900">{kpis.notasEmTransito}</h3>
+              <p className="text-xs text-gray-500 mt-1">NFs únicas identificadas</p>
+            </div>
+            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
+              <Truck size={28} />
+            </div>
+          </Card>
+
+          <Card className={`p-6 border-l-4 shadow-sm flex items-center justify-between ${kpis.atrasados > 0 ? 'border-l-red-500' : 'border-l-gray-300'}`}>
+            <div>
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Atrasos / Alertas</p>
+              <h3 className={`text-3xl font-extrabold ${kpis.atrasados > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                {kpis.atrasados}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">itens com previsão ultrapassada</p>
+            </div>
+            <div className={`p-3 rounded-full ${kpis.atrasados > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}>
+              <AlertTriangle size={28} />
+            </div>
+          </Card>
         </div>
 
-        {/* Filtros */}
-        <div className="flex gap-2 flex-wrap bg-white p-2 rounded-lg border border-gray-100 shadow-sm w-fit">
-          <FilterButton label="Todos os Pedidos" value="todos" current={activeFilter} onClick={setActiveFilter} />
-          <FilterButton label="Faturados" value="Faturado" current={activeFilter} onClick={setActiveFilter} />
-          <FilterButton label="Previstos" value="Previsto" current={activeFilter} onClick={setActiveFilter} />
-          <FilterButton label="Chegaram" value="Chegou" current={activeFilter} onClick={setActiveFilter} />
-        </div>
+        {/* 📊 GRÁFICOS DE INTELIGÊNCIA */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Gráfico 1: Volume por Mundo */}
+          <Card className="p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-6">Volume de Chegada por Mundo</h3>
+            <div className="h-64">
+              {kpis.grafMundo.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-400 text-sm">Sem dados para exibir</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={kpis.grafMundo} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+                      {kpis.grafMundo.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CORES_MUNDO[index % CORES_MUNDO.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} unidades`, 'Volume']} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
 
-        {/* Tabela */}
-        <Card className="overflow-hidden border-gray-100 shadow-sm">
-          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-800">
-              Pedidos Encontrados <span className="bg-blue-100 text-blue-700 py-0.5 px-2 rounded-full text-sm ml-2">{filteredPedidos.length}</span>
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-white border-b border-gray-200">
-                <tr>
-                  {["Referência (SKU)", "Quantidade", "Status", "Previsão", "Data de Entrega"].map((col) => (
-                    <th key={col} className="px-6 py-4 font-semibold text-gray-600">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredPedidos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                      Nenhum pedido encontrado para este filtro.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPedidos.map((pedido: Pedido) => (
-                    <tr key={pedido.id} className="hover:bg-blue-50/50 transition-colors">
-                      <td className="px-6 py-4 font-mono text-gray-700">{pedido.produtoSku}</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">{pedido.quantidade} un.</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
-                            ORDER_STATUS_BADGE_CLASS[pedido.orderStatus]
-                          }`}
-                        >
-                          {pedido.orderStatus}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{formatDate(pedido.previsaoEntrega)}</td>
-                      <td className="px-6 py-4 text-gray-600">{formatDate(pedido.dataEntrega)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+          {/* Gráfico 2: Volume por Remetente */}
+          <Card className="p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-6">Volume por Fábrica / Remetente</h3>
+            <div className="h-64">
+              {kpis.grafRemetente.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-400 text-sm">Sem dados para exibir</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={kpis.grafRemetente} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11}} />
+                    <Tooltip cursor={{fill: '#f3f4f6'}} formatter={(value) => [`${value} unidades`, 'Volume']} />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+
+        </div>
       </div>
     </MainLayout>
   );
