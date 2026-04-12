@@ -16,6 +16,7 @@ export interface Pedido {
   produtoSku: string;
   descricao: string;
   quantidade: number;
+  qtdePorCaixa?: number;
   previsaoEntrega: string | null;
   dataEntrega: string | null;
   orderStatus: OrderStatus;

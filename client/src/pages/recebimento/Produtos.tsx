@@ -3,6 +3,7 @@
  *
  * Página: Lista de Recebimento Futuro
  * Filtra produtos do banco de dados que NÃO possuem "Data de Entrega".
+ * Exibe a quantidade total real (Volumes x Qtde. por Caixa).
  */
 
 import { useRef, useState } from "react";
@@ -225,7 +226,10 @@ export default function RecebimentoProdutos() {
                       <td className="px-4 py-3 font-mono text-blue-600">{produto.produtoSku}</td>
                       <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{produto.descricao}</td>
                       <td className="px-4 py-3 text-gray-600">{produto.mundo ?? "—"}</td>
-                      <td className="px-4 py-3 text-center font-bold">{produto.quantidade}</td>
+                      <td className="px-4 py-3 text-center font-bold">
+                        {/* Multiplica Volumes (quantidade) por QTDE POR CAIXA */}
+                        {produto.quantidade * (produto.qtdePorCaixa || 1)}
+                      </td>
                       <td className="px-4 py-3 text-orange-600 font-semibold">
                         {formatDate(produto.previsaoEntrega)}
                       </td>

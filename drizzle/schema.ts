@@ -62,6 +62,7 @@ export const pedidosRastreio = pgTable("pedidos_rastreio", {
   id: serial("id").primaryKey(),
   produtoSku: varchar("produto_sku", { length: 255 }).notNull(),
   quantidade: integer("quantidade").notNull(),
+  qtdePorCaixa: integer("qtde_por_caixa").default(1),
   previsaoEntrega: timestamp("previsao_entrega"),
   dataEntrega: timestamp("data_entrega"),
   orderStatus: orderStatusEnum("order_status").notNull(),

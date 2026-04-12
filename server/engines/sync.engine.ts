@@ -24,6 +24,7 @@ export interface SyncResult {
 interface ParsedRow {
   sku: string;
   volumes: number;
+  qtdePorCaixa: number; // Multiplicador
   descricao: string;
   previsao: Date | null;
   entrega: Date | null;
@@ -97,37 +98,40 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
 
     await saveGoogleSheetsConfig(sheetsUrl, 1, fileName);
 
-    if (!firstSheetName) throw new Error("Planilha não encontrada.");
+    if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
     const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
     const rows = response.data.values;
     if (!rows || rows.length === 0) { result.erros.push("Planilha vazia"); return result; }
 
     let headerRowIndex = -1;
-    let idxSku = -1, idxVolumes = -1, idxDescricao = -1;
+    let idxSku = -1, idxVolumes = -1, idxQtdePorCaixa = -1, idxDescricao = -1;
     let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
 
-    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    // Procura o cabeçalho na Linha 1 conforme as 17 colunas informadas
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
       const currentHeaders = rows[i].map((h: any) => h ? h.toString().toUpperCase().replace(/\n/g, " ").trim() : "");
       
-      const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF" || h === "SKU" || h.includes("REFERÊNCIA"));
+      const tempSku = currentHeaders.findIndex((h: string) => h === "REF.");
       const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
-      
+      const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE. POR CAIXA"));
+
       if (tempSku !== -1 && tempVol !== -1) {
         headerRowIndex = i;
         idxSku = tempSku;
         idxVolumes = tempVol;
-        idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
-        idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO") || h.includes("PREVISAO"));
-        idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
+        idxQtdePorCaixa = tempQtdeCaixa;
+        idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO"));
         idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
         idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
-        idxMundo = currentHeaders.findIndex((h: string) => h === "MUNDO");
+        idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO"));
+        idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA"));
+        idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
         break; 
       }
     }
 
     if (headerRowIndex === -1) {
-      result.erros.push("Cabeçalho não encontrado. Certifique-se que 'REF.' e 'VOLUMES' existem.");
+      result.erros.push("Cabeçalho não encontrado. Verifique as colunas REF. e VOLUMES.");
       return result;
     }
 
@@ -136,14 +140,15 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       if (!rowData || rowData.length === 0) continue;
 
       const sku = rowData[idxSku]?.toString().trim();
-      const rawVolumes = rowData[idxVolumes]?.toString().replace(/\D/g, "");
-      const volumes = rawVolumes ? parseInt(rawVolumes, 10) : 0;
+      const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
+      const qtdePorCaixa = parseInt(rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "") || "1", 10);
 
       if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
       const row: ParsedRow = {
         sku,
         volumes,
+        qtdePorCaixa,
         descricao: idxDescricao !== -1 ? rowData[idxDescricao]?.toString().trim() || "Sem descrição" : "Sem descrição",
         previsao: idxPrevisao !== -1 ? parseDate(rowData[idxPrevisao]) : null,
         entrega: idxEntrega !== -1 ? parseDate(rowData[idxEntrega]) : null,
@@ -157,12 +162,13 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
 
         const existingRows = await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.produtoSku, row.sku));
-        const existing = existingRows.find((p) => p.quantidade === row.volumes);
+        const existing = existingRows.find((p) => p.quantidade === row.volumes && p.notaFiscal === row.notaFiscal);
 
         if (!existing) {
           await insertPedidoRastreio({
             produtoSku: row.sku,
             quantidade: row.volumes,
+            qtdePorCaixa: row.qtdePorCaixa,
             previsaoEntrega: row.previsao,
             dataEntrega: row.entrega,
             orderStatus,
@@ -193,6 +199,8 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         }
 
         await updatePedidoRastreio(existing.id, {
+          quantidade: row.volumes,
+          qtdePorCaixa: row.qtdePorCaixa,
           previsaoEntrega: row.previsao,
           dataEntrega: row.entrega,
           orderStatus,
@@ -222,6 +230,7 @@ export async function getAllPedidosWithDescricao() {
         id: pedidosRastreio.id,
         produtoSku: pedidosRastreio.produtoSku,
         quantidade: pedidosRastreio.quantidade,
+        qtdePorCaixa: pedidosRastreio.qtdePorCaixa, // <-- INCLUIR NO SELECT
         previsaoEntrega: pedidosRastreio.previsaoEntrega,
         dataEntrega: pedidosRastreio.dataEntrega,
         orderStatus: pedidosRastreio.orderStatus,
@@ -250,6 +259,7 @@ export async function getPendingNotifications() {
         id: pedidosRastreio.id,
         produtoSku: pedidosRastreio.produtoSku,
         quantidade: pedidosRastreio.quantidade,
+        qtdePorCaixa: pedidosRastreio.qtdePorCaixa,
         previsaoEntrega: pedidosRastreio.previsaoEntrega,
         dataEntrega: pedidosRastreio.dataEntrega,
         orderStatus: pedidosRastreio.orderStatus,
@@ -275,41 +285,30 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
     await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus });
     return true;
   } catch (error) {
-    console.error("[SyncEngine] Erro ao atualizar status:", error);
+    console.error("[SyncEngine] Erro ao atualizar status de notificação:", error);
     return false;
   }
 }
 
-// ==========================================
-// 🔍 FUNÇÃO DE DIAGNÓSTICO (O RAIO-X)
-// ==========================================
 export async function testarLeituraRobo(sheetsUrl: string) {
   try {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-    if (!spreadsheetId) return { sucesso: false, mensagem: "URL do Google Sheets inválida." };
-
+    if (!spreadsheetId) return { sucesso: false, mensagem: "URL inválida." };
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
-
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
     const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
-
-    if (!firstSheetName) return { sucesso: false, mensagem: "Nenhuma aba encontrada na planilha." };
-
+    if (!firstSheetName) return { sucesso: false, mensagem: "Aba não encontrada." };
     const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
     const rows = response.data.values;
-
-    if (!rows || rows.length === 0) return { sucesso: false, mensagem: "A planilha está vazia." };
-
+    if (!rows || rows.length === 0) return { sucesso: false, mensagem: "Vazia." };
     return {
       sucesso: true,
       aba: firstSheetName,
       totalLinhas: rows.length,
       linha1: rows[0] || [],
-      linha2: rows[1] || [],
-      linha3: rows[2] || []
     };
   } catch (error: any) {
-    return { sucesso: false, mensagem: `Erro na API do Google: ${error.message}` };
+    return { sucesso: false, mensagem: error.message };
   }
 }
