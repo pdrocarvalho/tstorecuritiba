@@ -1,138 +1,244 @@
 /**
  * client/src/pages/recebimento/Historico.tsx
  *
- * Página: Histórico de Entregas
- * Exibe apenas produtos que JÁ POSSUEM "Data de Entrega".
+ * Painel Analítico do Histórico de Entregas
+ * Exibe KPIs e gráficos de tudo o que JÁ CHEGOU, com filtros de data.
  */
 
-import { useRef, useState } from "react";
-import { Printer, Filter, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useMemo } from "react";
+import { Filter, X, Box, FileText, Layers, Calendar, PackageOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { formatDate } from "@/lib/utils";
-import type { Pedido, ProdutosFiltros } from "@/types";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend
+} from "recharts";
+import type { Pedido } from "@/types";
 
-const INITIAL_FILTERS: ProdutosFiltros = { remetente: "", mundo: "", status: "" };
+const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-function filtraHistorico(pedidos: Pedido[], filtros: ProdutosFiltros): Pedido[] {
-  return pedidos.filter((p) => {
-    // REGRA PRINCIPAL: Se NÃO tem data de entrega, não aparece no histórico!
-    if (!p.dataEntrega) return false;
-
-    const matchRemetente = !filtros.remetente || p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase());
-    const matchMundo = !filtros.mundo || p.mundo?.toLowerCase().includes(filtros.mundo.toLowerCase());
-    
-    return matchRemetente && matchMundo;
-  });
+interface FiltrosHistorico {
+  dataInicio: string;
+  dataFim: string;
+  remetente: string;
+  mundo: string;
 }
 
-function printTable(tableHtml: string) {
-  const printWindow = window.open("", "", "height=600,width=800");
-  if (!printWindow) return;
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Histórico de Entregas</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; font-size: 20px; margin-bottom: 16px; }
-        .data { text-align: right; font-size: 12px; color: #666; margin-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background-color: #f2f2f2; border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold; font-size: 10px; }
-        td { border: 1px solid #ddd; padding: 6px 8px; font-size: 10px; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-      </style>
-    </head>
-    <body>
-      <p class="data">Relatório gerado em: ${new Date().toLocaleDateString("pt-BR")}</p>
-      <h1>Histórico de Entregas (Produtos já recebidos)</h1>
-      ${tableHtml}
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-  printWindow.print();
-}
+const INITIAL_FILTERS: FiltrosHistorico = {
+  dataInicio: "",
+  dataFim: "",
+  remetente: "",
+  mundo: "",
+};
 
 export default function RecebimentoHistorico() {
-  const [filtros, setFiltros] = useState<ProdutosFiltros>(INITIAL_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
-  const tableRef = useRef<HTMLTableElement>(null);
+  const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
+  const [showFilters, setShowFilters] = useState(true);
 
-  // Busca todos os pedidos e aplica o filtro de "Histórico" localmente
-  const { data: todosPedidos = [] } = trpc.notifications.getPending.useQuery();
-  const historico = filtraHistorico(todosPedidos as Pedido[], filtros);
+  // Busca os dados do banco
+  const { data: todosPedidos = [], isLoading } = trpc.notifications.getPending.useQuery();
+
+  // 🧠 LÓGICA DE NEGÓCIO E CÁLCULO DOS KPIS
+  const kpis = useMemo(() => {
+    let totalVolumes = 0;
+    let totalUnidades = 0;
+    const notasSet = new Set<string>();
+    
+    // Para agrupar Referências Únicas por Mundo
+    const skusPorMundo: Record<string, Set<string>> = {};
+    
+    // Para ver quem mais enviou caixas
+    const volumesPorRemetente: Record<string, number> = {};
+
+    // 1. FILTRAGEM
+    const historicoFiltrado = (todosPedidos as Pedido[]).filter((p) => {
+      if (!p.dataEntrega) return false; // Regra de Ouro: Só entra o que já chegou
+
+      // Filtro de Texto
+      if (filtros.remetente && !p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase())) return false;
+      if (filtros.mundo && !p.mundo?.toLowerCase().includes(filtros.mundo.toLowerCase())) return false;
+
+      // Filtro de Datas
+      const dataEntrega = new Date(p.dataEntrega);
+      dataEntrega.setHours(0, 0, 0, 0);
+
+      if (filtros.dataInicio) {
+        const inicio = new Date(filtros.dataInicio + "T00:00:00");
+        if (dataEntrega < inicio) return false;
+      }
+      if (filtros.dataFim) {
+        const fim = new Date(filtros.dataFim + "T23:59:59");
+        if (dataEntrega > fim) return false;
+      }
+
+      return true;
+    });
+
+    // 2. CÁLCULO
+    historicoFiltrado.forEach((p) => {
+      // Quantidades
+      totalVolumes += p.quantidade; // Caixas físicas
+      totalUnidades += p.quantidade * (p.qtdePorCaixa || 1); // Unidades reais para venda
+
+      // Notas Fiscais únicas
+      if (p.notaFiscal) notasSet.add(p.notaFiscal);
+
+      // Referências Únicas por Mundo
+      const mundo = p.mundo || "Sem Mundo";
+      if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
+      skusPorMundo[mundo].add(p.produtoSku);
+
+      // Volumes por Remetente
+      const remetente = p.remetente || "Desconhecido";
+      volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + p.quantidade;
+    });
+
+    // 3. FORMATAÇÃO PARA OS GRÁFICOS
+    const grafSkusMundo = Object.keys(skusPorMundo)
+      .map(mundo => ({ name: mundo, value: skusPorMundo[mundo].size }))
+      .sort((a, b) => b.value - a.value);
+
+    const grafRemetente = Object.entries(volumesPorRemetente)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return {
+      totalVolumes,
+      totalUnidades,
+      totalNotas: notasSet.size,
+      grafSkusMundo,
+      grafRemetente
+    };
+  }, [todosPedidos, filtros]);
+
+  if (isLoading) return <MainLayout><div className="flex h-full items-center justify-center">Carregando histórico...</div></MainLayout>;
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Histórico de Entregas</h1>
-            <p className="text-gray-600 mt-1">Produtos que já deram entrada na loja</p>
-          </div>
-          <Button onClick={() => tableRef.current && printTable(tableRef.current.outerHTML)} variant="outline" className="flex items-center gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-            <Printer size={18} />
-            Imprimir Relatório
-          </Button>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Histórico de Entregas</h1>
+          <p className="text-gray-600 mt-1">Análise de produtividade e recebimentos concluídos</p>
         </div>
 
-        <Card className="p-4">
-          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-emerald-600 font-medium hover:text-emerald-700">
-            <Filter size={18} /> Filtrar Histórico {showFilters && <X size={16} />}
+        {/* 🎛️ BARRA DE FILTROS */}
+        <Card className="p-4 border-emerald-100 bg-emerald-50/30">
+          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-emerald-700 font-bold hover:text-emerald-800">
+            <Filter size={18} /> Filtros de Análise {showFilters ? <X size={16} /> : null}
           </button>
+          
           {showFilters && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 mb-1 block">Remetente</span>
-                <Input placeholder="Filtrar por remetente..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} />
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Data Inicial</span>
+                <Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} className="bg-white" />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 mb-1 block">Mundo</span>
-                <Input placeholder="Filtrar por mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} />
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Data Final</span>
+                <Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} className="bg-white" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Remetente (Fábrica)</span>
+                <Input placeholder="Ex: Cutelaria" value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} className="bg-white" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Mundo</span>
+                <Input placeholder="Ex: Servir" value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} className="bg-white" />
               </label>
             </div>
           )}
         </Card>
 
-        <Card className="overflow-hidden border-gray-200 shadow-sm">
-          <div className="overflow-x-auto">
-            <table ref={tableRef} className="w-full text-sm text-left">
-              <thead className="bg-emerald-50 border-b border-emerald-100">
-                <tr>
-                  {["REMETENTE", "NOTA FISCAL", "REF.", "DESCRIÇÃO", "MUNDO", "QTDE. TOTAL", "DATA DE ENTREGA"].map((col) => (
-                    <th key={col} className="px-4 py-4 font-bold text-emerald-900 uppercase tracking-wider">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {historico.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 italic">Nenhum produto entregue encontrado.</td></tr>
-                ) : (
-                  historico.map((produto) => (
-                    <tr key={produto.id} className="hover:bg-emerald-50/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-900">{produto.remetente ?? "—"}</td>
-                      <td className="px-4 py-3 text-gray-600">{produto.notaFiscal ?? "—"}</td>
-                      <td className="px-4 py-3 font-mono text-emerald-600">{produto.produtoSku}</td>
-                      <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{produto.descricao}</td>
-                      <td className="px-4 py-3 text-gray-600">{produto.mundo ?? "—"}</td>
-                      <td className="px-4 py-3 text-center font-bold">{produto.quantidade * (produto.qtdePorCaixa || 1)}</td>
-                      <td className="px-4 py-3 text-emerald-600 font-bold">{formatDate(produto.dataEntrega)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-3 bg-emerald-50/50 border-t border-emerald-100 text-xs font-semibold text-emerald-700">
-            TOTAL DE ITENS RECEBIDOS: {historico.length}
-          </div>
-        </Card>
+        {/* 🏆 CARDS DE KPI */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-emerald-100 text-emerald-600 rounded-md"><Box size={20} /></div>
+              <p className="text-sm font-bold text-gray-500 uppercase">Volumes (Caixas)</p>
+            </div>
+            <h3 className="text-3xl font-black text-gray-900">{kpis.totalVolumes}</h3>
+          </Card>
+
+          <Card className="p-5 border-t-4 border-t-blue-500 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-md"><PackageOpen size={20} /></div>
+              <p className="text-sm font-bold text-gray-500 uppercase">Unidades Totais</p>
+            </div>
+            <h3 className="text-3xl font-black text-gray-900">{kpis.totalUnidades}</h3>
+          </Card>
+
+          <Card className="p-5 border-t-4 border-t-purple-500 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-purple-100 text-purple-600 rounded-md"><FileText size={20} /></div>
+              <p className="text-sm font-bold text-gray-500 uppercase">NFs Conferidas</p>
+            </div>
+            <h3 className="text-3xl font-black text-gray-900">{kpis.totalNotas}</h3>
+          </Card>
+
+          <Card className="p-5 border-t-4 border-t-orange-500 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-orange-100 text-orange-600 rounded-md"><Layers size={20} /></div>
+              <p className="text-sm font-bold text-gray-500 uppercase">SKUs Únicos</p>
+            </div>
+            {/* Soma de todos os SKUs únicos encontrados no período */}
+            <h3 className="text-3xl font-black text-gray-900">
+              {kpis.grafSkusMundo.reduce((acc, curr) => acc + curr.value, 0)}
+            </h3>
+          </Card>
+        </div>
+
+        {/* 📊 GRÁFICOS ANALÍTICOS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Gráfico 1: SKUs Únicos por Mundo */}
+          <Card className="p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-1">Referências (SKUs) Únicas por Mundo</h3>
+            <p className="text-xs text-gray-500 mb-6">Diversidade do mix de produtos recebido</p>
+            <div className="h-64">
+              {kpis.grafSkusMundo.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={kpis.grafSkusMundo} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="name" tick={{fontSize: 12}} />
+                    <YAxis tick={{fontSize: 12}} />
+                    <Tooltip cursor={{fill: '#f3f4f6'}} formatter={(value) => [`${value} SKUs diferentes`, 'Quantidade']} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {kpis.grafSkusMundo.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CORES_MUNDO[index % CORES_MUNDO.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+
+          {/* Gráfico 2: Volumes por Remetente */}
+          <Card className="p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-1">Volume de Caixas por Remetente</h3>
+            <p className="text-xs text-gray-500 mb-6">Fábricas que mais enviaram mercadoria física</p>
+            <div className="h-64">
+              {kpis.grafRemetente.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={kpis.grafRemetente} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
+                      {kpis.grafRemetente.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CORES_MUNDO[(index + 2) % CORES_MUNDO.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} caixas`, 'Volume']} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+
+        </div>
       </div>
     </MainLayout>
   );
