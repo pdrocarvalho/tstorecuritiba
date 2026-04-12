@@ -9,11 +9,11 @@ import Login from "./pages/Login";
 import UploadExcel from "./pages/UploadExcel";
 import NotFound from "./pages/NotFound";
 
-// Módulo de Recebimento (As nossas novas páginas)
-import RecebimentoDashboard from "./pages/recebimento/Dashboard"; // O nosso novo Painel / Visão Geral
-import RecebimentoProdutos from "./pages/recebimento/Produtos";     // Listagem de Recebimento Futuro
-import RecebimentoHistorico from "./pages/recebimento/Historico";   // O Histórico
-import RecebimentoConfig from "./pages/recebimento/Config";         // Configurações e Robô
+// Módulo de Recebimento
+import RecebimentoDashboard from "./pages/Dashboard"; // <--- CAMINHO CORRIGIDO AQUI!
+import RecebimentoProdutos from "./pages/recebimento/Produtos";
+import RecebimentoHistorico from "./pages/recebimento/Historico";
+import RecebimentoConfig from "./pages/recebimento/Config";
 
 function AppRouter() {
   return (
