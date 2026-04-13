@@ -149,9 +149,9 @@ export default function RecebimentoHistorico() {
           <Card className="p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-1">Referências (SKUs) Únicas por Mundo</h3>
             <p className="text-xs text-gray-500 mb-6">Diversidade do mix de produtos recebido</p>
-            <div className="h-64">
-              {/* CORREÇÃO DO ERRO AQUI: minHeight={250} */}
-              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+            {/* CORREÇÃO DO ERRO AQUI: Estilo Inline fixo e altura fixa no ResponsiveContainer */}
+            <div style={{ width: '100%', height: 300 }}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={kpis.grafSkusMundo} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis dataKey="name" tick={{fontSize: 12}} />
                   <YAxis tick={{fontSize: 12}} />
@@ -167,9 +167,9 @@ export default function RecebimentoHistorico() {
           <Card className="p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-1">Volume de Caixas por Remetente</h3>
             <p className="text-xs text-gray-500 mb-6">Fábricas que mais enviaram mercadoria física</p>
-            <div className="h-64">
-               {/* CORREÇÃO DO ERRO AQUI: minHeight={250} */}
-              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+            {/* CORREÇÃO DO ERRO AQUI: Estilo Inline fixo e altura fixa no ResponsiveContainer */}
+            <div style={{ width: '100%', height: 300 }}>
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={kpis.grafRemetente} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
                     {kpis.grafRemetente.map((_, index) => <Cell key={`cell-${index}`} fill={CORES_MUNDO[(index + 2) % CORES_MUNDO.length]} />)}
