@@ -136,9 +136,11 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       return result;
     }
 
-    // 🔴 A MÁGICA DO CAÇA-FANTASMAS ACONTECE AQUI
-    // Vamos rastrear o ID de todas as linhas que realmente existem na planilha hoje.
+    // ⚡ OTIMIZAÇÃO 1: Puxa todo o banco de dados de uma vez só! (1 requisição)
+    const todosPedidosDB = await db.select().from(pedidosRastreio);
+    
     const validDbIds = new Set<number>();
+    const processedSkus = new Set<string>(); // Para não atualizar o mesmo produto várias vezes atoa
 
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const rowData = rows[i];
@@ -164,36 +166,33 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       };
 
       try {
-        await upsertProduto({ sku: row.sku, descricao: row.descricao });
+        // ⚡ OTIMIZAÇÃO 2: Só insere a descrição do produto uma vez por sincronização
+        if (!processedSkus.has(row.sku)) {
+          await upsertProduto({ sku: row.sku, descricao: row.descricao });
+          processedSkus.add(row.sku);
+        }
+
         const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
 
-        // Busca no banco os pedidos deste SKU
-        const existingRows = await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.produtoSku, row.sku));
-        
-        // Encontra o registro exato e garante que ainda não foi validado neste loop
-        const existing = existingRows.find((p) => p.quantidade === row.volumes && p.notaFiscal === row.notaFiscal && !validDbIds.has(p.id));
+        // ⚡ OTIMIZAÇÃO 3: Procura NA MEMÓRIA em vez de ir ao banco de dados!
+        const existing = todosPedidosDB.find(
+          (p) => p.produtoSku === row.sku && 
+                 p.quantidade === row.volumes && 
+                 p.notaFiscal === row.notaFiscal && 
+                 !validDbIds.has(p.id)
+        );
 
         if (!existing) {
-          // É UM ITEM NOVO NA PLANILHA
           const inserted = await db.insert(pedidosRastreio).values({
-            produtoSku: row.sku,
-            quantidade: row.volumes,
-            qtdePorCaixa: row.qtdePorCaixa,
-            previsaoEntrega: row.previsao,
-            dataEntrega: row.entrega,
-            orderStatus,
-            notificationSentStatus: pendingStatusFor(orderStatus),
-            remetente: row.remetente,
-            notaFiscal: row.notaFiscal,
-            mundo: row.mundo,
-            consultorId: 1, 
-            clienteId: 1,   
+            produtoSku: row.sku, quantidade: row.volumes, qtdePorCaixa: row.qtdePorCaixa,
+            previsaoEntrega: row.previsao, dataEntrega: row.entrega, orderStatus,
+            notificationSentStatus: pendingStatusFor(orderStatus), remetente: row.remetente,
+            notaFiscal: row.notaFiscal, mundo: row.mundo, consultorId: 1, clienteId: 1,   
           }).returning({ id: pedidosRastreio.id });
           
-          validDbIds.add(inserted[0].id); // Protege da exclusão
+          validDbIds.add(inserted[0].id);
           result.novosPedidos++;
         } else {
-          // O ITEM JÁ EXISTE, VAMOS ATUALIZAR
           const hadEntrega = !!existing.dataEntrega;
           const hadPrevisao = !!existing.previsaoEntrega;
           let transitioned = false;
@@ -210,29 +209,21 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
           }
 
           await updatePedidoRastreio(existing.id, {
-            quantidade: row.volumes,
-            qtdePorCaixa: row.qtdePorCaixa,
-            previsaoEntrega: row.previsao,
-            dataEntrega: row.entrega,
-            orderStatus,
-            notificationSentStatus: transitioned ? updatedStatus : existing.notificationSentStatus,
-            remetente: row.remetente,
-            notaFiscal: row.notaFiscal,
-            mundo: row.mundo,
+            quantidade: row.volumes, qtdePorCaixa: row.qtdePorCaixa, previsaoEntrega: row.previsao,
+            dataEntrega: row.entrega, orderStatus, notificationSentStatus: transitioned ? updatedStatus : existing.notificationSentStatus,
+            remetente: row.remetente, notaFiscal: row.notaFiscal, mundo: row.mundo,
           });
 
-          validDbIds.add(existing.id); // Protege da exclusão
+          validDbIds.add(existing.id);
         }
       } catch (dbError) {
         console.error(`Erro ao processar SKU ${sku}:`, dbError);
       }
     }
 
-    // 🔴 HORA DA LIMPEZA: O que não foi validado acima, é fantasma.
-    const allDbRows = await db.select({ id: pedidosRastreio.id }).from(pedidosRastreio);
+    // HORA DA LIMPEZA DOS FANTASMAS
     let fantasmasApagados = 0;
-    
-    for (const dbRow of allDbRows) {
+    for (const dbRow of todosPedidosDB) {
       if (!validDbIds.has(dbRow.id)) {
         await db.delete(pedidosRastreio).where(eq(pedidosRastreio.id, dbRow.id));
         fantasmasApagados++;
