@@ -3,7 +3,7 @@
  */
 
 import { useState, useMemo } from "react";
-import { Filter, X, Box, FileText, Layers, Calendar } from "lucide-react";
+import { Filter, X, Box, FileText, Layers } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
@@ -37,7 +37,6 @@ export default function RecebimentoHistorico() {
     const volumesPorRemetente: Record<string, number> = {};
 
     const historicoFiltrado = (todosPedidos as Pedido[]).filter((p) => {
-      // APENAS ITENS QUE JÁ CHEGARAM (Têm data de entrega preenchida)
       if (!p.dataEntrega) return false;
 
       if (filtros.remetente && !p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase())) return false;
@@ -59,21 +58,17 @@ export default function RecebimentoHistorico() {
     });
 
     historicoFiltrado.forEach((p) => {
-      // VOLUMES FÍSICOS (CAIXAS)
       totalVolumes += p.quantidade;
 
-      // NOTAS FISCAIS ÚNICAS
       if (p.notaFiscal && p.notaFiscal.trim() !== "") {
         notasSet.add(p.notaFiscal.trim());
       }
 
-      // SKUs ÚNICOS POR MUNDO
-      const mundo = p.mundo?.trim() ? p.mundo.trim() : "Sem Mundo / Antigo";
+      const mundo = p.mundo?.trim() ? p.mundo.trim() : "Sem Mundo";
       if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
       skusPorMundo[mundo].add(p.produtoSku);
 
-      // VOLUMES POR REMETENTE
-      const remetente = p.remetente?.trim() ? p.remetente.trim() : "Desconhecido / Antigo";
+      const remetente = p.remetente?.trim() ? p.remetente.trim() : "Desconhecido";
       volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + p.quantidade;
     });
 
@@ -122,7 +117,6 @@ export default function RecebimentoHistorico() {
           )}
         </Card>
 
-        {/* AGORA COM 3 CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
             <div className="flex items-center gap-3 mb-2">
@@ -156,7 +150,8 @@ export default function RecebimentoHistorico() {
             <h3 className="font-bold text-gray-800 mb-1">Referências (SKUs) Únicas por Mundo</h3>
             <p className="text-xs text-gray-500 mb-6">Diversidade do mix de produtos recebido</p>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+              {/* CORREÇÃO DO ERRO AQUI: minHeight={250} */}
+              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                 <BarChart data={kpis.grafSkusMundo} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis dataKey="name" tick={{fontSize: 12}} />
                   <YAxis tick={{fontSize: 12}} />
@@ -173,7 +168,8 @@ export default function RecebimentoHistorico() {
             <h3 className="font-bold text-gray-800 mb-1">Volume de Caixas por Remetente</h3>
             <p className="text-xs text-gray-500 mb-6">Fábricas que mais enviaram mercadoria física</p>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+               {/* CORREÇÃO DO ERRO AQUI: minHeight={250} */}
+              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                 <PieChart>
                   <Pie data={kpis.grafRemetente} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
                     {kpis.grafRemetente.map((_, index) => <Cell key={`cell-${index}`} fill={CORES_MUNDO[(index + 2) % CORES_MUNDO.length]} />)}

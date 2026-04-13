@@ -108,15 +108,12 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
 
     for (let i = 0; i < Math.min(rows.length, 5); i++) {
-      // Limpeza agressiva: remove aspas simples, aspas duplas, quebras de linha e normaliza espaços
       const currentHeaders = rows[i].map((h: any) => 
         h ? h.toString().toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : ""
       );
       
       const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
       const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
-      
-      // NOVA MÁGICA: Em vez de procurar a frase exata, procura as palavras-chave juntas
       const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
 
       if (tempSku !== -1 && tempVol !== -1) {
@@ -139,14 +136,16 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       return result;
     }
 
+    // 🔴 A MÁGICA DO CAÇA-FANTASMAS ACONTECE AQUI
+    // Vamos rastrear o ID de todas as linhas que realmente existem na planilha hoje.
+    const validDbIds = new Set<number>();
+
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const rowData = rows[i];
       if (!rowData || rowData.length === 0) continue;
 
       const sku = rowData[idxSku]?.toString().trim();
       const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
-      
-      // Extrai o número da caixa, se falhar ou estiver vazio assume 1
       const rawQtdeCaixa = rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "");
       const qtdePorCaixa = rawQtdeCaixa ? parseInt(rawQtdeCaixa, 10) : 1;
 
@@ -168,12 +167,15 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         await upsertProduto({ sku: row.sku, descricao: row.descricao });
         const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
 
+        // Busca no banco os pedidos deste SKU
         const existingRows = await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.produtoSku, row.sku));
-        // Encontra o registo combinando o Volume e a Nota Fiscal para não misturar pedidos iguais de notas diferentes
-        const existing = existingRows.find((p) => p.quantidade === row.volumes && p.notaFiscal === row.notaFiscal);
+        
+        // Encontra o registro exato e garante que ainda não foi validado neste loop
+        const existing = existingRows.find((p) => p.quantidade === row.volumes && p.notaFiscal === row.notaFiscal && !validDbIds.has(p.id));
 
         if (!existing) {
-          await insertPedidoRastreio({
+          // É UM ITEM NOVO NA PLANILHA
+          const inserted = await db.insert(pedidosRastreio).values({
             produtoSku: row.sku,
             quantidade: row.volumes,
             qtdePorCaixa: row.qtdePorCaixa,
@@ -186,44 +188,59 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
             mundo: row.mundo,
             consultorId: 1, 
             clienteId: 1,   
-          });
+          }).returning({ id: pedidosRastreio.id });
+          
+          validDbIds.add(inserted[0].id); // Protege da exclusão
           result.novosPedidos++;
-          continue;
+        } else {
+          // O ITEM JÁ EXISTE, VAMOS ATUALIZAR
+          const hadEntrega = !!existing.dataEntrega;
+          const hadPrevisao = !!existing.previsaoEntrega;
+          let transitioned = false;
+          let updatedStatus = existing.notificationSentStatus;
+
+          if (!hadEntrega && row.entrega) {
+            updatedStatus = "PENDING_CHEGOU";
+            result.chegadas++;
+            transitioned = true;
+          } else if (!hadPrevisao && row.previsao && !row.entrega) {
+            updatedStatus = "PENDING_PREVISTO";
+            result.novasPrevisoes++;
+            transitioned = true;
+          }
+
+          await updatePedidoRastreio(existing.id, {
+            quantidade: row.volumes,
+            qtdePorCaixa: row.qtdePorCaixa,
+            previsaoEntrega: row.previsao,
+            dataEntrega: row.entrega,
+            orderStatus,
+            notificationSentStatus: transitioned ? updatedStatus : existing.notificationSentStatus,
+            remetente: row.remetente,
+            notaFiscal: row.notaFiscal,
+            mundo: row.mundo,
+          });
+
+          validDbIds.add(existing.id); // Protege da exclusão
         }
-
-        const hadEntrega = !!existing.dataEntrega;
-        const hadPrevisao = !!existing.previsaoEntrega;
-        let transitioned = false;
-        let updatedStatus = existing.notificationSentStatus;
-
-        if (!hadEntrega && row.entrega) {
-          updatedStatus = "PENDING_CHEGOU";
-          result.chegadas++;
-          transitioned = true;
-        } else if (!hadPrevisao && row.previsao && !row.entrega) {
-          updatedStatus = "PENDING_PREVISTO";
-          result.novasPrevisoes++;
-          transitioned = true;
-        }
-
-        // Esta linha garante que, mesmo que o produto já estivesse no sistema,
-        // a quantidade por caixa vai ser atualizada agora!
-        await updatePedidoRastreio(existing.id, {
-          quantidade: row.volumes,
-          qtdePorCaixa: row.qtdePorCaixa,
-          previsaoEntrega: row.previsao,
-          dataEntrega: row.entrega,
-          orderStatus,
-          notificationSentStatus: transitioned ? updatedStatus : existing.notificationSentStatus,
-          remetente: row.remetente,
-          notaFiscal: row.notaFiscal,
-          mundo: row.mundo,
-        });
-
       } catch (dbError) {
         console.error(`Erro ao processar SKU ${sku}:`, dbError);
       }
     }
+
+    // 🔴 HORA DA LIMPEZA: O que não foi validado acima, é fantasma.
+    const allDbRows = await db.select({ id: pedidosRastreio.id }).from(pedidosRastreio);
+    let fantasmasApagados = 0;
+    
+    for (const dbRow of allDbRows) {
+      if (!validDbIds.has(dbRow.id)) {
+        await db.delete(pedidosRastreio).where(eq(pedidosRastreio.id, dbRow.id));
+        fantasmasApagados++;
+      }
+    }
+    
+    console.log(`[Sync] Planilha lida com sucesso. Fantasmas deletados: ${fantasmasApagados}`);
+
   } catch (error: any) {
     console.error("Erro na API:", error);
     result.erros.push(`Falha ao ler planilha: ${error.message}`);
@@ -235,67 +252,36 @@ export async function getAllPedidosWithDescricao() {
   const db = await getDb();
   if (!db) return [];
   try {
-    return await db
-      .select({
-        id: pedidosRastreio.id,
-        produtoSku: pedidosRastreio.produtoSku,
-        quantidade: pedidosRastreio.quantidade,
-        qtdePorCaixa: pedidosRastreio.qtdePorCaixa,
-        previsaoEntrega: pedidosRastreio.previsaoEntrega,
-        dataEntrega: pedidosRastreio.dataEntrega,
-        orderStatus: pedidosRastreio.orderStatus,
-        notificationSentStatus: pedidosRastreio.notificationSentStatus,
-        remetente: pedidosRastreio.remetente,
-        notaFiscal: pedidosRastreio.notaFiscal,
-        mundo: pedidosRastreio.mundo,
-        consultorId: pedidosRastreio.consultorId,
-        clienteId: pedidosRastreio.clienteId,
+    return await db.select({
+        id: pedidosRastreio.id, produtoSku: pedidosRastreio.produtoSku, quantidade: pedidosRastreio.quantidade,
+        qtdePorCaixa: pedidosRastreio.qtdePorCaixa, previsaoEntrega: pedidosRastreio.previsaoEntrega,
+        dataEntrega: pedidosRastreio.dataEntrega, orderStatus: pedidosRastreio.orderStatus,
+        notificationSentStatus: pedidosRastreio.notificationSentStatus, remetente: pedidosRastreio.remetente,
+        notaFiscal: pedidosRastreio.notaFiscal, mundo: pedidosRastreio.mundo,
+        consultorId: pedidosRastreio.consultorId, clienteId: pedidosRastreio.clienteId,
         descricao: produtos.descricao,
-      })
-      .from(pedidosRastreio)
-      .leftJoin(produtos, eq(pedidosRastreio.produtoSku, produtos.sku));
-  } catch (error) {
-    console.error("[SyncEngine] Erro ao buscar dados:", error);
-    return [];
-  }
+      }).from(pedidosRastreio).leftJoin(produtos, eq(pedidosRastreio.produtoSku, produtos.sku));
+  } catch (error) { return []; }
 }
 
 export async function getPendingNotifications() {
   const db = await getDb();
   if (!db) return [];
   try {
-    return await db
-      .select({
-        id: pedidosRastreio.id,
-        produtoSku: pedidosRastreio.produtoSku,
-        quantidade: pedidosRastreio.quantidade,
-        qtdePorCaixa: pedidosRastreio.qtdePorCaixa,
-        previsaoEntrega: pedidosRastreio.previsaoEntrega,
-        dataEntrega: pedidosRastreio.dataEntrega,
-        orderStatus: pedidosRastreio.orderStatus,
-        notificationSentStatus: pedidosRastreio.notificationSentStatus,
-        remetente: pedidosRastreio.remetente,
-        notaFiscal: pedidosRastreio.notaFiscal,
-        mundo: pedidosRastreio.mundo,
-        consultorId: pedidosRastreio.consultorId,
-        clienteId: pedidosRastreio.clienteId,
+    return await db.select({
+        id: pedidosRastreio.id, produtoSku: pedidosRastreio.produtoSku, quantidade: pedidosRastreio.quantidade,
+        qtdePorCaixa: pedidosRastreio.qtdePorCaixa, previsaoEntrega: pedidosRastreio.previsaoEntrega,
+        dataEntrega: pedidosRastreio.dataEntrega, orderStatus: pedidosRastreio.orderStatus,
+        notificationSentStatus: pedidosRastreio.notificationSentStatus, remetente: pedidosRastreio.remetente,
+        notaFiscal: pedidosRastreio.notaFiscal, mundo: pedidosRastreio.mundo,
+        consultorId: pedidosRastreio.consultorId, clienteId: pedidosRastreio.clienteId,
         descricao: produtos.descricao,
-      })
-      .from(pedidosRastreio)
-      .leftJoin(produtos, eq(pedidosRastreio.produtoSku, produtos.sku))
+      }).from(pedidosRastreio).leftJoin(produtos, eq(pedidosRastreio.produtoSku, produtos.sku))
       .where(like(pedidosRastreio.notificationSentStatus, "PENDING_%"));
-  } catch (error) {
-    console.error("[SyncEngine] Erro ao buscar notificações:", error);
-    return [];
-  }
+  } catch (error) { return []; }
 }
 
 export async function updateNotificationStatus(pedidoId: number, newStatus: string): Promise<boolean> {
-  try {
-    await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus });
-    return true;
-  } catch (error) {
-    console.error("[SyncEngine] Erro ao atualizar status:", error);
-    return false;
-  }
+  try { await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus }); return true; } 
+  catch (error) { return false; }
 }
