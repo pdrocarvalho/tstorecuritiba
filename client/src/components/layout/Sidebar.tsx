@@ -3,35 +3,23 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, PackageSearch, CheckCircle, Settings, Store } from "lucide-react";
+import { LayoutDashboard, PackageSearch, CheckCircle, Settings, Store, LogOut } from "lucide-react";
 
 export default function Sidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
-  // Caso os teus caminhos de rota sejam diferentes no teu ficheiro App.tsx,
-  // basta ajustares a propriedade 'path' aqui.
   const menuItems = [
-    { 
-      path: "/", 
-      label: "Visão Geral", 
-      icon: LayoutDashboard 
-    },
-    { 
-      path: "/recebimento/produtos", 
-      label: "Recebimento Futuro", 
-      icon: PackageSearch 
-    },
-    { 
-      path: "/recebimento/historico", 
-      label: "Histórico de Entregas", 
-      icon: CheckCircle 
-    },
-    { 
-      path: "/recebimento/config", 
-      label: "Configurações", 
-      icon: Settings 
-    },
+    { path: "/", label: "Visão Geral", icon: LayoutDashboard },
+    { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
+    { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
+    { path: "/recebimento/config", label: "Configurações", icon: Settings },
   ];
+
+  // Função para lidar com a saída do sistema
+  const handleLogout = () => {
+    // Aqui você pode limpar os tokens de autenticação ou cache se necessário no futuro
+    setLocation("/login");
+  };
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-20 flex-shrink-0">
@@ -43,7 +31,7 @@ export default function Sidebar() {
         </span>
       </div>
 
-      {/* Navegação */}
+      {/* Navegação Principal */}
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1.5">
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-3">
           Menu Principal
@@ -75,9 +63,19 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Rodapé do Menu */}
-      <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-        &copy; {new Date().getFullYear()} T Store
+      {/* Área Inferior (Sair + Rodapé) */}
+      <div className="p-4 border-t border-slate-800 space-y-4">
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center px-3 py-2.5 rounded-lg transition-colors group cursor-pointer text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+        >
+          <LogOut size={20} className="mr-3 text-slate-500 group-hover:text-red-400" />
+          <span className="font-medium">Sair do Sistema</span>
+        </button>
+        
+        <div className="text-xs text-slate-500 text-center">
+          &copy; {new Date().getFullYear()} T Store
+        </div>
       </div>
     </aside>
   );
