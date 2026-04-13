@@ -36,8 +36,10 @@ export default function Login() {
       // Guardamos o nosso token e entramos no sistema
       localStorage.setItem("token", data.token);
       localStorage.setItem("userRole", data.role);
-      toast.success(`Bem-vindo, ${data.name.split(" ")[0]}!`);
-      setLocation(ROUTES.dashboard);
+      toast.success(`Bem-vindo, ${data.name?.split(" ")[0] || "Usuário"}!`);
+      
+      // ROTA CORRIGIDA: Agora aponta para a página inicial atualizada (Painel)
+      setLocation(ROUTES.home);
     } catch (error: any) {
       toast.error(error.message || "Erro ao conectar com o servidor.");
     } finally {
@@ -66,13 +68,14 @@ export default function Login() {
               Faça login com a sua conta autorizada para aceder ao sistema.
             </p>
             
-            {/* O Mágico Botão do Google */}
+            {/* O Mágico Botão do Google 
+              (Removido o 'useOneTap' para evitar o erro de CSP/Múltiplas Inicializações do Google)
+            */}
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => {
                 toast.error("O login com o Google falhou ou foi cancelado.");
               }}
-              useOneTap
               shape="pill"
               theme="filled_blue"
               size="large"
