@@ -1,248 +1,278 @@
 /**
  * client/src/pages/recebimento/Produtos.tsx
- *
- * Página: Lista de Recebimento Futuro
- * Filtra produtos do banco de dados que NÃO possuem "Data de Entrega".
- * Exibe a quantidade total real (Volumes x Qtde. por Caixa).
  */
 
-import { useRef, useState } from "react";
-import { useLocation } from "wouter";
-import { Printer, Upload, Filter, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useMemo } from "react";
+import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { formatDate } from "@/lib/utils";
-import { ROUTES } from "@/constants";
-import type { Pedido, ProdutosFiltros } from "@/types";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import type { Pedido } from "@/types";
 
-// =============================================================================
-// FILTROS E LÓGICA DE NEGÓCIO
-// =============================================================================
+const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-const INITIAL_FILTERS: ProdutosFiltros = { remetente: "", mundo: "", status: "" };
+export default function RecebimentoFuturo() {
+  // Estados do Controle "Sob Demanda"
+  const [urlPlanilha, setUrlPlanilha] = useState("");
+  const [isVinculado, setIsVinculado] = useState(false);
+  const [isSincronizando, setIsSincronizando] = useState(false);
+  
+  // Estado para mostrar/esconder a listagem
+  const [mostrarLista, setMostrarLista] = useState(false);
 
-/**
- * Filtra a lista seguindo a Regra de Ouro:
- * 1. Apenas itens sem DATA DE ENTREGA (Recebimento Futuro).
- * 2. Aplica filtros de texto (Remetente, Mundo, etc).
- */
-function filtraRecebimentoFuturo(pedidos: Pedido[], filtros: ProdutosFiltros): Pedido[] {
-  return pedidos.filter((p) => {
-    // REGRA PRINCIPAL: Se tem data de entrega, não aparece nesta lista
-    if (p.dataEntrega) return false;
-
-    const matchRemetente =
-      !filtros.remetente ||
-      p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase());
-    const matchMundo =
-      !filtros.mundo ||
-      p.mundo?.toLowerCase().includes(filtros.mundo.toLowerCase());
-    const matchStatus = !filtros.status || p.orderStatus === filtros.status;
-    
-    return matchRemetente && matchMundo && matchStatus;
+  // Consulta atual (no próximo passo, isto mudará para a nova API on-demand)
+  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getPending.useQuery(undefined, {
+    enabled: isVinculado, // Só pesquisa dados se o botão Vincular for ativado
   });
-}
 
-// =============================================================================
-// FUNÇÃO DE IMPRESSÃO
-// =============================================================================
-
-function printTable(tableHtml: string) {
-  const printWindow = window.open("", "", "height=600,width=800");
-  if (!printWindow) return;
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Recebimento Futuro — T Store Curitiba</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; font-size: 20px; margin-bottom: 16px; }
-        .data { text-align: right; font-size: 12px; color: #666; margin-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background-color: #f2f2f2; border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold; font-size: 10px; }
-        td { border: 1px solid #ddd; padding: 6px 8px; font-size: 10px; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-      </style>
-    </head>
-    <body>
-      <p class="data">Relatório gerado em: ${new Date().toLocaleDateString("pt-BR")}</p>
-      <h1>Lista de Recebimento Futuro</h1>
-      ${tableHtml}
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  printWindow.print();
-}
-
-// =============================================================================
-// COMPONENTE DA PÁGINA
-// =============================================================================
-
-export default function RecebimentoProdutos() {
-  const [filtros, setFiltros] = useState<ProdutosFiltros>(INITIAL_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
-  const tableRef = useRef<HTMLTableElement>(null);
-  const [, setLocation] = useLocation();
-
-  // LED Status
-  const configQuery = trpc.admin.getConfig.useQuery();
-  const isOnline = !!configQuery.data?.sheetsUrl;
-  const fileName = configQuery.data?.fileName || "Planilha não vinculada";
-
-  // Busca todos os pedidos e aplica o filtro de "Futuro" localmente
-  const { data: todosPedidos = [] } = trpc.notifications.getPending.useQuery();
-  const produtosFuturos = filtraRecebimentoFuturo(todosPedidos as Pedido[], filtros);
-
-  const handleFiltroChange = (key: keyof ProdutosFiltros, value: string) => {
-    setFiltros((prev) => ({ ...prev, [key]: value }));
+  // Funções de Controle da Barra Superior
+  const handleVincular = () => {
+    if (!urlPlanilha) return alert("Por favor, insira o link da planilha.");
+    setIsSincronizando(true);
+    setIsVinculado(true);
+    // Simula um tempo de leitura rápido
+    setTimeout(() => { refetch(); setIsSincronizando(false); }, 1000);
   };
 
-  const handlePrint = () => {
-    if (tableRef.current) printTable(tableRef.current.outerHTML);
+  const handleAtualizar = () => {
+    setIsSincronizando(true);
+    refetch().then(() => setIsSincronizando(false));
   };
 
-  const handleVincularSheets = () => {
-    setLocation(ROUTES.recebimento.config);
+  const handleCancelar = () => {
+    setIsVinculado(false);
+    setUrlPlanilha("");
+    setMostrarLista(false);
   };
+
+  // Cálculos Estratégicos (Mistos: Dashboard + Lista)
+  const kpis = useMemo(() => {
+    const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
+    
+    let totalVolumesFisicos = 0;
+    const notasEmTransitoSet = new Set<string>();
+    const notasAtrasadasSet = new Set<string>();
+    const skusPorMundo: Record<string, Set<string>> = {};
+    const volumesPorRemetente: Record<string, number> = {};
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    futuros.forEach((p) => {
+      // Cálculo para o Dashboard Analítico (Caixas Físicas)
+      totalVolumesFisicos += p.quantidade;
+      
+      if (p.notaFiscal) notasEmTransitoSet.add(p.notaFiscal);
+
+      if (p.previsaoEntrega) {
+        const previsao = new Date(p.previsaoEntrega);
+        if (previsao < hoje && p.notaFiscal) {
+          notasAtrasadasSet.add(p.notaFiscal);
+        }
+      }
+
+      const mundo = p.mundo || "Sem Mundo";
+      if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
+      skusPorMundo[mundo].add(p.produtoSku);
+
+      const remetente = p.remetente || "Desconhecido";
+      volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + p.quantidade;
+    });
+
+    return {
+      listaRecebimento: futuros,
+      totalVolumesFisicos,
+      notasEmTransito: notasEmTransitoSet.size,
+      atrasados: notasAtrasadasSet.size,
+      grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })).sort((a, b) => b.value - a.value),
+      grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+    };
+  }, [todosPedidos]);
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        
-        {/* LED de Status */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-300'}`} />
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-            {isOnline ? `Online: ${fileName}` : "Status: Offline"}
-          </span>
+      <div className="space-y-6 pb-12">
+        {/* CABEÇALHO */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
+          <p className="text-gray-600 mt-1">Gestão inteligente e sob demanda das mercadorias em trânsito</p>
         </div>
 
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
-            <p className="text-gray-600 mt-1">Produtos aguardando entrada em estoque</p>
+        {/* 1. BARRA DE CONTROLE SOB DEMANDA */}
+        <Card className="p-4 border border-blue-100 bg-blue-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center transition-all duration-300">
+          <div className="flex-1 w-full">
+            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Fonte de Dados (Google Sheets)</span>
+            <Input 
+              placeholder="Cole o link da planilha aqui..." 
+              value={urlPlanilha} 
+              onChange={(e) => setUrlPlanilha(e.target.value)} 
+              disabled={isVinculado}
+              className="bg-white border-blue-200 focus-visible:ring-blue-500"
+            />
           </div>
-          <div className="flex gap-2">
-            <Button onClick={handleVincularSheets} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
-              <Upload size={18} />
-              Sincronizar Sheets
-            </Button>
-            <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
-              <Printer size={18} />
-              Imprimir A4
-            </Button>
+          
+          <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
+            {!isVinculado ? (
+              <button onClick={handleVincular} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors">
+                <Link2 size={18} /> Vincular
+              </button>
+            ) : (
+              <>
+                <button onClick={handleAtualizar} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors disabled:opacity-50">
+                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> {isSincronizando ? "Lendo..." : "Atualizar"}
+                </button>
+                <button onClick={handleCancelar} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 px-6 py-2.5 rounded-md font-medium transition-colors">
+                  <X size={18} /> Cancelar
+                </button>
+              </>
+            )}
           </div>
-        </div>
+        </Card>
 
-        {/* Barra de Filtros */}
-        <Card className="p-4">
-          <button
-            onClick={() => setShowFilters((prev) => !prev)}
-            className="flex items-center gap-2 text-blue-600 font-medium hover:text-blue-700"
-          >
-            <Filter size={18} />
-            Filtrar Lista
-            {showFilters && <X size={16} />}
-          </button>
+        {/* ESTADO VAZIO (NÃO VINCULADO) */}
+        {!isVinculado && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <TableProperties size={64} className="mb-4 text-gray-300" />
+            <h3 className="text-xl font-medium text-gray-500">Nenhuma planilha vinculada</h3>
+            <p className="text-sm mt-2 text-center max-w-md">Insira o link da sua planilha e clique em Vincular para carregar os indicadores analíticos e a lista de recebimento futuro instantaneamente.</p>
+          </div>
+        )}
 
-          {showFilters && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700 mb-1 block">Remetente (Fábrica)</span>
-                <Input
-                  placeholder="Ex: Cutelaria..."
-                  value={filtros.remetente}
-                  onChange={(e) => handleFiltroChange("remetente", e.target.value)}
-                />
-              </label>
+        {/* 2. DASHBOARD VISÃO GERAL (SÓ APARECE SE VINCULADO) */}
+        {isVinculado && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Cards de KPI */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+                <div>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Total a Receber</p>
+                  <h3 className="text-3xl font-extrabold text-gray-900">{kpis.totalVolumesFisicos}</h3>
+                  <p className="text-xs text-gray-400 mt-1">volumes / caixas físicas</p>
+                </div>
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-full"><Package size={28} /></div>
+              </Card>
 
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700 mb-1 block">Mundo</span>
-                <Input
-                  placeholder="Ex: Cortar..."
-                  value={filtros.mundo}
-                  onChange={(e) => handleFiltroChange("mundo", e.target.value)}
-                />
-              </label>
+              <Card className="p-6 border-l-4 border-l-emerald-500 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+                <div>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Notas em Trânsito</p>
+                  <h3 className="text-3xl font-extrabold text-gray-900">{kpis.notasEmTransito}</h3>
+                  <p className="text-xs text-gray-400 mt-1">NFs únicas identificadas</p>
+                </div>
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full"><Truck size={28} /></div>
+              </Card>
 
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700 mb-1 block">Status de Notificação</span>
-                <select
-                  value={filtros.status}
-                  onChange={(e) => handleFiltroChange("status", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                >
-                  <option value="">Todos</option>
-                  <option value="Faturado">Faturado</option>
-                  <option value="Previsto">Previsto</option>
-                </select>
-              </label>
+              <Card className={`p-6 border-l-4 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow ${kpis.atrasados > 0 ? 'border-l-red-500' : 'border-l-gray-300'}`}>
+                <div>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Atrasos</p>
+                  <h3 className={`text-3xl font-extrabold ${kpis.atrasados > 0 ? 'text-red-600' : 'text-gray-900'}`}>{kpis.atrasados}</h3>
+                  <p className="text-xs text-gray-400 mt-1">NFs fora do prazo</p>
+                </div>
+                <div className={`p-3 rounded-full ${kpis.atrasados > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={28} /></div>
+              </Card>
             </div>
-          )}
-        </Card>
 
-        {/* Tabela de Recebimento Futuro */}
-        <Card className="overflow-hidden border-gray-200 shadow-sm">
-          <div className="overflow-x-auto">
-            <table ref={tableRef} className="w-full text-sm text-left">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {[
-                    "REMETENTE",
-                    "NOTA FISCAL",
-                    "REF.",
-                    "DESCRIÇÃO",
-                    "MUNDO",
-                    "QTDE. TOTAL",
-                    "PREVISÃO",
-                  ].map((col) => (
-                    <th key={col} className="px-4 py-4 font-bold text-gray-700 uppercase tracking-wider">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {produtosFuturos.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400 italic">
-                      Nenhum produto em recebimento futuro encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  produtosFuturos.map((produto) => (
-                    <tr key={produto.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-900">{produto.remetente ?? "—"}</td>
-                      <td className="px-4 py-3 text-gray-600">{produto.notaFiscal ?? "—"}</td>
-                      <td className="px-4 py-3 font-mono text-blue-600">{produto.produtoSku}</td>
-                      <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{produto.descricao}</td>
-                      <td className="px-4 py-3 text-gray-600">{produto.mundo ?? "—"}</td>
-                      <td className="px-4 py-3 text-center font-bold">
-                        {/* Multiplica Volumes (quantidade) por QTDE POR CAIXA */}
-                        {produto.quantidade * (produto.qtdePorCaixa || 1)}
-                      </td>
-                      <td className="px-4 py-3 text-orange-600 font-semibold">
-                        {formatDate(produto.previsaoEntrega)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-6 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-6">Referências Únicas a Receber por Mundo</h3>
+                <div style={{ width: '100%', height: 300 }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie data={kpis.grafSkusMundo} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+                        {kpis.grafSkusMundo.map((_, index) => <Cell key={index} fill={CORES_MUNDO[index % CORES_MUNDO.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`${value} SKUs diferentes`, 'Quantidade']} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card className="p-6 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-6">Volume de Caixas por Fábrica</h3>
+                <div style={{ width: '100%', height: 300 }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={kpis.grafRemetente} layout="vertical" margin={{ left: 10 }}>
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={90} tick={{fontSize: 10}} />
+                      <Tooltip cursor={{fill: '#f3f4f6'}} formatter={(value) => [`${value} caixas`, 'Volumes Físicos']} />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+
+            <hr className="my-8 border-gray-200" />
+
+            {/* 3. LISTA DE RECEBIMENTO FUTURO (EXPANSÍVEL) */}
+            <div className="flex flex-col items-center">
+              <button 
+                onClick={() => setMostrarLista(!mostrarLista)}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-all"
+              >
+                {mostrarLista ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                {mostrarLista ? "Ocultar Lista Detalhada" : "Ver Lista Completa de Produtos"}
+              </button>
+            </div>
+
+            {mostrarLista && (
+              <Card className="mt-6 shadow-md border-slate-200 overflow-hidden animate-in slide-in-from-top-4 duration-300">
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                  <h2 className="font-bold text-slate-800 text-lg">Listagem de SKUs em Trânsito</h2>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">
+                    Mostrando QTDE TOTAL UNITÁRIA
+                  </span>
+                </div>
+                
+                <div className="overflow-x-auto max-h-[600px]">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-100 text-slate-600 text-xs uppercase sticky top-0 z-10 shadow-sm">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Remetente</th>
+                        <th className="px-4 py-3 font-semibold">Nota Fiscal</th>
+                        <th className="px-4 py-3 font-semibold">Ref. (SKU)</th>
+                        <th className="px-4 py-3 font-semibold w-1/3">Descrição</th>
+                        <th className="px-4 py-3 font-semibold">Mundo</th>
+                        <th className="px-4 py-3 font-semibold text-right bg-blue-50/50">Qtd. Total</th>
+                        <th className="px-4 py-3 font-semibold text-center">Previsão</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {kpis.listaRecebimento.map((item, idx) => {
+                        // CÁLCULO EXATO DA SUA PLANILHA: Volumes * Qtd por Caixa
+                        const qtdTotalUnitaria = item.quantidade * (item.qtdePorCaixa || 1);
+                        
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-slate-600">{item.remetente || '-'}</td>
+                            <td className="px-4 py-3 font-medium text-slate-700">{item.notaFiscal || '-'}</td>
+                            <td className="px-4 py-3 text-slate-600 font-mono text-xs">{item.produtoSku}</td>
+                            <td className="px-4 py-3 text-slate-700">{item.descricao || 'Sem descrição'}</td>
+                            <td className="px-4 py-3 text-slate-500 text-xs font-medium">{item.mundo || '-'}</td>
+                            <td className="px-4 py-3 font-black text-blue-700 text-right bg-blue-50/20">{qtdTotalUnitaria}</td>
+                            <td className="px-4 py-3 text-center text-slate-600">
+                              {item.previsaoEntrega ? new Date(item.previsaoEntrega).toLocaleDateString('pt-BR') : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {kpis.listaRecebimento.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                            Nenhum produto em trânsito no momento.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </div>
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs font-semibold text-gray-500">
-            TOTAL DE ITENS PENDENTES: {produtosFuturos.length}
-          </div>
-        </Card>
+        )}
       </div>
     </MainLayout>
   );
