@@ -2,7 +2,7 @@
  * client/src/pages/recebimento/Historico.tsx
  */
 
-import { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
+import { useState, useMemo, useEffect } from "react";
 import { 
   Link2, RefreshCw, X, Filter, Box, FileText, 
   Layers, TableProperties, ChevronDown, ChevronUp 
@@ -24,11 +24,15 @@ interface FiltrosHistorico { dataInicio: string; dataFim: string; remetente: str
 const INITIAL_FILTERS: FiltrosHistorico = { dataInicio: "", dataFim: "", remetente: "", mundo: "" };
 
 export default function RecebimentoHistorico() {
-  // 🚀 INICIALIZAÇÃO: Busca o link salvo especificamente para o Histórico
+  // 🚀 PERSISTÊNCIA: Inicializa estados buscando no sessionStorage
   const [urlPlanilha, setUrlPlanilha] = useState(() => {
     return sessionStorage.getItem("url_historico") || "";
   });
-  const [isVinculado, setIsVinculado] = useState(false);
+
+  const [isVinculado, setIsVinculado] = useState(() => {
+    return sessionStorage.getItem("vinculado_historico") === "true";
+  });
+
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
@@ -36,58 +40,54 @@ export default function RecebimentoHistorico() {
 
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
-    { enabled: false }
+    { enabled: isVinculado && !!urlPlanilha }
   );
 
-  // 🚀 AUTO-CONEXÃO: Reestabelece o vínculo ao entrar na página
+  // 🚀 AUTO-LOAD: Garante que os dados apareçam ao retornar à aba
   useEffect(() => {
-    if (urlPlanilha) {
-      handleVincular(true);
+    if (isVinculado && urlPlanilha) {
+      refetch();
     }
   }, []);
 
-  // 🚀 ATUALIZADO: Salva no sessionStorage ao vincular
-  const handleVincular = async (silencioso = false) => {
-    if (!urlPlanilha) return;
+  const handleVincular = async () => {
+    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
     setIsSincronizando(true);
     try {
       const result = await refetch();
       if (!result.isError) {
         setIsVinculado(true);
+        // 🚀 SALVA NO sessionStorage
         sessionStorage.setItem("url_historico", urlPlanilha);
-        if (!silencioso) toast.success("Banco de Dados Histórico vinculado!");
+        sessionStorage.setItem("vinculado_historico", "true");
+        toast.success("Histórico vinculado!");
         setUltimaSincronizacao(Date.now());
-      } else {
-        if (!silencioso) toast.error("Falha ao ler planilha de histórico.");
       }
-    } catch (error) {
-      console.error(error);
     } finally {
       setIsSincronizando(false);
     }
   };
 
+  const handleCancelar = () => {
+    setIsVinculado(false);
+    setUrlPlanilha("");
+    // 🚀 LIMPA O sessionStorage
+    sessionStorage.removeItem("url_historico");
+    sessionStorage.removeItem("vinculado_historico");
+    setFiltros(INITIAL_FILTERS);
+    toast.info("Vínculo removido.");
+  };
+
   const handleAtualizar = async () => {
     const agora = Date.now();
     if (ultimaSincronizacao !== 0 && (agora - ultimaSincronizacao) < 30000) {
-      const resto = Math.ceil((30000 - (agora - ultimaSincronizacao)) / 1000);
-      return toast.warning(`Aguarde ${resto}s para atualizar.`);
+      return toast.warning("Aguarde 30s.");
     }
     setIsSincronizando(true);
     await refetch();
     setUltimaSincronizacao(Date.now());
     toast.success("Histórico atualizado!");
     setIsSincronizando(false);
-  };
-
-  // 🚀 ATUALIZADO: Limpa o sessionStorage ao cancelar
-  const handleCancelar = () => {
-    setIsVinculado(false);
-    setUrlPlanilha("");
-    sessionStorage.removeItem("url_historico");
-    setFiltros(INITIAL_FILTERS);
-    setUltimaSincronizacao(0);
-    toast.info("Vínculo de histórico removido.");
   };
 
   const kpis = useMemo(() => {
@@ -143,38 +143,27 @@ export default function RecebimentoHistorico() {
 
         <Card className="p-4 border-emerald-100 bg-emerald-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1 block">Fonte de Dados</span>
+            <span className="text-xs font-bold text-emerald-800 uppercase mb-1 block">Fonte de Dados</span>
             <Input 
-              placeholder="Cole o link da planilha de Banco de Dados..." 
-              value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} 
+              placeholder="Link da planilha de Banco de Dados..." 
+              value={urlPlanilha} 
+              onChange={(e) => setUrlPlanilha(e.target.value)} 
               disabled={isVinculado} className="bg-white border-emerald-200 rounded-lg" 
             />
           </div>
           
           <div className="flex gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
-              <button 
-                onClick={() => handleVincular(false)} 
-                disabled={isSincronizando} 
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[160px] shadow-md transition-all"
-              >
+              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[160px] shadow-md transition-all">
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Lendo..." : "Vincular Banco"}
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleAtualizar} 
-                  disabled={isSincronizando} 
-                  className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-sm"
-                >
-                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
-                  {isSincronizando ? "Buscando..." : "Atualizar"}
+                <button onClick={handleAtualizar} disabled={isSincronizando} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-sm">
+                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> Atualizar
                 </button>
-                <button 
-                  onClick={handleCancelar} 
-                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"
-                >
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm">
                   <X size={20} />
                 </button>
               </div>
@@ -184,7 +173,6 @@ export default function RecebimentoHistorico() {
 
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Filtros e Gráficos continuam aqui... */}
             <Card className="p-4 border-slate-200 bg-white shadow-sm">
               <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between w-full text-slate-700 font-bold">
                 <div className="flex items-center gap-2"><Filter size={18} /> Filtros de Análise</div>

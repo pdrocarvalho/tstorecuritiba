@@ -2,7 +2,7 @@
  * client/src/pages/recebimento/Produtos.tsx
  */
 
-import { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
+import { useState, useMemo, useEffect } from "react";
 import { 
   Link2, RefreshCw, X, Package, Truck, AlertTriangle, 
   ChevronDown, ChevronUp, TableProperties, Printer 
@@ -21,24 +21,29 @@ import type { Pedido } from "@/types";
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function RecebimentoFuturo() {
-  // 🚀 INICIALIZAÇÃO: Verifica se já existe um link no baú da sessão
+  // 🚀 PERSISTÊNCIA: Inicializa estados buscando no baú da sessão
   const [urlPlanilha, setUrlPlanilha] = useState(() => {
     return sessionStorage.getItem("url_recebimento") || "";
   });
-  const [isVinculado, setIsVinculado] = useState(false);
+
+  const [isVinculado, setIsVinculado] = useState(() => {
+    return sessionStorage.getItem("vinculado_recebimento") === "true";
+  });
+
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
+  // 🚀 QUERY: Habilitada automaticamente se já houver link salvo
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
-    { enabled: false }
+    { enabled: isVinculado && !!urlPlanilha }
   );
 
-  // 🚀 AUTO-CONEXÃO: Reestabelece o vínculo ao trocar de aba
+  // 🚀 AUTO-LOAD: Recarrega os dados ao alternar abas
   useEffect(() => {
-    if (urlPlanilha) {
-      handleVincular(true);
+    if (isVinculado && urlPlanilha) {
+      refetch();
     }
   }, []);
 
@@ -77,64 +82,46 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  const gerarRelatorioImpressao = () => {
-    if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
-    const janelaImpressao = window.open('', '_blank');
-    if (!janelaImpressao) return toast.error("Habilite popups.");
-
-    const htmlRelatorio = `
-      <html>
-        <head><title>Relatório de Recebimento</title><style>body{font-family:sans-serif;padding:20px;font-size:12px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;}</style></head>
-        <body>
-          <h1>Recebimento Futuro</h1>
-          <table><thead><tr><th>Remetente</th><th>NF</th><th>SKU</th><th>Qtd</th></tr></thead>
-          <tbody>${kpis.listaRecebimento.map(item => `<tr><td>${item.remetente}</td><td>${item.notaFiscal}</td><td>${item.produtoSku}</td><td>${item.quantidade}</td></tr>`).join('')}</tbody></table>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>`;
-    janelaImpressao.document.write(htmlRelatorio);
-    janelaImpressao.document.close();
-  };
-
-  // 🚀 ATUALIZADO: Salva no sessionStorage ao vincular
-  const handleVincular = async (silencioso = false) => {
-    if (!urlPlanilha) return;
+  const handleVincular = async () => {
+    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
     setIsSincronizando(true);
     try {
       const result = await refetch();
-      if (!result.isError) {
+      if (result.isError) {
+        toast.error("Erro ao acessar a planilha.");
+      } else {
         setIsVinculado(true);
+        // 🚀 SALVA NO sessionStorage
         sessionStorage.setItem("url_recebimento", urlPlanilha);
-        if (!silencioso) toast.success("Recebimento sincronizado!");
+        sessionStorage.setItem("vinculado_recebimento", "true");
+        toast.success("Recebimento vinculado!");
         setUltimaSincronizacao(Date.now());
       }
-    } catch (error) {
-      console.error(error);
     } finally {
       setIsSincronizando(false);
     }
   };
 
+  const handleCancelar = () => {
+    setIsVinculado(false);
+    setUrlPlanilha("");
+    // 🚀 LIMPA O sessionStorage
+    sessionStorage.removeItem("url_recebimento");
+    sessionStorage.removeItem("vinculado_recebimento");
+    setMostrarLista(false);
+    toast.info("Vínculo removido.");
+  };
+
   const handleAtualizar = async () => {
     const agora = Date.now();
     if (ultimaSincronizacao !== 0 && (agora - ultimaSincronizacao) < 30000) {
-      return toast.warning("Aguarde 30s para atualizar.");
+      return toast.warning("Aguarde 30s.");
     }
     setIsSincronizando(true);
     await refetch();
     setUltimaSincronizacao(Date.now());
     toast.success("Dados atualizados!");
     setIsSincronizando(false);
-  };
-
-  // 🚀 ATUALIZADO: Limpa o sessionStorage ao cancelar
-  const handleCancelar = () => {
-    setIsVinculado(false);
-    setUrlPlanilha("");
-    sessionStorage.removeItem("url_recebimento");
-    setMostrarLista(false);
-    setUltimaSincronizacao(0);
-    toast.info("Vínculo removido.");
   };
 
   return (
@@ -145,43 +132,30 @@ export default function RecebimentoFuturo() {
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Recebimento Futuro</h1>
             <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
           </div>
-          {isVinculado && (
-            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md">
-              <Printer size={18} /> Imprimir Relatório
-            </button>
-          )}
         </div>
 
         <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-col md:flex-row gap-4 items-center shadow-sm">
           <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Fonte de Dados</span>
+            <span className="text-xs font-bold text-blue-800 uppercase mb-1 block">Fonte de Dados</span>
             <Input 
-              placeholder="Cole o link da planilha..." 
-              value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} 
+              placeholder="Link da planilha..." 
+              value={urlPlanilha} 
+              onChange={(e) => setUrlPlanilha(e.target.value)} 
               disabled={isVinculado} className="bg-white border-blue-200" 
             />
           </div>
           <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
-              <button 
-                onClick={() => handleVincular(false)} 
-                disabled={isSincronizando} 
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[140px]"
-              >
+              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[140px]">
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Vinculando..." : "Vincular"}
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleAtualizar} 
-                  disabled={isSincronizando} 
-                  className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
-                >
-                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
-                  {isSincronizando ? "Lendo..." : "Atualizar"}
+                <button onClick={handleAtualizar} disabled={isSincronizando} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2">
+                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> Atualizar
                 </button>
-                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm">
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200">
                   <X size={20} />
                 </button>
               </div>
@@ -189,7 +163,6 @@ export default function RecebimentoFuturo() {
           </div>
         </Card>
 
-        {/* ... Restante da página (KPIs, Gráficos, Tabela) mantidos como antes ... */}
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -221,7 +194,7 @@ export default function RecebimentoFuturo() {
             {mostrarLista && (
               <Card className="overflow-hidden shadow-md border-slate-200">
                 <div className="overflow-x-auto max-h-[400px]">
-                  <table className="w-full text-left text-sm border-collapse">
+                  <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-bold text-slate-500 border-b">
                       <tr><th className="px-4 py-3">Remetente</th><th className="px-4 py-3">Nota</th><th className="px-4 py-3">Ref</th><th className="px-4 py-3">Descrição</th><th className="px-4 py-3 text-right">Qtd</th></tr>
                     </thead>
