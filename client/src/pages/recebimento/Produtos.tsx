@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
-// 🎨 PALETA DE CORES VIBRANTES (PADRONIZADA)
+// 🎨 PALETA DE CORES VIBRANTES
 const MUNDO_COLORS: Record<string, string> = {
   "CORTAR": "#e57373",
   "FESTEJAR": "#9575cd",
@@ -45,13 +45,26 @@ export default function RecebimentoFuturo() {
   }, []);
 
   const kpis = useMemo(() => {
+    // 1. Filtrar apenas os que não foram entregues
     const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
+    
+    // 🚀 2. ORDENAÇÃO: Por Remetente (A-Z) e depois por Nota Fiscal
+    const listaOrdenada = [...futuros].sort((a, b) => {
+      const remA = (a.remetente || "").toUpperCase();
+      const remB = (b.remetente || "").toUpperCase();
+      if (remA !== remB) return remA.localeCompare(remB);
+
+      const notaA = (a.notaFiscal || "").toUpperCase();
+      const notaB = (b.notaFiscal || "").toUpperCase();
+      return notaA.localeCompare(notaB);
+    });
+
     let totalVolumesFisicos = 0;
     const notasEmTransitoSet = new Set<string>();
     const skusPorMundo: Record<string, Set<string>> = {};
     const volumesPorRemetente: Record<string, number> = {};
 
-    futuros.forEach((p) => {
+    listaOrdenada.forEach((p) => {
       totalVolumesFisicos += p.quantidade;
       if (p.notaFiscal) notasEmTransitoSet.add(p.notaFiscal);
       
@@ -64,7 +77,7 @@ export default function RecebimentoFuturo() {
     });
 
     return {
-      listaRecebimento: futuros, 
+      listaRecebimento: listaOrdenada, 
       totalVolumesFisicos, 
       notasEmTransito: notasEmTransitoSet.size,
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })).sort((a, b) => b.value - a.value),
@@ -72,7 +85,7 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 IMPRESSÃO COLORIDA E ORGANIZADA
+  // 🚀 IMPRESSÃO NA NOVA ORDEM
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
     const janelaImpressao = window.open('', '_blank');
@@ -85,40 +98,25 @@ export default function RecebimentoFuturo() {
           <style>
             body { font-family: sans-serif; padding: 20px; font-size: 10px; color: #333; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #eee; padding: 6px; text-align: left; }
-            th { 
-                background-color: #f1f5f9 !important; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact;
-                font-weight: bold; 
-                text-transform: uppercase; 
-            }
+            th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
+            th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: bold; text-transform: uppercase; }
             .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 10px; }
-            /* 🚀 ESTILO DA BOLINHA COLORIDA NA IMPRESSÃO */
-            .mundo-badge { 
-                width: 8px; 
-                height: 8px; 
-                border-radius: 50%; 
-                display: inline-block; 
-                margin-right: 5px; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-            }
+            .mundo-badge { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           </style>
         </head>
         <body>
           <div class="header">
-            <h2 style="margin:0">T Store - Recebimento Futuro</h2>
-            <p style="margin:5px 0">Data do Relatório: ${new Date().toLocaleString('pt-BR')}</p>
+            <h2 style="margin:0 text-transform: uppercase;">T Store - Recebimento Futuro</h2>
+            <p style="margin:5px 0">Lista Agrupada por Remetente e Nota | Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
           </div>
           <table>
             <thead>
               <tr>
                 <th>Remetente</th>
                 <th>Descrição</th>
+                <th>Ref.</th>
                 <th>Mundo</th>
                 <th>Nota Fiscal</th>
-                <th>Ref.</th>
                 <th>Qtde</th>
               </tr>
             </thead>
@@ -128,22 +126,17 @@ export default function RecebimentoFuturo() {
                 return `
                   <tr>
                     <td>${item.remetente || '-'}</td>
-                    <td style="font-size: 9px; color: #666;">${item.descricao || '-'}</td>
-                    <td>
-                      <span class="mundo-badge" style="background-color: ${cor};"></span>
-                      <b>${item.mundo || '-'}</b>
-                    </td>
-                    <td>${item.notaFiscal || '-'}</td>
+                    <td style="font-size: 9px;">${item.descricao || '-'}</td>
                     <td>${item.produtoSku}</td>
+                    <td><span class="mundo-badge" style="background-color: ${cor};"></span>${item.mundo || '-'}</td>
+                    <td>${item.notaFiscal || '-'}</td>
                     <td style="text-align: right;"><b>${item.quantidade}</b></td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
           </table>
-          <script>
-            setTimeout(() => { window.print(); window.close(); }, 500);
-          </script>
+          <script>setTimeout(() => { window.print(); window.close(); }, 500);</script>
         </body>
       </html>
     `;
@@ -160,7 +153,7 @@ export default function RecebimentoFuturo() {
         setIsVinculado(true);
         sessionStorage.setItem("url_recebimento", urlPlanilha);
         sessionStorage.setItem("vinculado_rece_futuro", "true");
-        toast.success("Recebimento vinculado!");
+        toast.success("Dados vinculados e ordenados!");
       }
     } finally {
       setIsSincronizando(false);
@@ -181,14 +174,10 @@ export default function RecebimentoFuturo() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Recebimento Futuro</h1>
-            <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
+            <p className="text-gray-600">Mercadorias organizadas por Remetente e NF</p>
           </div>
-          
           {isVinculado && (
-            <button 
-              onClick={gerarRelatorioImpressao} 
-              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:bg-slate-800 transition-all active:scale-95"
-            >
+            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:bg-slate-800 transition-all">
               <Printer size={18} /> Imprimir Relatório
             </button>
           )}
@@ -217,10 +206,10 @@ export default function RecebimentoFuturo() {
 
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            {/* GRÁFICOS */}
+            {/* Gráficos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="p-6">
-                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest">SKUs por Mundo</h3>
+                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">SKUs por Mundo</h3>
                 <div style={{ width: '100%', height: 320 }}>
                   <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
@@ -237,12 +226,12 @@ export default function RecebimentoFuturo() {
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest">Volumes por Remetente</h3>
+                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">Volumes por Remetente</h3>
                 <div style={{ width: '100%', height: 320 }}>
                   <ResponsiveContainer width="100%" height={320}>
                     <BarChart data={kpis.grafRemetente} layout="vertical">
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} />
+                      <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
                       <Tooltip cursor={{fill: 'transparent'}} />
                       <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                     </BarChart>
@@ -253,35 +242,35 @@ export default function RecebimentoFuturo() {
 
             <div className="flex justify-center">
               <button onClick={() => setMostrarLista(!mostrarLista)} className="bg-slate-900 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-all">
-                {mostrarLista ? "Ocultar Detalhes" : "Ver Detalhes dos Itens"}
+                {mostrarLista ? "Ocultar Lista Detalhada" : "Ver Lista Organizada"}
               </button>
             </div>
 
             {mostrarLista && (
               <Card className="overflow-hidden border-slate-200 shadow-xl">
-                <div className="overflow-x-auto max-h-[450px]">
+                <div className="overflow-x-auto max-h-[500px]">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-100 sticky top-0 uppercase text-[10px] font-black text-slate-600 border-b">
                       <tr>
                         <th className="px-4 py-4">Remetente</th>
                         <th className="px-4 py-4">Descrição</th>
+                        <th className="px-4 py-4">Ref.</th>
                         <th className="px-4 py-4">Mundo</th>
                         <th className="px-4 py-4">Nota Fiscal</th>
-                        <th className="px-4 py-4">Ref.</th>
                         <th className="px-4 py-4 text-right">Qtde</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {kpis.listaRecebimento.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 text-slate-600">{item.remetente || '-'}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{item.remetente || '-'}</td>
                           <td className="px-4 py-3 text-xs text-slate-500 italic max-w-xs truncate">{item.descricao || '-'}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{item.produtoSku}</td>
                           <td className="px-4 py-3">
                             <span className="inline-block w-3 h-3 rounded-full mr-2 align-middle" style={{ backgroundColor: MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO }}></span>
                             <span className="text-[10px] font-black uppercase">{item.mundo || '-'}</span>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">{item.notaFiscal || '-'}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{item.produtoSku}</td>
                           <td className="px-4 py-3 text-right font-black text-blue-600">{item.quantidade}</td>
                         </tr>
                       ))}
