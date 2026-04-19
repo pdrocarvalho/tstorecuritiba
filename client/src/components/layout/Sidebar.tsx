@@ -3,21 +3,21 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, PackageSearch, CheckCircle, Settings, Store, LogOut } from "lucide-react";
+import { PackageSearch, CheckCircle, Store, LogOut } from "lucide-react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
 
+  // Menu enxuto e focado na nova arquitetura
   const menuItems = [
-    { path: "/", label: "Visão Geral", icon: LayoutDashboard },
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
-    { path: "/recebimento/config", label: "Configurações", icon: Settings },
   ];
 
   // Função para lidar com a saída do sistema
   const handleLogout = () => {
-    // Aqui você pode limpar os tokens de autenticação ou cache se necessário no futuro
+    localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
     setLocation("/login");
   };
 
