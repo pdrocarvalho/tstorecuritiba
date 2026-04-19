@@ -2,38 +2,35 @@
  * server/routers/notification.router.ts
  */
 
-import { initTRPC } from "@trpc/server";
 import { z } from "zod";
+// 🚀 IMPORTANTE: Usamos o router e publicProcedure do seu núcleo
+import { router, publicProcedure } from "../_core/trpc"; 
 import { 
   fetchLiveGoogleSheet, 
   addRowToSheet, 
   updateSheetRow 
 } from "../engines/sync.engine";
 
-const t = initTRPC.create();
-
-export const notificationsRouter = t.router({
+// 🚀 NOME PADRONIZADO: notificationsRouter (plural)
+export const notificationsRouter = router({
   /**
-   * 🚀 A MÁGICA: getLiveData agora aceita o "mode"
-   * Isso permite que o robô saiba se deve ler o formato de Recebimento ou Avarias
+   * 🚀 getLiveData agora aceita o "mode"
    */
-  getLiveData: t.procedure
+  getLiveData: publicProcedure
     .input(
       z.object({
         url: z.string(),
-        // Define que o modo só pode ser um destes dois
         mode: z.enum(["recebimento", "avarias"]).optional().default("recebimento"),
       })
     )
     .query(async ({ input }) => {
-      // Passamos a URL e o Modo para o Robô no sync.engine.ts
       return await fetchLiveGoogleSheet(input.url, input.mode);
     }),
 
   /**
-   * Adiciona uma nova linha de Avaria no Sheets
+   * Adiciona uma nova linha de Avaria
    */
-  addAvaria: t.procedure
+  addAvaria: publicProcedure
     .input(
       z.object({
         url: z.string(),
@@ -45,9 +42,9 @@ export const notificationsRouter = t.router({
     }),
 
   /**
-   * Atualiza uma célula específica (ex: mudar Status ou Tratativa)
+   * Atualiza uma célula específica
    */
-  updateAvaria: t.procedure
+  updateAvaria: publicProcedure
     .input(
       z.object({
         url: z.string(),
@@ -65,5 +62,3 @@ export const notificationsRouter = t.router({
       );
     }),
 });
-
-export type NotificationsRouter = typeof notificationsRouter;

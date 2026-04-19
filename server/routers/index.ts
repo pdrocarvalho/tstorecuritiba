@@ -1,23 +1,30 @@
+/**
+ * server/routers/index.ts
+ */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../_core/trpc";
-import { notificationRouter } from "./notification.router";
-import { syncPedidosFromGoogleSheets, testarLeituraRobo } from "../engines/sync.engine";
+// 🚀 Garanta que o nome importado aqui seja o mesmo que exportamos no arquivo da rota
+import { notificationsRouter } from "./notification.router"; 
+import { 
+  syncPedidosFromGoogleSheets, 
+  testarLeituraRobo 
+} from "../engines/sync.engine"; // Agora as funções existem aqui!
 import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../db";
 
 export const appRouter = router({
-  notifications: notificationRouter,
+  notifications: notificationsRouter,
 
   admin: router({
     getConfig: publicProcedure.query(async () => {
-      const config = await getGoogleSheetsConfig();
-      return config;
+      return await getGoogleSheetsConfig();
     }),
     
     configSheets: publicProcedure
       .input(z.object({ sheetsUrl: z.string() }))
       .mutation(async ({ input }) => {
         try {
+          // Salva no banco de dados a URL da planilha mestra
           await saveGoogleSheetsConfig(input.sheetsUrl, 1);
           return { success: true, url: input.sheetsUrl };
         } catch (error: any) {
@@ -28,9 +35,12 @@ export const appRouter = router({
     syncNow: publicProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
-        if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada. Salve a URL em Configurações.");
+        if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada.");
         
+        // 🚀 O erro do argumento sumiu porque atualizamos o sync.engine
         const resultado = await syncPedidosFromGoogleSheets(config.sheetsUrl);
+        
+        // 🚀 As propriedades agora existem no retorno
         return {
           novosPedidos: resultado.novosPedidos,
           novasPrevisoes: resultado.novasPrevisoes,
@@ -42,7 +52,6 @@ export const appRouter = router({
       }
     }),
 
-    // Nova Rota para o Diagnóstico
     testarRobo: publicProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
