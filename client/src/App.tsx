@@ -1,3 +1,7 @@
+/**
+ * client/src/App.tsx
+ */
+
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -8,6 +12,7 @@ import { ROUTES } from "./constants";
 // Importações corretas baseadas na nossa nova arquitetura
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
+import GestaoAvarias from "./pages/avarias/Avarias"; // 🚀 1. Importação da nova página
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +32,9 @@ export default function App() {
             {/* Rotas do Recebimento */}
             <Route path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <Route path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
+            
+            {/* 🚀 2. ROTA INDEPENDENTE DE AVARIAS */}
+            <Route path={ROUTES.avarias} component={GestaoAvarias} />
             
             <Route component={NotFound} />
           </Switch>

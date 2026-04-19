@@ -12,8 +12,8 @@ export default function Sidebar() {
   const menuItems = [
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
-    // 🚀 A NOSSA NOVA ABA FOI ADICIONADA AQUI:
-    { path: "/recebimento/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
+    // 🚀 A Nova Aba Independente de Avarias:
+    { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
   ];
 
   // Função para lidar com a saída do sistema
