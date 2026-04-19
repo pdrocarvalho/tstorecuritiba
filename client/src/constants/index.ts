@@ -1,14 +1,12 @@
 /**
- * client/src/constants/index.ts
- *
- * Dicionário central de todas as rotas (URLs) da aplicação.
+ * client/src/constants.ts
  */
 
 export const ROUTES = {
   home: "/",
   recebimento: {
-    produtos: "/recebimento/produtos",     // Aba: Recebimento Futuro
-    historico: "/recebimento/historico",   // Aba: Histórico de Entregas
-    config: "/recebimento/config",         // Aba: Configurações
+    produtos: "/recebimento/produtos",
+    historico: "/recebimento/historico",
+    avarias: "/recebimento/avarias", // A nova rota adicionada aqui
   },
-} as const;
+};

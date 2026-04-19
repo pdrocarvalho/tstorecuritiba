@@ -1,50 +1,37 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import { 
-  getAllPedidosWithDescricao, 
-  getPendingNotifications, 
-  updateNotificationStatus, 
-  fetchLiveGoogleSheet,
-  addRowToSheet // ✍️ IMPORTAMOS A NOSSA NOVA FUNÇÃO DE ESCRITA AQUI
+  fetchLiveGoogleSheet, 
+  addRowToSheet, 
+  updateSheetRow 
 } from "../engines/sync.engine";
-import { generatePendingEmails } from "../engines/notification.engine";
-import { sendBulkEmails } from "../services/gmail.service";
 
 export const notificationRouter = router({
-  // 🚀 A NOVA ROTA "SOB DEMANDA"
+  // 1. LER DADOS
   getLiveData: publicProcedure
     .input(z.object({ url: z.string() }))
     .query(async ({ input }) => {
-      if (!input.url || input.url.trim() === "") return [];
+      if (!input.url) return [];
       return fetchLiveGoogleSheet(input.url);
     }),
 
-  // ✍️ NOVA ROTA DE ESCRITA: Envia a nova avaria para o Google Sheets
+  // 2. ADICIONAR (CREATE)
   addAvaria: publicProcedure
     .input(z.object({ url: z.string(), row: z.array(z.any()) }))
     .mutation(async ({ input }) => {
       return await addRowToSheet(input.url, input.row);
     }),
 
-  // Mantemos as rotas antigas abaixo apenas para não quebrar o motor de E-mails
-  getPending: publicProcedure.query(async () => {
-    return getAllPedidosWithDescricao();
-  }),
-
-  sendPending: publicProcedure.mutation(async () => {
-    const pendentes = await getPendingNotifications();
-    if (pendentes.length === 0) {
-      return { success: true, emailsSent: 0, message: "Nenhuma notificação pendente." };
-    }
-    const emails = await generatePendingEmails();
-    const emailsSent = await sendBulkEmails(emails);
-    
-    for (const pedido of pendentes) {
-      const newStatus = pedido.notificationSentStatus.replace("PENDING_", "SENT_");
-      await updateNotificationStatus(pedido.id, newStatus);
-    }
-    return { success: true, emailsSent, message: `${emailsSent} e-mail(s) enviado(s).` };
-  }),
-
-  getHistory: publicProcedure.query(async () => { return []; }),
+  // 3. EDITAR STATUS (UPDATE)
+  // Nota: Na sua planilha, o STATUS é a coluna M (13ª coluna).
+  updateAvariaStatus: publicProcedure
+    .input(z.object({ 
+      url: z.string(), 
+      rowNumber: z.number(), 
+      status: z.string() 
+    }))
+    .mutation(async ({ input }) => {
+      // "M" é a letra da coluna STATUS na sua estrutura
+      return await updateSheetRow(input.url, input.rowNumber, "M", input.status);
+    }),
 });

@@ -3,7 +3,7 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { PackageSearch, CheckCircle, Store, LogOut } from "lucide-react";
+import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon } from "lucide-react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -12,6 +12,8 @@ export default function Sidebar() {
   const menuItems = [
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
+    // 🚀 A NOSSA NOVA ABA FOI ADICIONADA AQUI:
+    { path: "/recebimento/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
   ];
 
   // Função para lidar com a saída do sistema
