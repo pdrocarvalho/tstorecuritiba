@@ -19,6 +19,9 @@ export default function RecebimentoFuturo() {
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
+  
+  // ⏱️ NOVO ESTADO: Guarda a hora exata da última leitura
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha }, 
@@ -58,7 +61,6 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 A FUNÇÃO DE IMPRESSÃO REAL (ESTILO GOOGLE SHEETS)
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) {
       return toast.warning("Não há dados para imprimir.");
@@ -77,15 +79,12 @@ export default function RecebimentoFuturo() {
             .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
             .header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
             .header p { margin: 0; font-size: 12px; color: #666; }
-            
             table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
             th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 8px; font-size: 10px; text-transform: uppercase; text-align: left; }
             td { border: 1px solid #ccc; padding: 6px 8px; font-size: 10px; word-wrap: break-word; }
-            
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .font-bold { font-weight: bold; }
-            
             @page { size: A4 portrait; margin: 1cm; }
             tr { page-break-inside: avoid; }
             thead { display: table-header-group; }
@@ -153,8 +152,10 @@ export default function RecebimentoFuturo() {
         toast.error(`Falha no acesso: ${result.error?.message}`);
         setIsVinculado(false);
       } else {
-        toast.success("Dados carregados!");
+        toast.success("Dados carregados com sucesso!");
         setIsVinculado(true);
+        // ⏱️ Salva a hora exata que leu com sucesso
+        setUltimaSincronizacao(Date.now());
       }
     } catch (error) {
       toast.error("Erro inesperado.");
@@ -164,10 +165,27 @@ export default function RecebimentoFuturo() {
     }
   };
 
+  // ⏱️ A NOVA LÓGICA DE ATUALIZAÇÃO TRANSPARENTE
   const handleAtualizar = async () => {
+    const agora = Date.now();
+    const tempoDecorrido = agora - ultimaSincronizacao;
+    const tempoEspera = 30000; // 30 segundos
+
+    // Se ainda não passaram 30 segundos, barra a ação e avisa
+    if (ultimaSincronizacao !== 0 && tempoDecorrido < tempoEspera) {
+      const segundosRestantes = Math.ceil((tempoEspera - tempoDecorrido) / 1000);
+      return toast.warning(`Por segurança contra bloqueios, aguarde ${segundosRestantes} segundos para atualizar novamente.`);
+    }
+
     setIsSincronizando(true);
-    await refetch();
-    toast.success("Tabela atualizada!");
+    const result = await refetch();
+    
+    if (result.isError) {
+      toast.error(`Falha ao atualizar: ${result.error?.message}`);
+    } else {
+      setUltimaSincronizacao(Date.now()); // Reseta o relógio
+      toast.success("Atualização real concluída buscando os dados mais recentes do Google!");
+    }
     setIsSincronizando(false);
   };
 
@@ -175,19 +193,18 @@ export default function RecebimentoFuturo() {
     setIsVinculado(false);
     setUrlPlanilha("");
     setMostrarLista(false);
+    setUltimaSincronizacao(0); // Reseta o relógio
   };
 
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        {/* CABEÇALHO */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
             <p className="text-gray-600 mt-1">Gestão inteligente e sob demanda das mercadorias em trânsito</p>
           </div>
           
-          {/* BOTÃO DE AÇÃO RÁPIDA ÚNICO (Só aparece se vinculado) */}
           {isVinculado && (
             <button 
               onClick={gerarRelatorioImpressao}
@@ -198,7 +215,6 @@ export default function RecebimentoFuturo() {
           )}
         </div>
 
-        {/* BARRA DE VINCULAÇÃO */}
         <Card className="p-4 border border-blue-100 bg-blue-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Link do Google Sheets</span>
@@ -237,7 +253,6 @@ export default function RecebimentoFuturo() {
 
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            {/* KPIS VISUAIS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex items-center justify-between">
                 <div>
@@ -262,7 +277,6 @@ export default function RecebimentoFuturo() {
               </Card>
             </div>
 
-            {/* GRÁFICOS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="p-6 shadow-sm">
                 <h3 className="font-bold text-gray-800 mb-6">SKUs por Mundo</h3>

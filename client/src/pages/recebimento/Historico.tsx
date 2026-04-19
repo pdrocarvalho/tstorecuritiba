@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
-import { toast } from "sonner"; // 🛡️ Importando a biblioteca de alertas
+import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -23,6 +23,9 @@ export default function RecebimentoHistorico() {
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
+  
+  // ⏱️ NOVO ESTADO: Guarda a hora exata da última leitura
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha }, 
@@ -30,28 +33,18 @@ export default function RecebimentoHistorico() {
   );
 
   const handleVincular = async () => {
-    if (!urlPlanilha) {
-      toast.warning("Por favor, insira o link da planilha de Banco de Dados.");
-      return;
-    }
-    if (!urlPlanilha.includes("docs.google.com/spreadsheets")) {
-      toast.error("Link inválido. Insira uma planilha válida do Google Sheets.");
-      return;
-    }
-
+    if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha de Banco de Dados.");
     setIsSincronizando(true);
-    
     try {
       const result = await refetch();
       if (result.isError) {
         toast.error(`Falha no acesso: ${result.error?.message}`);
         setIsVinculado(false);
-      } else if (result.data && result.data.length === 0) {
-        toast.warning("Planilha lida, mas vazia ou formato incorreto.");
-        setIsVinculado(true);
       } else {
         toast.success("Histórico vinculado com sucesso!");
         setIsVinculado(true);
+        // ⏱️ Salva a hora exata que leu com sucesso
+        setUltimaSincronizacao(Date.now());
       }
     } catch (error) {
       toast.error("Erro inesperado de conexão.");
@@ -61,13 +54,24 @@ export default function RecebimentoHistorico() {
     }
   };
 
+  // ⏱️ A NOVA LÓGICA DE ATUALIZAÇÃO TRANSPARENTE
   const handleAtualizar = async () => {
+    const agora = Date.now();
+    const tempoDecorrido = agora - ultimaSincronizacao;
+    const tempoEspera = 30000; // 30 segundos
+
+    if (ultimaSincronizacao !== 0 && tempoDecorrido < tempoEspera) {
+      const segundosRestantes = Math.ceil((tempoEspera - tempoDecorrido) / 1000);
+      return toast.warning(`Por segurança contra bloqueios, aguarde ${segundosRestantes} segundos para atualizar novamente.`);
+    }
+
     setIsSincronizando(true);
     const result = await refetch();
     if (result.isError) {
       toast.error(`Falha ao atualizar: ${result.error?.message}`);
     } else {
-      toast.success("Histórico atualizado!");
+      setUltimaSincronizacao(Date.now()); // Reseta o relógio
+      toast.success("Histórico atualizado com dados frescos do Google!");
     }
     setIsSincronizando(false);
   };
@@ -76,6 +80,7 @@ export default function RecebimentoHistorico() {
     setIsVinculado(false);
     setUrlPlanilha("");
     setFiltros(INITIAL_FILTERS);
+    setUltimaSincronizacao(0);
     toast.info("Histórico desvinculado.");
   };
 
@@ -139,7 +144,7 @@ export default function RecebimentoHistorico() {
             {!isVinculado ? (
               <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 py-2.5 rounded-md font-medium transition-all">
                 {isSincronizando ? <RefreshCw size={18} className="animate-spin" /> : <Link2 size={18} />} 
-                {isSincronizando ? "Lendo..." : "Vincular"}
+                {isSincronizando ? "Lendo..." : "Vincular Banco"}
               </button>
             ) : (
               <>
@@ -158,7 +163,6 @@ export default function RecebimentoHistorico() {
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <TableProperties size={64} className="mb-4 text-gray-200" />
             <h3 className="text-xl font-medium text-gray-500">Aguardando vinculação de dados</h3>
-            <p className="text-sm mt-2">Os indicadores de produtividade aparecerão assim que o banco for vinculado.</p>
           </div>
         ) : (
           <div className="space-y-6 animate-in fade-in duration-500">
