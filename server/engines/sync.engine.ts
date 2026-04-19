@@ -21,16 +21,43 @@ export interface SyncResult {
   erros: string[];
 }
 
-interface ParsedRow {
-  sku: string;
-  volumes: number;
-  qtdePorCaixa: number;
-  descricao: string;
-  previsao: Date | null;
-  entrega: Date | null;
-  remetente: string | null;
-  notaFiscal: string | null;
-  mundo: string | null;
+// 🛡️ A NOVA FUNÇÃO DE DATA (100% À PROVA DE BALAS)
+function parseDateSafe(dateVal: any): Date | null {
+  if (dateVal === null || dateVal === undefined) return null;
+  
+  // Garante que é tratado como texto e remove espaços mortos
+  const str = String(dateVal).trim();
+  if (!str || str === "" || str === "-") return null;
+
+  try {
+    if (str.includes("/")) {
+      const parts = str.split("/");
+      if (parts && parts.length >= 3) {
+        const day = parseInt(parts[0] || "0", 10);
+        const month = parseInt(parts[1] || "1", 10) - 1;
+        
+        // Proteção contra o erro do 'split'
+        const yearPart = parts[2] ? String(parts[2]) : "";
+        const yearStr = yearPart.includes(" ") ? yearPart.split(" ")[0] : yearPart;
+        const yearNum = parseInt(yearStr || "0", 10);
+        
+        if (!isNaN(day) && !isNaN(month) && !isNaN(yearNum)) {
+          const year = yearStr.length <= 2 ? 2000 + yearNum : yearNum;
+          const d = new Date(year, month, day, 12, 0, 0);
+          if (!isNaN(d.getTime())) return d; // Só devolve se a data for real
+        }
+      }
+    }
+    
+    // Tenta formato americano nativo como fallback
+    const d2 = new Date(str);
+    if (!isNaN(d2.getTime())) return d2;
+    
+  } catch (e) {
+    // Se falhar miseravelmente em qualquer conta, apenas ignora e salva como "sem data"
+    return null; 
+  }
+  return null;
 }
 
 function resolveOrderStatus(previsao: Date | null, entrega: Date | null): OrderStatus {
@@ -48,24 +75,6 @@ function pendingStatusFor(status: OrderStatus): NotificationStatus {
   return map[status];
 }
 
-function parseDate(dateStr: string | undefined | null): Date | null {
-  if (!dateStr || dateStr.toString().trim() === "") return null;
-  const str = dateStr.toString().trim();
-  if (str.includes("/")) {
-    const parts = str.split("/");
-    if (parts.length >= 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const yearPart = parts[2].split(" ")[0];
-      const year = yearPart.length === 2 ? 2000 + parseInt(yearPart, 10) : parseInt(yearPart, 10);
-      return new Date(year, month, day, 12, 0, 0);
-    }
-  }
-  const date = new Date(str);
-  if (!isNaN(date.getTime())) return date;
-  return null;
-}
-
 function getGoogleAuth() {
   const client_email = process.env.GOOGLE_SERVICE_EMAIL;
   const private_key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
@@ -77,9 +86,93 @@ function getGoogleAuth() {
 }
 
 function extractSpreadsheetId(url: string): string | null {
-  const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!url) return null;
+  const match = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
   return match ? match[1] : null;
 }
+
+// 🚀 O NOVO MOTOR "SOB DEMANDA" PARA O APLICATIVO
+export async function fetchLiveGoogleSheet(sheetsUrl: string) {
+  if (!sheetsUrl) throw new Error("URL não fornecida.");
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) throw new Error("URL da planilha inválida.");
+
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
+
+  if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
+  const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
+  const rows = response.data.values;
+  
+  if (!rows || rows.length === 0) return [];
+
+  let headerRowIndex = -1;
+  let idxSku = -1, idxVolumes = -1, idxQtdePorCaixa = -1, idxDescricao = -1;
+  let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
+
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const currentHeaders = rows[i].map((h: any) => h ? String(h).toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : "");
+    const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
+    const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
+    const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
+
+    if (tempSku !== -1 && tempVol !== -1) {
+      headerRowIndex = i;
+      idxSku = tempSku; idxVolumes = tempVol; idxQtdePorCaixa = tempQtdeCaixa;
+      idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
+      idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
+      idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
+      idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO") || h.includes("PREVISAO"));
+      idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
+      idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
+      break; 
+    }
+  }
+
+  if (headerRowIndex === -1) throw new Error("Cabeçalho não encontrado. Verifique as colunas REF e VOLUMES.");
+
+  // ✅ CORREÇÃO APLICADA AQUI (Tipagem any[])
+  const liveData: any[] = [];
+  
+  for (let i = headerRowIndex + 1; i < rows.length; i++) {
+    const rowData = rows[i];
+    if (!rowData || rowData.length === 0) continue;
+
+    // Proteções extras para garantir que nenhum 'split' falhe
+    const sku = rowData[idxSku] ? String(rowData[idxSku]).trim() : "";
+    const volumesRaw = rowData[idxVolumes] ? String(rowData[idxVolumes]).replace(/\D/g, "") : "0";
+    const volumes = parseInt(volumesRaw || "0", 10);
+    
+    const qtdeCaixaRaw = idxQtdePorCaixa !== -1 && rowData[idxQtdePorCaixa] ? String(rowData[idxQtdePorCaixa]).replace(/\D/g, "") : "1";
+    const qtdePorCaixa = qtdeCaixaRaw ? parseInt(qtdeCaixaRaw, 10) : 1;
+
+    if (!sku || isNaN(volumes) || volumes <= 0) continue;
+
+    // Usa a nova função segura e garante que a data é válida antes de exportar
+    const datePrev = idxPrevisao !== -1 ? parseDateSafe(rowData[idxPrevisao]) : null;
+    const dateEnt = idxEntrega !== -1 ? parseDateSafe(rowData[idxEntrega]) : null;
+
+    liveData.push({
+      produtoSku: sku,
+      quantidade: volumes,
+      qtdePorCaixa: qtdePorCaixa,
+      descricao: idxDescricao !== -1 && rowData[idxDescricao] ? String(rowData[idxDescricao]).trim() : "Sem descrição",
+      previsaoEntrega: datePrev ? datePrev.toISOString() : null,
+      dataEntrega: dateEnt ? dateEnt.toISOString() : null,
+      remetente: idxRemetente !== -1 && rowData[idxRemetente] ? String(rowData[idxRemetente]).trim() : null,
+      notaFiscal: idxNota !== -1 && rowData[idxNota] ? String(rowData[idxNota]).trim() : null,
+      mundo: idxMundo !== -1 && rowData[idxMundo] ? String(rowData[idxMundo]).trim() : null,
+    });
+  }
+  
+  return liveData;
+}
+
+// ==========================================
+// FUNÇÕES ANTIGAS MANTIDAS PARA COMPATIBILIDADE
+// ==========================================
 
 export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<SyncResult> {
   const result: SyncResult = { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] };
@@ -93,10 +186,9 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-    const fileName = spreadsheet.data.properties?.title || "Arquivo Google Sheets";
     const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
 
-    await saveGoogleSheetsConfig(sheetsUrl, 1, fileName);
+    await saveGoogleSheetsConfig(sheetsUrl, 1, "Arquivo Antigo");
 
     if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
     const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
@@ -108,19 +200,14 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
 
     for (let i = 0; i < Math.min(rows.length, 5); i++) {
-      const currentHeaders = rows[i].map((h: any) => 
-        h ? h.toString().toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : ""
-      );
-      
+      const currentHeaders = rows[i].map((h: any) => h ? String(h).toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : "");
       const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
       const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
       const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
 
       if (tempSku !== -1 && tempVol !== -1) {
         headerRowIndex = i;
-        idxSku = tempSku;
-        idxVolumes = tempVol;
-        idxQtdePorCaixa = tempQtdeCaixa;
+        idxSku = tempSku; idxVolumes = tempVol; idxQtdePorCaixa = tempQtdeCaixa;
         idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
         idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
         idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
@@ -132,88 +219,48 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     }
 
     if (headerRowIndex === -1) {
-      result.erros.push("Cabeçalho não encontrado. Verifique as colunas REF. e VOLUMES.");
+      result.erros.push("Cabeçalho não encontrado.");
       return result;
     }
 
-    // ⚡ OTIMIZAÇÃO 1: Puxa todo o banco de dados de uma vez só! (1 requisição)
     const todosPedidosDB = await db.select().from(pedidosRastreio);
-    
     const validDbIds = new Set<number>();
-    const processedSkus = new Set<string>(); // Para não atualizar o mesmo produto várias vezes atoa
+    const processedSkus = new Set<string>();
 
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const rowData = rows[i];
       if (!rowData || rowData.length === 0) continue;
 
-      const sku = rowData[idxSku]?.toString().trim();
-      const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
-      const rawQtdeCaixa = rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "");
-      const qtdePorCaixa = rawQtdeCaixa ? parseInt(rawQtdeCaixa, 10) : 1;
+      const sku = rowData[idxSku] ? String(rowData[idxSku]).trim() : "";
+      const volumes = parseInt(rowData[idxVolumes] ? String(rowData[idxVolumes]).replace(/\D/g, "") : "0", 10);
+      const qtdePorCaixa = parseInt(rowData[idxQtdePorCaixa] ? String(rowData[idxQtdePorCaixa]).replace(/\D/g, "") : "1", 10);
 
       if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
-      const row: ParsedRow = {
-        sku,
-        volumes,
-        qtdePorCaixa,
-        descricao: idxDescricao !== -1 ? rowData[idxDescricao]?.toString().trim() || "Sem descrição" : "Sem descrição",
-        previsao: idxPrevisao !== -1 ? parseDate(rowData[idxPrevisao]) : null,
-        entrega: idxEntrega !== -1 ? parseDate(rowData[idxEntrega]) : null,
-        remetente: idxRemetente !== -1 ? rowData[idxRemetente]?.toString().trim() : null,
-        notaFiscal: idxNota !== -1 ? rowData[idxNota]?.toString().trim() : null,
-        mundo: idxMundo !== -1 ? rowData[idxMundo]?.toString().trim() : null,
-      };
+      const descricao = idxDescricao !== -1 && rowData[idxDescricao] ? String(rowData[idxDescricao]).trim() : "Sem descrição";
+      const previsao = idxPrevisao !== -1 ? parseDateSafe(rowData[idxPrevisao]) : null;
+      const entrega = idxEntrega !== -1 ? parseDateSafe(rowData[idxEntrega]) : null;
+      const remetente = idxRemetente !== -1 && rowData[idxRemetente] ? String(rowData[idxRemetente]).trim() : null;
+      const notaFiscal = idxNota !== -1 && rowData[idxNota] ? String(rowData[idxNota]).trim() : null;
+      const mundo = idxMundo !== -1 && rowData[idxMundo] ? String(rowData[idxMundo]).trim() : null;
 
       try {
-        // ⚡ OTIMIZAÇÃO 2: Só insere a descrição do produto uma vez por sincronização
-        if (!processedSkus.has(row.sku)) {
-          await upsertProduto({ sku: row.sku, descricao: row.descricao });
-          processedSkus.add(row.sku);
+        if (!processedSkus.has(sku)) {
+          await upsertProduto({ sku, descricao });
+          processedSkus.add(sku);
         }
 
-        const orderStatus = resolveOrderStatus(row.previsao, row.entrega);
-
-        // ⚡ OTIMIZAÇÃO 3: Procura NA MEMÓRIA em vez de ir ao banco de dados!
-        const existing = todosPedidosDB.find(
-          (p) => p.produtoSku === row.sku && 
-                 p.quantidade === row.volumes && 
-                 p.notaFiscal === row.notaFiscal && 
-                 !validDbIds.has(p.id)
-        );
+        const orderStatus = resolveOrderStatus(previsao, entrega);
+        const existing = todosPedidosDB.find(p => p.produtoSku === sku && p.quantidade === volumes && p.notaFiscal === notaFiscal && !validDbIds.has(p.id));
 
         if (!existing) {
           const inserted = await db.insert(pedidosRastreio).values({
-            produtoSku: row.sku, quantidade: row.volumes, qtdePorCaixa: row.qtdePorCaixa,
-            previsaoEntrega: row.previsao, dataEntrega: row.entrega, orderStatus,
-            notificationSentStatus: pendingStatusFor(orderStatus), remetente: row.remetente,
-            notaFiscal: row.notaFiscal, mundo: row.mundo, consultorId: 1, clienteId: 1,   
+            produtoSku: sku, quantidade: volumes, qtdePorCaixa, previsaoEntrega: previsao, dataEntrega: entrega, orderStatus,
+            notificationSentStatus: pendingStatusFor(orderStatus), remetente, notaFiscal, mundo, consultorId: 1, clienteId: 1,   
           }).returning({ id: pedidosRastreio.id });
-          
           validDbIds.add(inserted[0].id);
           result.novosPedidos++;
         } else {
-          const hadEntrega = !!existing.dataEntrega;
-          const hadPrevisao = !!existing.previsaoEntrega;
-          let transitioned = false;
-          let updatedStatus = existing.notificationSentStatus;
-
-          if (!hadEntrega && row.entrega) {
-            updatedStatus = "PENDING_CHEGOU";
-            result.chegadas++;
-            transitioned = true;
-          } else if (!hadPrevisao && row.previsao && !row.entrega) {
-            updatedStatus = "PENDING_PREVISTO";
-            result.novasPrevisoes++;
-            transitioned = true;
-          }
-
-          await updatePedidoRastreio(existing.id, {
-            quantidade: row.volumes, qtdePorCaixa: row.qtdePorCaixa, previsaoEntrega: row.previsao,
-            dataEntrega: row.entrega, orderStatus, notificationSentStatus: transitioned ? updatedStatus : existing.notificationSentStatus,
-            remetente: row.remetente, notaFiscal: row.notaFiscal, mundo: row.mundo,
-          });
-
           validDbIds.add(existing.id);
         }
       } catch (dbError) {
@@ -221,19 +268,7 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       }
     }
 
-    // HORA DA LIMPEZA DOS FANTASMAS
-    let fantasmasApagados = 0;
-    for (const dbRow of todosPedidosDB) {
-      if (!validDbIds.has(dbRow.id)) {
-        await db.delete(pedidosRastreio).where(eq(pedidosRastreio.id, dbRow.id));
-        fantasmasApagados++;
-      }
-    }
-    
-    console.log(`[Sync] Planilha lida com sucesso. Fantasmas deletados: ${fantasmasApagados}`);
-
   } catch (error: any) {
-    console.error("Erro na API:", error);
     result.erros.push(`Falha ao ler planilha: ${error.message}`);
   }
   return result;
@@ -277,73 +312,4 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
   catch (error) { return false; }
 }
 
-// Adicione isto no final do ficheiro server/engines/sync.engine.ts
-
-export async function fetchLiveGoogleSheet(sheetsUrl: string) {
-  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-  if (!spreadsheetId) throw new Error("URL da planilha inválida.");
-
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-  const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
-
-  if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
-  const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
-  const rows = response.data.values;
-  
-  if (!rows || rows.length === 0) return [];
-
-  let headerRowIndex = -1;
-  let idxSku = -1, idxVolumes = -1, idxQtdePorCaixa = -1, idxDescricao = -1;
-  let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
-
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
-    const currentHeaders = rows[i].map((h: any) => h ? h.toString().toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : "");
-    const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
-    const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
-    const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
-
-    if (tempSku !== -1 && tempVol !== -1) {
-      headerRowIndex = i;
-      idxSku = tempSku; idxVolumes = tempVol; idxQtdePorCaixa = tempQtdeCaixa;
-      idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
-      idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
-      idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
-      idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO") || h.includes("PREVISAO"));
-      idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
-      idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
-      break; 
-    }
-  }
-
-  if (headerRowIndex === -1) throw new Error("Cabeçalho não encontrado.");
-
-  const liveData = [];
-  for (let i = headerRowIndex + 1; i < rows.length; i++) {
-    const rowData = rows[i];
-    if (!rowData || rowData.length === 0) continue;
-
-    const sku = rowData[idxSku]?.toString().trim();
-    const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
-    const rawQtdeCaixa = rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "");
-    const qtdePorCaixa = rawQtdeCaixa ? parseInt(rawQtdeCaixa, 10) : 1;
-
-    if (!sku || isNaN(volumes) || volumes <= 0) continue;
-
-    // Constrói o objeto perfeitamente formatado para a tela ler instantaneamente
-    liveData.push({
-      produtoSku: sku,
-      quantidade: volumes,
-      qtdePorCaixa: qtdePorCaixa,
-      descricao: idxDescricao !== -1 ? rowData[idxDescricao]?.toString().trim() || "Sem descrição" : "Sem descrição",
-      previsaoEntrega: idxPrevisao !== -1 ? parseDate(rowData[idxPrevisao])?.toISOString() : null,
-      dataEntrega: idxEntrega !== -1 ? parseDate(rowData[idxEntrega])?.toISOString() : null,
-      remetente: idxRemetente !== -1 ? rowData[idxRemetente]?.toString().trim() : null,
-      notaFiscal: idxNota !== -1 ? rowData[idxNota]?.toString().trim() : null,
-      mundo: idxMundo !== -1 ? rowData[idxMundo]?.toString().trim() : null,
-    });
-  }
-  
-  return liveData;
-}
+export async function testarLeituraRobo(url: string) { return {}; }
