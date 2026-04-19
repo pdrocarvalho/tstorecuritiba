@@ -11,12 +11,13 @@ import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { 
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend 
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis
 } from "recharts";
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
-// 🎨 PALETA DE CORES VIBRANTES (MANTIDA)
+// 🎨 PALETA DE CORES VIBRANTES (PADRONIZADA)
 const MUNDO_COLORS: Record<string, string> = {
   "CORTAR": "#e57373",
   "FESTEJAR": "#9575cd",
@@ -26,7 +27,6 @@ const MUNDO_COLORS: Record<string, string> = {
 };
 const COR_PADRAO = "#94a3b8";
 
-// 🚀 NOVA INTERFACE DE FILTROS
 interface FiltrosHistorico {
   dataInicio: string;
   dataFim: string;
@@ -45,7 +45,6 @@ export default function RecebimentoHistorico() {
   const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_historico") || "");
   const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_historico") === "true");
   
-  // 🚀 NOVOS ESTADOS PARA OS FILTROS
   const [showFilters, setShowFilters] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
 
@@ -59,14 +58,12 @@ export default function RecebimentoHistorico() {
   }, []);
 
   const kpis = useMemo(() => {
-    // 🚀 LÓGICA DE FILTRAGEM IMPLEMENTADA
     const filtrados = (todosPedidos as Pedido[]).filter((p) => {
       if (!p.dataEntrega) return false;
 
       const dataEnt = new Date(p.dataEntrega);
       dataEnt.setHours(0,0,0,0);
 
-      // Filtro de Datas
       if (filtros.dataInicio) {
         const inicio = new Date(filtros.dataInicio + "T00:00:00");
         if (dataEnt < inicio) return false;
@@ -76,7 +73,6 @@ export default function RecebimentoHistorico() {
         if (dataEnt > fim) return false;
       }
 
-      // Filtros de Texto
       if (filtros.remetente && !p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase())) return false;
       if (filtros.mundo && !p.mundo?.toLowerCase().includes(filtros.mundo.toLowerCase())) return false;
 
@@ -86,13 +82,18 @@ export default function RecebimentoHistorico() {
     let totalVolumes = 0;
     const notasSet = new Set<string>();
     const skusPorMundo: Record<string, Set<string>> = {};
+    const volumesPorRemetente: Record<string, number> = {};
 
     filtrados.forEach((p) => {
       totalVolumes += p.quantidade;
       if (p.notaFiscal) notasSet.add(p.notaFiscal.trim());
+      
       const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
       if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
       skusPorMundo[mundo].add(p.produtoSku);
+
+      const rem = p.remetente || "Desconhecido";
+      volumesPorRemetente[rem] = (volumesPorRemetente[rem] || 0) + p.quantidade;
     });
 
     return {
@@ -100,8 +101,12 @@ export default function RecebimentoHistorico() {
       totalNotas: notasSet.size,
       diversidadeSkus: Object.keys(skusPorMundo).length,
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })),
+      grafRemetente: Object.entries(volumesPorRemetente)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10) // Top 10 remetentes para não poluir
     };
-  }, [todosPedidos, filtros]); // 🚀 Recalcula sempre que os filtros mudarem
+  }, [todosPedidos, filtros]);
 
   const handleVincular = async () => {
     if (!urlPlanilha) return toast.warning("Insira o link.");
@@ -113,18 +118,7 @@ export default function RecebimentoHistorico() {
         sessionStorage.setItem("vinculado_historico", "true");
         toast.success("Histórico vinculado!");
       }
-    } catch (e) {
-      toast.error("Erro ao vincular.");
-    }
-  };
-
-  const handleCancelar = () => {
-    setIsVinculado(false);
-    setUrlPlanilha("");
-    sessionStorage.removeItem("url_historico");
-    sessionStorage.removeItem("vinculado_historico");
-    setFiltros(INITIAL_FILTERS);
-    toast.info("Vínculo removido.");
+    } catch (e) { toast.error("Erro ao vincular."); }
   };
 
   return (
@@ -139,7 +133,7 @@ export default function RecebimentoHistorico() {
           </div>
           <div className="flex gap-2 pt-5">
             {!isVinculado ? (
-              <button onClick={handleVincular} className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2">
+              <button onClick={handleVincular} className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md">
                 <Link2 size={18} /> Vincular
               </button>
             ) : (
@@ -147,7 +141,7 @@ export default function RecebimentoHistorico() {
                 <button onClick={() => refetch()} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2">
                   <RefreshCw size={18} /> Atualizar
                 </button>
-                <button onClick={handleCancelar} className="p-2.5 text-slate-400 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
+                <button onClick={() => {setIsVinculado(false); sessionStorage.clear();}} className="p-2.5 text-slate-400 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
               </div>
             )}
           </div>
@@ -156,69 +150,71 @@ export default function RecebimentoHistorico() {
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
             
-            {/* 🚀 NOVA SEÇÃO DE FILTROS NA INTERFACE */}
+            {/* SEÇÃO DE FILTROS */}
             <Card className="p-4 border-slate-200 bg-white shadow-sm">
-              <button 
-                onClick={() => setShowFilters(!showFilters)} 
-                className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600 transition-colors"
-              >
+              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600">
                 <div className="flex items-center gap-2"><Filter size={18} /> Filtros de Pesquisa</div>
                 {showFilters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </button>
-              
               {showFilters && (
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Início</label>
-                    <Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Fim</label>
-                    <Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Remetente</label>
-                    <Input placeholder="Filtrar fábrica..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Mundo</label>
-                    <Input placeholder="Filtrar mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} className="mt-1" />
-                  </div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase">Início</label><Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} className="mt-1" /></div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase">Fim</label><Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} className="mt-1" /></div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase">Remetente</label><Input placeholder="Filtrar fábrica..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} className="mt-1" /></div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase">Mundo</label><Input placeholder="Filtrar mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} className="mt-1" /></div>
                 </div>
               )}
             </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
-                <p className="text-xs font-bold text-gray-500 uppercase">Volumes Recebidos</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Volumes Recebidos</p>
                 <h3 className="text-3xl font-black">{kpis.totalVolumes}</h3>
               </Card>
               <Card className="p-5 border-t-4 border-t-purple-500 shadow-sm">
-                <p className="text-xs font-bold text-gray-500 uppercase">Notas Processadas</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notas Processadas</p>
                 <h3 className="text-3xl font-black">{kpis.totalNotas}</h3>
               </Card>
               <Card className="p-5 border-t-4 border-t-orange-500 shadow-sm">
-                <p className="text-xs font-bold text-gray-500 uppercase">Diversidade de SKUs</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Diversidade de SKUs</p>
                 <h3 className="text-3xl font-black">{kpis.diversidadeSkus}</h3>
               </Card>
             </div>
 
-            <Card className="p-6">
-              <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">Distribuição Histórica por Mundo</h3>
-              <div style={{ width: '100%', height: 400 }}>
-                <ResponsiveContainer width="100%" height={400}>
-                  <PieChart>
-                    <Pie data={kpis.grafSkusMundo} cx="50%" cy="40%" innerRadius={70} outerRadius={110} dataKey="value">
-                      {kpis.grafSkusMundo.map((entry, i) => (
-                        <Cell key={i} fill={MUNDO_COLORS[entry.name.toUpperCase()] || COR_PADRAO} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold', paddingTop: '25px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* PIZZA: SKUs POR MUNDO */}
+              <Card className="p-6 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">SKUs por Mundo</h3>
+                <div style={{ width: '100%', height: 350 }}>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <PieChart>
+                      <Pie data={kpis.grafSkusMundo} cx="50%" cy="42%" innerRadius={70} outerRadius={100} dataKey="value">
+                        {kpis.grafSkusMundo.map((entry, i) => (
+                          <Cell key={i} fill={MUNDO_COLORS[entry.name.toUpperCase()] || COR_PADRAO} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '20px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* BARRA: VOLUMES POR REMETENTE (RESTAURADO 🚀) */}
+              <Card className="p-6 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">Volumes por Remetente</h3>
+                <div style={{ width: '100%', height: 350 }}>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={kpis.grafRemetente} layout="vertical">
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
+                      <Tooltip cursor={{fill: 'transparent'}} />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
           </div>
         )}
       </div>
