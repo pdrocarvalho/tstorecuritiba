@@ -3,7 +3,7 @@
  */
 
 import { useState, useMemo } from "react";
-import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties, FileText, Printer } from "lucide-react";
+import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties, Printer } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
@@ -58,17 +58,15 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 A NOVA FUNÇÃO DE IMPRESSÃO REAL (ESTILO GOOGLE SHEETS)
+  // 🚀 A FUNÇÃO DE IMPRESSÃO REAL (ESTILO GOOGLE SHEETS)
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) {
       return toast.warning("Não há dados para imprimir.");
     }
 
-    // Criamos uma nova janela invisível para o navegador
     const janelaImpressao = window.open('', '_blank');
     if (!janelaImpressao) return toast.error("Por favor, habilite popups para imprimir o relatório.");
 
-    // Construímos o HTML puro do relatório
     const htmlRelatorio = `
       <html>
         <head>
@@ -137,11 +135,9 @@ export default function RecebimentoFuturo() {
       </html>
     `;
 
-    // Injetamos o HTML na nova janela e disparamos a impressão
     janelaImpressao.document.write(htmlRelatorio);
     janelaImpressao.document.close();
     
-    // Pequeno delay para garantir que o CSS/Fontes carreguem antes da caixa de impressão
     setTimeout(() => {
       janelaImpressao.print();
       janelaImpressao.close();
@@ -191,22 +187,14 @@ export default function RecebimentoFuturo() {
             <p className="text-gray-600 mt-1">Gestão inteligente e sob demanda das mercadorias em trânsito</p>
           </div>
           
-          {/* BOTÕES DE AÇÃO RÁPIDA (Só aparecem se vinculado) */}
+          {/* BOTÃO DE AÇÃO RÁPIDA ÚNICO (Só aparece se vinculado) */}
           {isVinculado && (
-            <div className="flex gap-2">
-              <button 
-                onClick={gerarRelatorioImpressao}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold shadow-md transition-all active:scale-95"
-              >
-                <Printer size={18} /> Imprimir Relatório
-              </button>
-              <button 
-                onClick={gerarRelatorioImpressao}
-                className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all active:scale-95"
-              >
-                <FileText size={18} /> Gerar PDF
-              </button>
-            </div>
+            <button 
+              onClick={gerarRelatorioImpressao}
+              className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold shadow-md transition-all active:scale-95"
+            >
+              <Printer size={18} /> Imprimir Relatório
+            </button>
           )}
         </div>
 
@@ -219,12 +207,12 @@ export default function RecebimentoFuturo() {
               value={urlPlanilha} 
               onChange={(e) => setUrlPlanilha(e.target.value)} 
               disabled={isVinculado}
-              className="bg-white"
+              className="bg-white border-blue-200"
             />
           </div>
           <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
-              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium">
+              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2.5 rounded-md font-medium">
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} Vincular
               </button>
             ) : (
