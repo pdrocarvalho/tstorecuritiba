@@ -9,48 +9,77 @@ import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { toast } from "sonner"; // 🛡️ Importando a biblioteca de alertas
 import type { Pedido } from "@/types";
 
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function RecebimentoFuturo() {
-  // Estados do Controle "Sob Demanda"
   const [urlPlanilha, setUrlPlanilha] = useState("");
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
-  
-  // Estado para mostrar/esconder a listagem
   const [mostrarLista, setMostrarLista] = useState(false);
 
-  // Consulta atual (no próximo passo, isto mudará para a nova API on-demand)
-  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getLiveData.useQuery({ url: urlPlanilha }, {
-    enabled: isVinculado, // Só pesquisa dados se o botão Vincular for ativado
-  });
+  // 🛡️ Mudei enabled para false. Agora o sistema SÓ busca quando você manda.
+  const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
+    { url: urlPlanilha }, 
+    { enabled: false }
+  );
 
-  // Funções de Controle da Barra Superior
-  const handleVincular = () => {
-    if (!urlPlanilha) return alert("Por favor, insira o link da planilha.");
+  const handleVincular = async () => {
+    if (!urlPlanilha) {
+      toast.warning("Por favor, insira o link da planilha.");
+      return;
+    }
+    if (!urlPlanilha.includes("docs.google.com/spreadsheets")) {
+      toast.error("Link inválido. Certifique-se de colar um link válido do Google Sheets.");
+      return;
+    }
+
     setIsSincronizando(true);
-    setIsVinculado(true);
-    // Simula um tempo de leitura rápido
-    setTimeout(() => { refetch(); setIsSincronizando(false); }, 1000);
+    
+    try {
+      // Aqui ele bate no servidor e aguarda a resposta real
+      const result = await refetch();
+      
+      if (result.isError) {
+        toast.error(`Falha no acesso: ${result.error?.message}`);
+        setIsVinculado(false); // Aborta a vinculação
+      } else if (result.data && result.data.length === 0) {
+        toast.warning("A planilha foi lida, mas está vazia ou não possui as colunas REF e VOLUMES.");
+        setIsVinculado(true); // Vincula, mas avisa que está vazia
+      } else {
+        toast.success("Planilha vinculada e dados carregados com sucesso!");
+        setIsVinculado(true);
+      }
+    } catch (error) {
+      toast.error("Erro inesperado de conexão.");
+      setIsVinculado(false);
+    } finally {
+      setIsSincronizando(false);
+    }
   };
 
-  const handleAtualizar = () => {
+  const handleAtualizar = async () => {
     setIsSincronizando(true);
-    refetch().then(() => setIsSincronizando(false));
+    const result = await refetch();
+    if (result.isError) {
+      toast.error(`Falha ao atualizar: ${result.error?.message}`);
+    } else {
+      toast.success("Tabela atualizada com a versão mais recente!");
+    }
+    setIsSincronizando(false);
   };
 
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
     setMostrarLista(false);
+    toast.info("Planilha desvinculada. Tela limpa.");
   };
 
-  // Cálculos Estratégicos (Mistos: Dashboard + Lista)
   const kpis = useMemo(() => {
     const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
-    
     let totalVolumesFisicos = 0;
     const notasEmTransitoSet = new Set<string>();
     const notasAtrasadasSet = new Set<string>();
@@ -61,16 +90,12 @@ export default function RecebimentoFuturo() {
     hoje.setHours(0, 0, 0, 0);
 
     futuros.forEach((p) => {
-      // Cálculo para o Dashboard Analítico (Caixas Físicas)
       totalVolumesFisicos += p.quantidade;
-      
       if (p.notaFiscal) notasEmTransitoSet.add(p.notaFiscal);
 
       if (p.previsaoEntrega) {
         const previsao = new Date(p.previsaoEntrega);
-        if (previsao < hoje && p.notaFiscal) {
-          notasAtrasadasSet.add(p.notaFiscal);
-        }
+        if (previsao < hoje && p.notaFiscal) notasAtrasadasSet.add(p.notaFiscal);
       }
 
       const mundo = p.mundo || "Sem Mundo";
@@ -82,9 +107,7 @@ export default function RecebimentoFuturo() {
     });
 
     return {
-      listaRecebimento: futuros,
-      totalVolumesFisicos,
-      notasEmTransito: notasEmTransitoSet.size,
+      listaRecebimento: futuros, totalVolumesFisicos, notasEmTransito: notasEmTransitoSet.size,
       atrasados: notasAtrasadasSet.size,
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })).sort((a, b) => b.value - a.value),
       grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
@@ -94,13 +117,11 @@ export default function RecebimentoFuturo() {
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        {/* CABEÇALHO */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
           <p className="text-gray-600 mt-1">Gestão inteligente e sob demanda das mercadorias em trânsito</p>
         </div>
 
-        {/* 1. BARRA DE CONTROLE SOB DEMANDA */}
         <Card className="p-4 border border-blue-100 bg-blue-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center transition-all duration-300">
           <div className="flex-1 w-full">
             <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Fonte de Dados (Google Sheets)</span>
@@ -115,8 +136,9 @@ export default function RecebimentoFuturo() {
           
           <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
-              <button onClick={handleVincular} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors">
-                <Link2 size={18} /> Vincular
+              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2.5 rounded-md font-medium transition-colors">
+                {isSincronizando ? <RefreshCw size={18} className="animate-spin" /> : <Link2 size={18} />} 
+                {isSincronizando ? "Lendo..." : "Vincular"}
               </button>
             ) : (
               <>
@@ -131,19 +153,16 @@ export default function RecebimentoFuturo() {
           </div>
         </Card>
 
-        {/* ESTADO VAZIO (NÃO VINCULADO) */}
         {!isVinculado && (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <TableProperties size={64} className="mb-4 text-gray-300" />
             <h3 className="text-xl font-medium text-gray-500">Nenhuma planilha vinculada</h3>
-            <p className="text-sm mt-2 text-center max-w-md">Insira o link da sua planilha e clique em Vincular para carregar os indicadores analíticos e a lista de recebimento futuro instantaneamente.</p>
+            <p className="text-sm mt-2 text-center max-w-md">Insira o link da sua planilha e clique em Vincular para carregar os indicadores analíticos.</p>
           </div>
         )}
 
-        {/* 2. DASHBOARD VISÃO GERAL (SÓ APARECE SE VINCULADO) */}
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Cards de KPI */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
                 <div>
@@ -173,7 +192,6 @@ export default function RecebimentoFuturo() {
               </Card>
             </div>
 
-            {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="p-6 shadow-sm">
                 <h3 className="font-bold text-gray-800 mb-6">Referências Únicas a Receber por Mundo</h3>
@@ -207,12 +225,8 @@ export default function RecebimentoFuturo() {
 
             <hr className="my-8 border-gray-200" />
 
-            {/* 3. LISTA DE RECEBIMENTO FUTURO (EXPANSÍVEL) */}
             <div className="flex flex-col items-center">
-              <button 
-                onClick={() => setMostrarLista(!mostrarLista)}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-all"
-              >
+              <button onClick={() => setMostrarLista(!mostrarLista)} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-all">
                 {mostrarLista ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 {mostrarLista ? "Ocultar Lista Detalhada" : "Ver Lista Completa de Produtos"}
               </button>
@@ -222,9 +236,7 @@ export default function RecebimentoFuturo() {
               <Card className="mt-6 shadow-md border-slate-200 overflow-hidden animate-in slide-in-from-top-4 duration-300">
                 <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
                   <h2 className="font-bold text-slate-800 text-lg">Listagem de SKUs em Trânsito</h2>
-                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">
-                    Mostrando QTDE TOTAL UNITÁRIA
-                  </span>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Mostrando QTDE TOTAL UNITÁRIA</span>
                 </div>
                 
                 <div className="overflow-x-auto max-h-[600px]">
@@ -242,9 +254,7 @@ export default function RecebimentoFuturo() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {kpis.listaRecebimento.map((item, idx) => {
-                        // CÁLCULO EXATO DA SUA PLANILHA: Volumes * Qtd por Caixa
                         const qtdTotalUnitaria = item.quantidade * (item.qtdePorCaixa || 1);
-                        
                         return (
                           <tr key={idx} className="hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3 text-slate-600">{item.remetente || '-'}</td>
@@ -260,11 +270,7 @@ export default function RecebimentoFuturo() {
                         );
                       })}
                       {kpis.listaRecebimento.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                            Nenhum produto em trânsito no momento.
-                          </td>
-                        </tr>
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Nenhum produto em trânsito no momento.</td></tr>
                       )}
                     </tbody>
                   </table>
