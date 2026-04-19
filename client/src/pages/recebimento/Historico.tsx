@@ -33,7 +33,7 @@ export default function RecebimentoHistorico() {
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
 
   // Consulta de dados (Habilitada apenas após vincular)
-  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getPending.useQuery(undefined, {
+  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getLiveData.useQuery({ url: urlPlanilha }, {
     enabled: isVinculado,
   });
 

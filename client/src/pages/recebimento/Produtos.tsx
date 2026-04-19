@@ -23,7 +23,7 @@ export default function RecebimentoFuturo() {
   const [mostrarLista, setMostrarLista] = useState(false);
 
   // Consulta atual (no próximo passo, isto mudará para a nova API on-demand)
-  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getPending.useQuery(undefined, {
+  const { data: todosPedidos = [], isLoading, refetch } = trpc.notifications.getLiveData.useQuery({ url: urlPlanilha }, {
     enabled: isVinculado, // Só pesquisa dados se o botão Vincular for ativado
   });
 

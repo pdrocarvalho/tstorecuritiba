@@ -1,11 +1,20 @@
+import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
-import { getAllPedidosWithDescricao, getPendingNotifications, updateNotificationStatus } from "../engines/sync.engine";
+import { getAllPedidosWithDescricao, getPendingNotifications, updateNotificationStatus, fetchLiveGoogleSheet } from "../engines/sync.engine";
 import { generatePendingEmails } from "../engines/notification.engine";
 import { sendBulkEmails } from "../services/gmail.service";
 
 export const notificationRouter = router({
+  // 🚀 A NOVA ROTA "SOB DEMANDA"
+  getLiveData: publicProcedure
+    .input(z.object({ url: z.string() }))
+    .query(async ({ input }) => {
+      if (!input.url || input.url.trim() === "") return [];
+      return fetchLiveGoogleSheet(input.url);
+    }),
+
+  // Mantemos as rotas antigas abaixo apenas para não quebrar o motor de E-mails
   getPending: publicProcedure.query(async () => {
-    // Agora enviamos TODOS os produtos para a listagem/dashboard em vez de apenas os pendentes!
     return getAllPedidosWithDescricao();
   }),
 
@@ -24,7 +33,5 @@ export const notificationRouter = router({
     return { success: true, emailsSent, message: `${emailsSent} e-mail(s) enviado(s).` };
   }),
 
-  getHistory: publicProcedure.query(async () => {
-    return [];
-  }),
+  getHistory: publicProcedure.query(async () => { return []; }),
 });

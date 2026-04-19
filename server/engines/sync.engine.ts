@@ -276,3 +276,74 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
   try { await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus }); return true; } 
   catch (error) { return false; }
 }
+
+// Adicione isto no final do ficheiro server/engines/sync.engine.ts
+
+export async function fetchLiveGoogleSheet(sheetsUrl: string) {
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) throw new Error("URL da planilha inválida.");
+
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
+
+  if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
+  const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: firstSheetName });
+  const rows = response.data.values;
+  
+  if (!rows || rows.length === 0) return [];
+
+  let headerRowIndex = -1;
+  let idxSku = -1, idxVolumes = -1, idxQtdePorCaixa = -1, idxDescricao = -1;
+  let idxPrevisao = -1, idxEntrega = -1, idxRemetente = -1, idxNota = -1, idxMundo = -1;
+
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const currentHeaders = rows[i].map((h: any) => h ? h.toString().toUpperCase().replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim() : "");
+    const tempSku = currentHeaders.findIndex((h: string) => h === "REF." || h === "REF");
+    const tempVol = currentHeaders.findIndex((h: string) => h === "VOLUMES");
+    const tempQtdeCaixa = currentHeaders.findIndex((h: string) => h.includes("QTDE") && h.includes("CAIXA"));
+
+    if (tempSku !== -1 && tempVol !== -1) {
+      headerRowIndex = i;
+      idxSku = tempSku; idxVolumes = tempVol; idxQtdePorCaixa = tempQtdeCaixa;
+      idxDescricao = currentHeaders.findIndex((h: string) => h.includes("DESCRIÇÃO") || h.includes("DESCRICAO"));
+      idxRemetente = currentHeaders.findIndex((h: string) => h.includes("REMETENTE"));
+      idxNota = currentHeaders.findIndex((h: string) => h.includes("NOTA FISCAL"));
+      idxPrevisao = currentHeaders.findIndex((h: string) => h.includes("PREVISÃO") || h.includes("PREVISAO"));
+      idxEntrega = currentHeaders.findIndex((h: string) => h.includes("DATA DE ENTREGA") || h === "ENTREGA");
+      idxMundo = currentHeaders.findIndex((h: string) => h.includes("MUNDO"));
+      break; 
+    }
+  }
+
+  if (headerRowIndex === -1) throw new Error("Cabeçalho não encontrado.");
+
+  const liveData = [];
+  for (let i = headerRowIndex + 1; i < rows.length; i++) {
+    const rowData = rows[i];
+    if (!rowData || rowData.length === 0) continue;
+
+    const sku = rowData[idxSku]?.toString().trim();
+    const volumes = parseInt(rowData[idxVolumes]?.toString().replace(/\D/g, "") || "0", 10);
+    const rawQtdeCaixa = rowData[idxQtdePorCaixa]?.toString().replace(/\D/g, "");
+    const qtdePorCaixa = rawQtdeCaixa ? parseInt(rawQtdeCaixa, 10) : 1;
+
+    if (!sku || isNaN(volumes) || volumes <= 0) continue;
+
+    // Constrói o objeto perfeitamente formatado para a tela ler instantaneamente
+    liveData.push({
+      produtoSku: sku,
+      quantidade: volumes,
+      qtdePorCaixa: qtdePorCaixa,
+      descricao: idxDescricao !== -1 ? rowData[idxDescricao]?.toString().trim() || "Sem descrição" : "Sem descrição",
+      previsaoEntrega: idxPrevisao !== -1 ? parseDate(rowData[idxPrevisao])?.toISOString() : null,
+      dataEntrega: idxEntrega !== -1 ? parseDate(rowData[idxEntrega])?.toISOString() : null,
+      remetente: idxRemetente !== -1 ? rowData[idxRemetente]?.toString().trim() : null,
+      notaFiscal: idxNota !== -1 ? rowData[idxNota]?.toString().trim() : null,
+      mundo: idxMundo !== -1 ? rowData[idxMundo]?.toString().trim() : null,
+    });
+  }
+  
+  return liveData;
+}
