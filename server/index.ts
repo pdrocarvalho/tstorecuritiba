@@ -8,16 +8,19 @@ import { OAuth2Client } from "google-auth-library";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
-
-// 🚀 CORREÇÃO DO ERRO COOP:
-// Este middleware permite que o popup do Google Sign-In se comunique com seu app.
+// 🚀 PASSO 1: SEGURANÇA NO TOPO (COOP & COEP)
+// Definimos os cabeçalhos ANTES de qualquer outro middleware ou rota.
 app.use((_req, res, next) => {
+  // Permite a comunicação entre seu site e o popup do Google
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  // Previne bloqueios de carregamento de recursos externos (como a foto do usuário)
   res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
   next();
 });
+
+// Middlewares padrão
+app.use(cors());
+app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -38,13 +41,13 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    // 1. O Google verifica se a chave que o Frontend mandou é real e não foi forjada
+    // 1. O Google verifica se o token é autêntico
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: GOOGLE_CLIENT_ID,
     });
     
-    // 2. Extraímos os dados da pessoa
+    // 2. Extraímos os dados da conta
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
       return res.status(401).json({ message: "E-mail não encontrado na conta Google." });
@@ -52,15 +55,10 @@ app.post("/api/auth/login", async (req, res) => {
 
     const { email, name, picture } = payload;
 
-    // 🚨 TRAVA DE SEGURANÇA: Se quiseres bloquear e-mails estranhos, tiras as barras (//) abaixo!
-    // if (!email.endsWith("@tstore.com")) {
-    //   return res.status(403).json({ message: "Acesso Negado: Use o seu e-mail corporativo da T Store." });
-    // }
-
-    // 3. Por enquanto, todos são Admin para testarmos
+    // Role padrão para o sistema
     const role = "admin"; 
 
-    // 4. Criamos o NOSSO token interno para o resto da aplicação funcionar como antes
+    // 4. Criamos o token interno (JWT)
     const authToken = jwt.sign(
       { id: email, email, role, name, picture },
       JWT_SECRET,
