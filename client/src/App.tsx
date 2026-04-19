@@ -5,11 +5,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 
-// Importações corretas baseadas na sua pasta 'recebimento'
-import RecebimentoDashboard from "./pages/recebimento/Dashboard";
+// Importações corretas baseadas na nossa nova arquitetura
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
-import RecebimentoConfig from "./pages/recebimento/Config";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -20,16 +18,15 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Switch>
-            {/* O Painel Principal é a página inicial */}
-            <Route path="/" component={RecebimentoDashboard} />
-            <Route path={ROUTES.home} component={RecebimentoDashboard} />
+            {/* A Nova Sala de Controle (Recebimento Futuro) agora é a página inicial exata */}
+            <Route path="/" component={RecebimentoProdutos} />
+            <Route path={ROUTES.home} component={RecebimentoProdutos} />
             
             <Route path="/login" component={Login} />
             
             {/* Rotas do Recebimento */}
             <Route path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <Route path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
-            <Route path={ROUTES.recebimento.config} component={RecebimentoConfig} />
             
             <Route component={NotFound} />
           </Switch>
