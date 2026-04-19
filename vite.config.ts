@@ -16,6 +16,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // 👇 A NOSSA CORREÇÃO DE SEGURANÇA PARA O GOOGLE ENTRA AQUI 👇
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
+    // O seu proxy continua intacto
     proxy: {
       "/api": {
         target: "http://localhost:3000",
