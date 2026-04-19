@@ -72,7 +72,6 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 FUNÇÃO DE IMPRESSÃO RESTAURADA
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
     const janelaImpressao = window.open('', '_blank');
@@ -88,7 +87,6 @@ export default function RecebimentoFuturo() {
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             th { background: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 10px; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .mundo-badge { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
           </style>
         </head>
         <body>
@@ -99,18 +97,20 @@ export default function RecebimentoFuturo() {
           <table>
             <thead>
               <tr>
-                <th>Mundo</th>
                 <th>Remetente</th>
-                <th>NF</th>
-                <th>SKU</th>
-                <th>Qtd</th>
+                <th>Descrição</th>
+                <th>Mundo</th>
+                <th>Nota Fiscal</th>
+                <th>Ref.</th>
+                <th>Qtde</th>
               </tr>
             </thead>
             <tbody>
               ${kpis.listaRecebimento.map(item => `
                 <tr>
-                  <td>${item.mundo || '-'}</td>
                   <td>${item.remetente || '-'}</td>
+                  <td>${item.descricao || '-'}</td>
+                  <td>${item.mundo || '-'}</td>
                   <td>${item.notaFiscal || '-'}</td>
                   <td>${item.produtoSku}</td>
                   <td>${item.quantidade}</td>
@@ -159,7 +159,6 @@ export default function RecebimentoFuturo() {
             <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
           </div>
           
-          {/* 🚀 BOTÃO IMPRIMIR RESTAURADO NO CABEÇALHO */}
           {isVinculado && (
             <button 
               onClick={gerarRelatorioImpressao} 
@@ -237,18 +236,38 @@ export default function RecebimentoFuturo() {
                 <div className="overflow-x-auto max-h-[450px]">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-100 sticky top-0 uppercase text-[10px] font-black text-slate-600 border-b">
-                      <tr><th className="px-4 py-4">Mundo</th><th className="px-4 py-4">Remetente</th><th className="px-4 py-4">Nota</th><th className="px-4 py-4">Ref</th><th className="px-4 py-4 text-right">Qtd</th></tr>
+                      {/* 🚀 ORDEM DAS COLUNAS ATUALIZADA */}
+                      <tr>
+                        <th className="px-4 py-4">Remetente</th>
+                        <th className="px-4 py-4">Descrição</th>
+                        <th className="px-4 py-4">Mundo</th>
+                        <th className="px-4 py-4">Nota Fiscal</th>
+                        <th className="px-4 py-4">Ref.</th>
+                        <th className="px-4 py-4 text-right">Qtde</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {kpis.listaRecebimento.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          {/* 1. REMETENTE */}
+                          <td className="px-4 py-3 text-slate-600">{item.remetente || '-'}</td>
+                          
+                          {/* 2. DESCRIÇÃO (Adicionada) */}
+                          <td className="px-4 py-3 text-xs text-slate-500 italic max-w-xs truncate">{item.descricao || '-'}</td>
+                          
+                          {/* 3. MUNDO */}
                           <td className="px-4 py-3">
                             <span className="inline-block w-3 h-3 rounded-full mr-2 align-middle" style={{ backgroundColor: MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO }}></span>
                             <span className="text-[10px] font-black uppercase">{item.mundo || '-'}</span>
                           </td>
-                          <td className="px-4 py-3 text-slate-600">{item.remetente || '-'}</td>
+                          
+                          {/* 4. NOTA FISCAL */}
                           <td className="px-4 py-3 font-bold text-slate-900">{item.notaFiscal || '-'}</td>
+                          
+                          {/* 5. REF. */}
                           <td className="px-4 py-3 font-mono text-xs">{item.produtoSku}</td>
+                          
+                          {/* 6. QTDE */}
                           <td className="px-4 py-3 text-right font-black text-blue-600">{item.quantidade}</td>
                         </tr>
                       ))}
