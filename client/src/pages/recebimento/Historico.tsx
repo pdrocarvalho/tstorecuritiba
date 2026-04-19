@@ -4,20 +4,19 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { 
-  Link2, RefreshCw, X, Filter, Box, FileText, Layers 
+  Link2, RefreshCw, X, Filter, ChevronDown, ChevronUp 
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  Cell, PieChart, Pie, Legend 
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend 
 } from "recharts";
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
-// 🎨 NOVA PALETA DE CORES (TONS FORTES)
+// 🎨 PALETA DE CORES VIBRANTES (MANTIDA)
 const MUNDO_COLORS: Record<string, string> = {
   "CORTAR": "#e57373",
   "FESTEJAR": "#9575cd",
@@ -27,9 +26,28 @@ const MUNDO_COLORS: Record<string, string> = {
 };
 const COR_PADRAO = "#94a3b8";
 
+// 🚀 NOVA INTERFACE DE FILTROS
+interface FiltrosHistorico {
+  dataInicio: string;
+  dataFim: string;
+  remetente: string;
+  mundo: string;
+}
+
+const INITIAL_FILTERS: FiltrosHistorico = {
+  dataInicio: "",
+  dataFim: "",
+  remetente: "",
+  mundo: ""
+};
+
 export default function RecebimentoHistorico() {
   const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_historico") || "");
   const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_historico") === "true");
+  
+  // 🚀 NOVOS ESTADOS PARA OS FILTROS
+  const [showFilters, setShowFilters] = useState(true);
+  const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
 
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
@@ -41,15 +59,38 @@ export default function RecebimentoHistorico() {
   }, []);
 
   const kpis = useMemo(() => {
+    // 🚀 LÓGICA DE FILTRAGEM IMPLEMENTADA
+    const filtrados = (todosPedidos as Pedido[]).filter((p) => {
+      if (!p.dataEntrega) return false;
+
+      const dataEnt = new Date(p.dataEntrega);
+      dataEnt.setHours(0,0,0,0);
+
+      // Filtro de Datas
+      if (filtros.dataInicio) {
+        const inicio = new Date(filtros.dataInicio + "T00:00:00");
+        if (dataEnt < inicio) return false;
+      }
+      if (filtros.dataFim) {
+        const fim = new Date(filtros.dataFim + "T23:59:59");
+        if (dataEnt > fim) return false;
+      }
+
+      // Filtros de Texto
+      if (filtros.remetente && !p.remetente?.toLowerCase().includes(filtros.remetente.toLowerCase())) return false;
+      if (filtros.mundo && !p.mundo?.toLowerCase().includes(filtros.mundo.toLowerCase())) return false;
+
+      return true;
+    });
+
     let totalVolumes = 0;
     const notasSet = new Set<string>();
     const skusPorMundo: Record<string, Set<string>> = {};
 
-    (todosPedidos as Pedido[]).forEach((p) => {
-      if (!p.dataEntrega) return;
-      const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
+    filtrados.forEach((p) => {
       totalVolumes += p.quantidade;
       if (p.notaFiscal) notasSet.add(p.notaFiscal.trim());
+      const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
       if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
       skusPorMundo[mundo].add(p.produtoSku);
     });
@@ -57,34 +98,96 @@ export default function RecebimentoHistorico() {
     return {
       totalVolumes, 
       totalNotas: notasSet.size,
+      diversidadeSkus: Object.keys(skusPorMundo).length,
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })),
     };
-  }, [todosPedidos]);
+  }, [todosPedidos, filtros]); // 🚀 Recalcula sempre que os filtros mudarem
+
+  const handleVincular = async () => {
+    if (!urlPlanilha) return toast.warning("Insira o link.");
+    try {
+      const result = await refetch();
+      if (!result.isError) {
+        setIsVinculado(true);
+        sessionStorage.setItem("url_historico", urlPlanilha);
+        sessionStorage.setItem("vinculado_historico", "true");
+        toast.success("Histórico vinculado!");
+      }
+    } catch (e) {
+      toast.error("Erro ao vincular.");
+    }
+  };
+
+  const handleCancelar = () => {
+    setIsVinculado(false);
+    setUrlPlanilha("");
+    sessionStorage.removeItem("url_historico");
+    sessionStorage.removeItem("vinculado_historico");
+    setFiltros(INITIAL_FILTERS);
+    toast.info("Vínculo removido.");
+  };
 
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        <h1 className="text-3xl font-bold">Histórico de Entregas</h1>
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Histórico de Entregas</h1>
 
         <Card className="p-4 border-emerald-100 bg-emerald-50/50 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-xs font-bold text-emerald-800 uppercase mb-1 block">Banco de Dados Histórico</span>
-            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white" />
+            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-emerald-200" />
           </div>
           <div className="flex gap-2 pt-5">
             {!isVinculado ? (
-              <button onClick={() => { refetch(); setIsVinculado(true); sessionStorage.setItem("url_historico", urlPlanilha); sessionStorage.setItem("vinculado_historico", "true"); }} className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold">Vincular</button>
+              <button onClick={handleVincular} className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2">
+                <Link2 size={18} /> Vincular
+              </button>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => refetch()} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold">Atualizar</button>
-                <button onClick={() => { setIsVinculado(false); sessionStorage.removeItem("url_historico"); sessionStorage.removeItem("vinculado_historico"); }} className="p-2.5 text-slate-400 bg-white rounded-lg border"><X /></button>
+                <button onClick={() => refetch()} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2">
+                  <RefreshCw size={18} /> Atualizar
+                </button>
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
               </div>
             )}
           </div>
         </Card>
 
         {isVinculado && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in duration-500">
+            
+            {/* 🚀 NOVA SEÇÃO DE FILTROS NA INTERFACE */}
+            <Card className="p-4 border-slate-200 bg-white shadow-sm">
+              <button 
+                onClick={() => setShowFilters(!showFilters)} 
+                className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600 transition-colors"
+              >
+                <div className="flex items-center gap-2"><Filter size={18} /> Filtros de Pesquisa</div>
+                {showFilters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </button>
+              
+              {showFilters && (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Início</label>
+                    <Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Fim</label>
+                    <Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Remetente</label>
+                    <Input placeholder="Filtrar fábrica..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Mundo</label>
+                    <Input placeholder="Filtrar mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} className="mt-1" />
+                  </div>
+                </div>
+              )}
+            </Card>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
                 <p className="text-xs font-bold text-gray-500 uppercase">Volumes Recebidos</p>
@@ -96,7 +199,7 @@ export default function RecebimentoHistorico() {
               </Card>
               <Card className="p-5 border-t-4 border-t-orange-500 shadow-sm">
                 <p className="text-xs font-bold text-gray-500 uppercase">Diversidade de SKUs</p>
-                <h3 className="text-3xl font-black">{kpis.grafSkusMundo.length}</h3>
+                <h3 className="text-3xl font-black">{kpis.diversidadeSkus}</h3>
               </Card>
             </div>
 
