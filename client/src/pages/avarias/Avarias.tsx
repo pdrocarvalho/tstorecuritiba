@@ -2,13 +2,13 @@
  * client/src/pages/avarias/Avarias.tsx
  */
 
-import React, { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
   CheckCircle2, Clock, Truck, TableProperties, 
   ChevronDown, ChevronUp, Info, Tag, Timer, PackageCheck, 
   HelpCircle, Printer, Filter
-} from "lucide-react";
+} from "lucide-react"; // 🚀 CORRIGIDO: lucide-react
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
@@ -31,26 +31,31 @@ const STATUS_OPTIONS = [
 ];
 
 export default function GestaoAvarias() {
-  // 🚀 INICIALIZAÇÃO: Busca no baú (sessionStorage) se já existe um link salvo
+  // 🚀 PERSISTÊNCIA: Inicializa estados buscando no sessionStorage
   const [urlPlanilha, setUrlPlanilha] = useState(() => {
     return sessionStorage.getItem("url_avarias") || "";
   });
-  const [isVinculado, setIsVinculado] = useState(false);
+
+  const [isVinculado, setIsVinculado] = useState(() => {
+    return sessionStorage.getItem("vinculado_avarias") === "true";
+  });
+
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [filtroSku, setFiltroSku] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
+  // 🚀 QUERY: Habilitada automaticamente se já houver URL e status de vinculado
   const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' }, 
-    { enabled: false }
+    { enabled: isVinculado && !!urlPlanilha }
   );
 
-  // 🚀 AUTO-CONEXÃO: Se já tem URL salva ao entrar na página, vincula automaticamente
+  // 🚀 AUTO-REFETCH: Garante que os dados carreguem ao trocar de aba
   useEffect(() => {
-    if (urlPlanilha) {
-      handleVincular(true); // O 'true' avisa que é silencioso
+    if (isVinculado && urlPlanilha) {
+      refetch();
     }
   }, []);
 
@@ -104,13 +109,11 @@ export default function GestaoAvarias() {
             body { font-family: sans-serif; padding: 20px; font-size: 12px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background: #f4f4f4; }
-            .badge { padding: 2px 5px; border-radius: 3px; border: 1px solid #ccc; font-size: 10px; }
+            th { background: #f4f4f4; font-weight: bold; }
           </style>
         </head>
         <body>
           <h2>Relatório de Gestão de Avarias</h2>
-          <p>Filtros: ${filtrosAtivos.length > 0 ? filtrosAtivos.join(", ") : "Geral"}</p>
           <table>
             <thead>
               <tr><th>Cód.</th><th>REF</th><th>Descrição</th><th>Qtd</th><th>NF Entrada</th><th>Tratativa</th></tr>
@@ -123,7 +126,7 @@ export default function GestaoAvarias() {
                   <td>${av.DESCRICAO || ""}</td>
                   <td>${av.QTDE_ || ""}</td>
                   <td>${av.NOTA_FISCAL_DE_ENTRADA || ""}</td>
-                  <td><span class="badge">${av.TRATATIVA || "PENDENTE"}</span></td>
+                  <td>${av.TRATATIVA || "PENDENTE"}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -136,31 +139,31 @@ export default function GestaoAvarias() {
     printWindow.document.close();
   };
 
-  // 🚀 ATUALIZADO: Agora salva o link no baú ao vincular
-  const handleVincular = async (silencioso = false) => {
-    if (!urlPlanilha) return;
+  const handleVincular = async () => {
+    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
     setIsSincronizando(true);
     try {
       const result = await refetch();
-      if (!result.isError) {
-        setIsVinculado(true);
-        sessionStorage.setItem("url_avarias", urlPlanilha); // Salva no baú
-        if (!silencioso) toast.success("Avarias sincronizadas!");
+      if (result.isError) {
+        toast.error("Falha no acesso à planilha.");
       } else {
-        if (!silencioso) toast.error("Falha ao ler planilha salva.");
+        setIsVinculado(true);
+        sessionStorage.setItem("url_avarias", urlPlanilha);
+        sessionStorage.setItem("vinculado_avarias", "true");
+        toast.success("Avarias vinculadas!");
       }
     } catch (error) {
-      console.error(error);
+      toast.error("Erro de conexão.");
     } finally {
       setIsSincronizando(false);
     }
   };
 
-  // 🚀 ATUALIZADO: Agora limpa o baú ao clicar no X
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
-    sessionStorage.removeItem("url_avarias"); // Limpa o baú
+    sessionStorage.removeItem("url_avarias");
+    sessionStorage.removeItem("vinculado_avarias");
     setExpandedRow(null);
     setFiltrosAtivos([]);
     toast.info("Vínculo removido.");
@@ -189,8 +192,8 @@ export default function GestaoAvarias() {
           </div>
           {isVinculado && (
             <div className="flex gap-3">
-              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 transition-all"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-all active:scale-95"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50"><Printer size={18}/> Imprimir</button>
+              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
@@ -209,9 +212,9 @@ export default function GestaoAvarias() {
           <div className="flex gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
               <button 
-                onClick={() => handleVincular(false)} 
+                onClick={handleVincular} 
                 disabled={isSincronizando} 
-                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md disabled:bg-red-400 min-w-[140px] flex items-center justify-center gap-2"
+                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2"
               >
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Vinculando..." : "Vincular"}
@@ -221,15 +224,15 @@ export default function GestaoAvarias() {
                 <button 
                   onClick={() => refetch()} 
                   disabled={isSincronizando}
-                  className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50 transition-colors shadow-sm"
+                  className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50 transition-colors"
                 >
                   <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
                   {isSincronizando ? "Atualizando..." : "Atualizar"}
                 </button>
                 <button 
                   onClick={handleCancelar} 
-                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"
-                  title="Desvincular Planilha"
+                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200"
+                  title="Desvincular"
                 >
                   <X size={20}/>
                 </button>
@@ -239,8 +242,8 @@ export default function GestaoAvarias() {
         </Card>
 
         {isVinculado && (
-          <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl animate-in fade-in duration-500">
-            <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
+          <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
+             <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
               <div className="relative w-full lg:w-96">
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <Input placeholder="Buscar por REF ou Código..." className="pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
@@ -285,7 +288,7 @@ export default function GestaoAvarias() {
                         {isExpanded && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={7} className="px-10 py-8">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-2">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
                                   <div className="grid grid-cols-2 gap-4">
@@ -296,7 +299,7 @@ export default function GestaoAvarias() {
                                 </div>
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Diagnóstico</h4>
-                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1 leading-relaxed">{av.MOTIVO || 'Não informado.'}</p></div>
+                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1">{av.MOTIVO || 'Não informado.'}</p></div>
                                   <div className="flex gap-3">
                                     <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE_ || '-'}</div>
                                     <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
@@ -304,13 +307,9 @@ export default function GestaoAvarias() {
                                 </div>
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Logística</h4>
-                                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 text-slate-700">
+                                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
                                     <div><p className="text-[10px] text-slate-400 font-bold uppercase">Status Interno</p><p className="text-xs font-black">{av.STATUS || 'PENDENTE'}</p></div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div><p className="text-[10px] text-slate-400 font-bold uppercase">NF Saída</p><p className="text-xs font-medium">{av.NOTA_FISCAL_DE_SAIDA || '-'}</p></div>
-                                      <div><p className="text-[10px] text-slate-400 font-bold uppercase">NF Repos.</p><p className="text-xs font-medium">{av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p></div>
-                                    </div>
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Data Coleta</p><p className="text-xs font-medium">{av.DATA_DA_COLETA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Data Coleta</p><p className="text-xs">{av.DATA_DA_COLETA || '-'}</p></div>
                                   </div>
                                 </div>
                               </div>
@@ -324,35 +323,6 @@ export default function GestaoAvarias() {
               </table>
             </div>
           </Card>
-        )}
-
-        {showModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-end">
-             <div className="w-full max-w-md bg-white h-full shadow-2xl p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-               <div className="flex justify-between items-center mb-8 border-b pb-4">
-                 <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><AlertOctagon className="text-red-600" /> Registrar Avaria</h2>
-                 <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
-               </div>
-               <div className="space-y-5">
-                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Unidade / Fábrica</label>
-                 <select className="w-full border-slate-200 p-3 rounded-lg bg-slate-50 mt-1 focus:ring-2 focus:ring-red-500 outline-none transition-all" value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})}>
-                   <option value="">Selecione...</option>
-                   {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
-                 </select></div>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Referência</label><Input className="mt-1" value={form.ref} onChange={(e) => setForm({...form, ref: e.target.value})} /></div>
-                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Quantidade</label><Input className="mt-1" type="number" value={form.qtde} onChange={(e) => setForm({...form, qtde: e.target.value})} /></div>
-                 </div>
-                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição do Produto</label><Input className="mt-1" value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} /></div>
-                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">NF de Entrada</label><Input className="mt-1" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} /></div>
-                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Motivo</label><textarea className="w-full border-slate-200 p-3 rounded-lg bg-slate-50 h-24 text-sm mt-1 focus:ring-2 focus:ring-red-500 outline-none" placeholder="Relate o dano..." value={form.motivo} onChange={(e) => setForm({...form, motivo: e.target.value})} /></div>
-                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Responsável</label><Input className="mt-1" value={form.responsavel} onChange={(e) => setForm({...form, responsavel: e.target.value})} /></div>
-                 <button onClick={handleSalvar} disabled={mutationAdd.isPending} className="w-full bg-red-600 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-red-700 transition-all hover:scale-[1.02] active:scale-95 disabled:bg-slate-300">
-                   {mutationAdd.isPending ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />} Salvar Registro
-                 </button>
-               </div>
-             </div>
-          </div>
         )}
       </div>
     </MainLayout>
