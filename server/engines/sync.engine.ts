@@ -32,7 +32,7 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// 🧠 NOVA INTELIGÊNCIA: Descobre qual é a aba exata olhando para o GID do link
+// 🧠 INTELIGÊNCIA 1: Busca a aba correta pelo GID ou pelo nome exato "DB-AVARIAS"
 function getSheetNameFromUrl(url: string, spreadsheet: any): string {
   const match = String(url).match(/[#&]gid=([0-9]+)/);
   const gid = match ? parseInt(match[1], 10) : null;
@@ -41,6 +41,12 @@ function getSheetNameFromUrl(url: string, spreadsheet: any): string {
     const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.sheetId === gid);
     if (sheet && sheet.properties?.title) return sheet.properties.title;
   }
+  
+  const dbAvariasSheet = spreadsheet.data.sheets?.find((s: any) => 
+    String(s.properties?.title).toUpperCase().includes("DB-AVARIAS")
+  );
+  if (dbAvariasSheet && dbAvariasSheet.properties?.title) return dbAvariasSheet.properties.title;
+
   return spreadsheet.data.sheets?.[0]?.properties?.title || "Página1";
 }
 
@@ -69,7 +75,7 @@ function pendingStatusFor(status: OrderStatus): NotificationStatus {
   return map[status];
 }
 
-// 🚀 LEITURA INTELIGENTE SOB DEMANDA
+// 🚀 LEITURA SOB DEMANDA "À PROVA DE BALAS"
 export async function fetchLiveGoogleSheet(sheetsUrl: string) {
   if (!sheetsUrl) throw new Error("URL não fornecida.");
   const now = Date.now();
@@ -84,56 +90,64 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
   const sheets = google.sheets({ version: "v4", auth });
   
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet); // Pega a aba certa!
+  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
+  // Forçamos a leitura das colunas de A a Z para garantir que todos os dados vêm
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId: spreadsheetId as string, 
-    range: targetSheetName 
+    range: `'${targetSheetName}'!A:Z` 
   });
+  
   const rows = response.data.values;
   if (!rows || rows.length === 0) return [];
 
-  // 🧠 NOVA INTELIGÊNCIA: Escaneia até a linha 10 para achar o verdadeiro cabeçalho
-  let headerRowIndex = 0;
+  // 🧠 INTELIGÊNCIA 2: Encontrar o cabeçalho mesmo com espaços, formatado na Linha 3 (índice 2)
+  let headerRowIndex = 2; // Começa assumindo que é a linha 3
   let headers: string[] = [];
 
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const currentHeaders = rows[i].map((h: any) => String(h || "").toUpperCase().trim());
-    // Se a linha tem uma dessas palavras, achamos o cabeçalho!
-    if (currentHeaders.includes("CÓD. AVARIA") || currentHeaders.includes("REF.") || currentHeaders.includes("FÁBRICA")) {
+    const rowStr = rows[i].join(" ").toUpperCase();
+    // Basta a linha ter as palavras AVARIA e REF para o robô saber que é o cabeçalho
+    if (rowStr.includes("AVARIA") && rowStr.includes("REF")) {
       headerRowIndex = i;
-      headers = currentHeaders;
       break;
     }
   }
 
-  if (headers.length === 0) {
-    headers = rows[0].map((h: any) => String(h || "").toUpperCase().trim());
+  if (rows[headerRowIndex]) {
+    headers = rows[headerRowIndex].map((h: any) => String(h || "").toUpperCase().trim());
+  } else {
+    return [];
   }
   
   const data = rows.slice(headerRowIndex + 1).map((row, index) => {
-    const obj: any = { rowNumber: headerRowIndex + index + 2 };
+    // Salvamos o número da linha real no Google (+1 do slice, +1 base 1)
+    const obj: any = { rowNumber: headerRowIndex + index + 2 }; 
 
     headers.forEach((header, idx) => {
+      if (!header) return;
       let val = row[idx] || "";
       const key = header.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
     });
 
-    if (obj.REF_) obj.produtoSku = String(obj.REF_).trim();
-    if (obj.VOLUMES) obj.quantidade = parseInt(String(obj.VOLUMES).replace(/\D/g, ""), 10) || 0;
-
     return obj;
   });
 
-  // Remove linhas totalmente vazias (caso você tenha linhas em branco no meio ou no fim da planilha)
-  const dadosValidos = data.filter((d: any) => d.COD__AVARIA || d.REF_ || d.FABRICA);
+  // 🧠 INTELIGÊNCIA 3: Filtro permissivo. 
+  // Mantém a linha viva se tiver pelo menos o CÓD AVARIA OU a REF OU a FÁBRICA
+  const dadosValidos = data.filter((d: any) => {
+    const cod = String(d.COD__AVARIA || "").trim();
+    const ref = String(d.REF_ || "").trim();
+    const fab = String(d.FABRICA || "").trim();
+    return cod !== "" || ref !== "" || fab !== "";
+  });
 
   sheetsCache[sheetsUrl] = { data: dadosValidos, timestamp: Date.now() };
   return dadosValidos;
 }
 
-// ✍️ ADICIONAR E EDITAR (Atualizados para respeitar a Aba correta)
+// ✍️ ADICIONAR E EDITAR
 export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL inválida.");
@@ -174,29 +188,21 @@ export async function updateSheetRow(sheetsUrl: string, rowNumber: number, colum
   return { success: true };
 }
 
-// ... as funções antigas mantêm-se iguais abaixo
+// ... ROTAS DO RECEBIMENTO MANTIDAS IGUAIS
 export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<SyncResult> {
   const result: SyncResult = { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] };
   const db = await getDb();
   if (!db) return result;
-  
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) return result;
-
   try {
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
     const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
-
     await saveGoogleSheetsConfig(sheetsUrl, 1, "Arquivo Antigo");
-
     if (!firstSheetName) return result;
-    
-    const response = await sheets.spreadsheets.values.get({ 
-      spreadsheetId: spreadsheetId as string, 
-      range: firstSheetName 
-    });
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId: spreadsheetId as string, range: firstSheetName });
     const rows = response.data.values;
     if (!rows || rows.length === 0) return result;
 
@@ -222,7 +228,6 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         break; 
       }
     }
-
     if (headerRowIndex === -1) return result;
 
     const todosPedidosDB = await db.select().from(pedidosRastreio);
@@ -232,11 +237,9 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const rowData = rows[i];
       if (!rowData || rowData.length === 0) continue;
-
       const sku = rowData[idxSku] ? String(rowData[idxSku]).trim() : "";
       const volumes = parseInt(rowData[idxVolumes] ? String(rowData[idxVolumes]).replace(/\D/g, "") : "0", 10);
       const qtdePorCaixa = parseInt(rowData[idxQtdePorCaixa] ? String(rowData[idxQtdePorCaixa]).replace(/\D/g, "") : "1", 10);
-
       if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
       const descricao = idxDescricao !== -1 && rowData[idxDescricao] ? String(rowData[idxDescricao]).trim() : "Sem descrição";
@@ -250,7 +253,6 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
         if (!processedSkus.has(sku)) { await upsertProduto({ sku, descricao }); processedSkus.add(sku); }
         const orderStatus = resolveOrderStatus(previsao, entrega);
         const existing = todosPedidosDB.find(p => p.produtoSku === sku && p.quantidade === volumes && p.notaFiscal === notaFiscal && !validDbIds.has(p.id));
-
         if (!existing) {
           const inserted = await db.insert(pedidosRastreio).values({
             produtoSku: sku, quantidade: volumes, qtdePorCaixa, previsaoEntrega: previsao, dataEntrega: entrega, orderStatus,
@@ -302,4 +304,5 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
   try { await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus }); return true; } 
   catch (error) { return false; }
 }
+
 export async function testarLeituraRobo(url: string) { return {}; }
