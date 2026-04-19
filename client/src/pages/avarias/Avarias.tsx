@@ -39,7 +39,6 @@ export default function GestaoAvarias() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
-  // 🚀 MODO AVARIAS ATIVADO
   const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' }, 
     { enabled: false }
@@ -127,18 +126,42 @@ export default function GestaoAvarias() {
     printWindow.document.close();
   };
 
+  // 🚀 CORRIGIDO: Agora com Feedback de Loading e Toast de Sucesso
   const handleVincular = async () => {
+    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
     setIsSincronizando(true);
-    const result = await refetch();
-    if (!result.isError) setIsVinculado(true);
-    setIsSincronizando(false);
+    try {
+      const result = await refetch();
+      if (result.isError) {
+        toast.error("Falha no acesso à planilha.");
+      } else {
+        toast.success("Planilha de Avarias vinculada com sucesso!");
+        setIsVinculado(true);
+      }
+    } catch (error) {
+      toast.error("Erro de conexão.");
+    } finally {
+      setIsSincronizando(false);
+    }
+  };
+
+  const handleCancelar = () => {
+    setIsVinculado(false);
+    setUrlPlanilha("");
+    setExpandedRow(null);
+    setFiltrosAtivos([]);
+    toast.info("Planilha desvinculada.");
   };
 
   const [form, setForm] = useState({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
 
   const handleSalvar = async () => {
     if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("Campos obrigatórios faltando.");
-    const codAvaria = "GERANDO..."; // A lógica de código será processada no robô ou aqui
+    const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
+    const codigos = todasAvarias.map((a: any) => String(a.COD__AVARIA || "")).filter((c: string) => c.startsWith(fabrica?.prefixo || ""));
+    const num = codigos.length > 0 ? Math.max(...codigos.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
+    const codAvaria = `${fabrica?.prefixo}${String(num).padStart(4, '0')}`;
+    
     const novaLinha = [new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, form.qtde, form.nfEntrada, form.motivo, form.responsavel, "NÃO", "PENDENTE", "SIM", "PENDENTE", "", "", ""];
     mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
   };
@@ -153,33 +176,70 @@ export default function GestaoAvarias() {
           </div>
           {isVinculado && (
             <div className="flex gap-3">
-              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 transition-all"><Printer size={18}/> Imprimir</button>
+              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-all active:scale-95"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
 
-        <Card className="p-4 border-red-100 bg-red-50/30 flex gap-4 items-center">
-          <Input placeholder="Link do Google Sheets..." value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white flex-1" />
-          {!isVinculado ? (
-            <button onClick={handleVincular} disabled={isSincronizando} className="bg-red-600 text-white px-8 py-2 rounded-lg font-bold">Vincular</button>
-          ) : (
-            <button onClick={() => refetch()} className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2 rounded-lg font-bold flex items-center gap-2">
-              <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> Atualizar
-            </button>
-          )}
+        {/* 🚀 CABEÇALHO DE VINCULAÇÃO CORRIGIDO */}
+        <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
+          <div className="flex-1 w-full">
+            <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
+            <Input 
+              placeholder="Cole o link do Google Sheets..." 
+              value={urlPlanilha} 
+              onChange={(e) => setUrlPlanilha(e.target.value)} 
+              disabled={isVinculado} 
+              className="bg-white border-red-200 rounded-lg" 
+            />
+          </div>
+          <div className="flex gap-2 pt-5 w-full md:w-auto">
+            {!isVinculado ? (
+              <button 
+                onClick={handleVincular} 
+                disabled={isSincronizando} 
+                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md disabled:bg-red-400 min-w-[140px] flex items-center justify-center gap-2"
+              >
+                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
+                {isSincronizando ? "Vinculando..." : "Vincular"}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => refetch()} 
+                  disabled={isSincronizando}
+                  className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50 transition-colors shadow-sm"
+                >
+                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
+                  {isSincronizando ? "Atualizando..." : "Atualizar"}
+                </button>
+                {/* 🚀 O BOTÃO X VOLTOU */}
+                <button 
+                  onClick={handleCancelar} 
+                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"
+                  title="Desvincular Planilha"
+                >
+                  <X size={20}/>
+                </button>
+              </div>
+            )}
+          </div>
         </Card>
 
         {isVinculado && (
-          <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
+          <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl animate-in fade-in duration-500">
             <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
-              <Input placeholder="Buscar por REF ou Código..." className="w-full lg:w-96 pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
+              <div className="relative w-full lg:w-96">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                <Input placeholder="Buscar por REF ou Código..." className="pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map(s => (
                   <button 
                     key={s.id} 
                     onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? `bg-${s.color}-600 text-white border-${s.color}-700` : 'bg-white text-slate-500 border-slate-200'}`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? `bg-${s.color}-600 text-white border-${s.color}-700` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                   >
                     {s.label}
                   </button>
@@ -187,49 +247,101 @@ export default function GestaoAvarias() {
               </div>
             </div>
 
-            <table className="w-full text-left text-sm">
-              <thead className="bg-white text-slate-400 text-[10px] font-black uppercase border-b">
-                <tr><th className="px-6 py-4 w-10"></th><th className="px-4">Cód.</th><th className="px-4">REF</th><th className="px-4 w-1/3">Descrição</th><th className="px-4 text-center">Qtde</th><th className="px-4">NF Entrada</th><th className="px-6 text-right">Tratativa</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {avariasFiltradas.map((av: any, idx: number) => {
-                  const isExpanded = expandedRow === idx;
-                  const style = getTratativaStyle(av.TRATATIVA);
-                  return (
-                    <React.Fragment key={idx}>
-                      <tr onClick={() => setExpandedRow(isExpanded ? null : idx)} className="cursor-pointer hover:bg-slate-50 transition-all">
-                        <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
-                        <td className="px-4 font-bold">{av.COD__AVARIA}</td>
-                        <td className="px-4"><span className="bg-slate-100 px-2 py-1 rounded font-mono text-xs">{av.REF_}</span></td>
-                        <td className="px-4 text-slate-600">{av.DESCRICAO}</td>
-                        <td className="px-4 text-center font-black text-red-600">{av.QTDE_}</td>
-                        <td className="px-4">{av.NOTA_FISCAL_DE_ENTRADA}</td>
-                        <td className="px-6 text-right">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase border ${style.class}`}>
-                            {style.icon} {av.TRATATIVA || 'PENDENTE'}
-                          </span>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="bg-slate-50/80">
-                          <td colSpan={7} className="px-10 py-6">
-                            <div className="grid grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2">
-                              <div><p className="text-[10px] font-bold text-slate-400 uppercase">Motivo</p><p className="text-xs italic bg-white p-2 border rounded mt-1">{av.MOTIVO}</p></div>
-                              <div><p className="text-[10px] font-bold text-slate-400 uppercase">Responsável</p><p className="font-semibold">{av.RESPONSAVEL}</p></div>
-                              <div className="bg-white p-3 border rounded">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Status Interno</p><p className="text-xs font-black">{av.STATUS || 'PENDENTE'}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Coleta</p><p className="text-xs">{av.DATA_DA_COLETA || '-'}</p>
-                              </div>
-                            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white text-slate-400 text-[10px] font-black uppercase border-b tracking-widest">
+                  <tr><th className="px-6 py-4 w-10"></th><th className="px-4">Cód.</th><th className="px-4">REF</th><th className="px-4 w-1/3">Descrição</th><th className="px-4 text-center">Qtde</th><th className="px-4">NF Entrada</th><th className="px-6 text-right">Tratativa</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {avariasFiltradas.map((av: any, idx: number) => {
+                    const isExpanded = expandedRow === idx;
+                    const style = getTratativaStyle(av.TRATATIVA);
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}>
+                          <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
+                          <td className="px-4 font-bold text-slate-900">{av.COD__AVARIA || '-'}</td>
+                          <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF_ || '-'}</span></td>
+                          <td className="px-4 text-slate-700 font-medium">{av.DESCRICAO || '-'}</td>
+                          <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE_ || '-'}</td>
+                          <td className="px-4 text-slate-500">{av.NOTA_FISCAL_DE_ENTRADA || '-'}</td>
+                          <td className="px-6 text-right">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border shadow-sm ${style.class}`}>
+                              {style.icon} {av.TRATATIVA || 'PENDENTE'}
+                            </span>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {isExpanded && (
+                          <tr className="bg-slate-50/80">
+                            <td colSpan={7} className="px-10 py-8">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-2">
+                                <div className="space-y-4">
+                                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FABRICA || '-'}</p></div>
+                                  </div>
+                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSAVEL || '-'}</p></div>
+                                </div>
+                                <div className="space-y-4">
+                                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Diagnóstico</h4>
+                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1 leading-relaxed">{av.MOTIVO || 'Não informado.'}</p></div>
+                                  <div className="flex gap-3">
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE_ || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
+                                  </div>
+                                </div>
+                                <div className="space-y-4">
+                                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Logística</h4>
+                                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 text-slate-700">
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Status Interno</p><p className="text-xs font-black">{av.STATUS || 'PENDENTE'}</p></div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div><p className="text-[10px] text-slate-400 font-bold uppercase">NF Saída</p><p className="text-xs font-medium">{av.NOTA_FISCAL_DE_SAIDA || '-'}</p></div>
+                                      <div><p className="text-[10px] text-slate-400 font-bold uppercase">NF Repos.</p><p className="text-xs font-medium">{av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p></div>
+                                    </div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Data Coleta</p><p className="text-xs font-medium">{av.DATA_DA_COLETA || '-'}</p></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Card>
+        )}
+
+        {showModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-end">
+             <div className="w-full max-w-md bg-white h-full shadow-2xl p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
+               <div className="flex justify-between items-center mb-8 border-b pb-4">
+                 <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><AlertOctagon className="text-red-600" /> Registrar Avaria</h2>
+                 <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
+               </div>
+               <div className="space-y-5">
+                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Unidade / Fábrica</label>
+                 <select className="w-full border-slate-200 p-3 rounded-lg bg-slate-50 mt-1 focus:ring-2 focus:ring-red-500 outline-none transition-all" value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})}>
+                   <option value="">Selecione...</option>
+                   {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
+                 </select></div>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Referência</label><Input className="mt-1" value={form.ref} onChange={(e) => setForm({...form, ref: e.target.value})} /></div>
+                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Quantidade</label><Input className="mt-1" type="number" value={form.qtde} onChange={(e) => setForm({...form, qtde: e.target.value})} /></div>
+                 </div>
+                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição do Produto</label><Input className="mt-1" value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} /></div>
+                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">NF de Entrada</label><Input className="mt-1" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} /></div>
+                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Motivo</label><textarea className="w-full border-slate-200 p-3 rounded-lg bg-slate-50 h-24 text-sm mt-1 focus:ring-2 focus:ring-red-500 outline-none" placeholder="Relate o dano..." value={form.motivo} onChange={(e) => setForm({...form, motivo: e.target.value})} /></div>
+                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Responsável</label><Input className="mt-1" value={form.responsavel} onChange={(e) => setForm({...form, responsavel: e.target.value})} /></div>
+                 <button onClick={handleSalvar} disabled={mutationAdd.isPending} className="w-full bg-red-600 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-red-700 transition-all hover:scale-[1.02] active:scale-95 disabled:bg-slate-300">
+                   {mutationAdd.isPending ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />} Salvar Registro
+                 </button>
+               </div>
+             </div>
+          </div>
         )}
       </div>
     </MainLayout>
