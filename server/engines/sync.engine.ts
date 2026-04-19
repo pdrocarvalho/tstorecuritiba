@@ -24,8 +24,6 @@ export interface SyncResult {
 // 🛡️ A NOVA FUNÇÃO DE DATA (100% À PROVA DE BALAS)
 function parseDateSafe(dateVal: any): Date | null {
   if (dateVal === null || dateVal === undefined) return null;
-  
-  // Garante que é tratado como texto e remove espaços mortos
   const str = String(dateVal).trim();
   if (!str || str === "" || str === "-") return null;
 
@@ -35,8 +33,6 @@ function parseDateSafe(dateVal: any): Date | null {
       if (parts && parts.length >= 3) {
         const day = parseInt(parts[0] || "0", 10);
         const month = parseInt(parts[1] || "1", 10) - 1;
-        
-        // Proteção contra o erro do 'split'
         const yearPart = parts[2] ? String(parts[2]) : "";
         const yearStr = yearPart.includes(" ") ? yearPart.split(" ")[0] : yearPart;
         const yearNum = parseInt(yearStr || "0", 10);
@@ -44,17 +40,13 @@ function parseDateSafe(dateVal: any): Date | null {
         if (!isNaN(day) && !isNaN(month) && !isNaN(yearNum)) {
           const year = yearStr.length <= 2 ? 2000 + yearNum : yearNum;
           const d = new Date(year, month, day, 12, 0, 0);
-          if (!isNaN(d.getTime())) return d; // Só devolve se a data for real
+          if (!isNaN(d.getTime())) return d; 
         }
       }
     }
-    
-    // Tenta formato americano nativo como fallback
     const d2 = new Date(str);
     if (!isNaN(d2.getTime())) return d2;
-    
   } catch (e) {
-    // Se falhar miseravelmente em qualquer conta, apenas ignora e salva como "sem data"
     return null; 
   }
   return null;
@@ -91,9 +83,26 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// 🚀 O NOVO MOTOR "SOB DEMANDA" PARA O APLICATIVO
+// ⏳ SISTEMA DE CACHE (MEMÓRIA CURTA DE 30 SEGUNDOS)
+interface CacheEntry {
+  data: any[];
+  timestamp: number;
+}
+const sheetsCache: Record<string, CacheEntry> = {};
+const CACHE_TTL_MS = 30 * 1000; // 30 segundos de "imunidade"
+
+// 🚀 O MOTOR "SOB DEMANDA" BLINDADO E COM CACHE
 export async function fetchLiveGoogleSheet(sheetsUrl: string) {
   if (!sheetsUrl) throw new Error("URL não fornecida.");
+  
+  // 1. VERIFICA O CACHE ANTES DE ACORDAR O GOOGLE
+  const now = Date.now();
+  if (sheetsCache[sheetsUrl] && (now - sheetsCache[sheetsUrl].timestamp < CACHE_TTL_MS)) {
+    console.log("⚡ Servindo dados da memória Cache (Google protegido)");
+    return sheetsCache[sheetsUrl].data;
+  }
+
+  // Se não tem cache ou expirou, vai buscar dados frescos:
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL da planilha inválida.");
 
@@ -133,14 +142,12 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
 
   if (headerRowIndex === -1) throw new Error("Cabeçalho não encontrado. Verifique as colunas REF e VOLUMES.");
 
-  // ✅ CORREÇÃO APLICADA AQUI (Tipagem any[])
   const liveData: any[] = [];
   
   for (let i = headerRowIndex + 1; i < rows.length; i++) {
     const rowData = rows[i];
     if (!rowData || rowData.length === 0) continue;
 
-    // Proteções extras para garantir que nenhum 'split' falhe
     const sku = rowData[idxSku] ? String(rowData[idxSku]).trim() : "";
     const volumesRaw = rowData[idxVolumes] ? String(rowData[idxVolumes]).replace(/\D/g, "") : "0";
     const volumes = parseInt(volumesRaw || "0", 10);
@@ -150,7 +157,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
 
     if (!sku || isNaN(volumes) || volumes <= 0) continue;
 
-    // Usa a nova função segura e garante que a data é válida antes de exportar
     const datePrev = idxPrevisao !== -1 ? parseDateSafe(rowData[idxPrevisao]) : null;
     const dateEnt = idxEntrega !== -1 ? parseDateSafe(rowData[idxEntrega]) : null;
 
@@ -166,6 +172,9 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
       mundo: idxMundo !== -1 && rowData[idxMundo] ? String(rowData[idxMundo]).trim() : null,
     });
   }
+  
+  // 2. GUARDA NO CACHE ANTES DE DEVOLVER À TELA
+  sheetsCache[sheetsUrl] = { data: liveData, timestamp: Date.now() };
   
   return liveData;
 }
