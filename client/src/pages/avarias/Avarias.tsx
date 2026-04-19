@@ -2,10 +2,11 @@
  * client/src/pages/avarias/Avarias.tsx
  */
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
-  CheckCircle2, Clock, Truck, TableProperties 
+  CheckCircle2, Clock, Truck, TableProperties, 
+  ChevronDown, ChevronUp, Info
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,9 @@ export default function GestaoAvarias() {
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [filtroSku, setFiltroSku] = useState("");
+  
+  // 🚀 NOVO ESTADO: Controla qual linha está expandida (guarda o índice)
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha },
@@ -37,12 +41,11 @@ export default function GestaoAvarias() {
     onSuccess: () => {
       toast.success("Avaria registrada com sucesso!");
       setShowModal(false);
-      refetch(); // Atualiza a lista automaticamente após salvar
+      refetch();
     },
     onError: (err) => toast.error("Erro ao salvar: " + err.message)
   });
 
-  // 🛡️ A NOSSA FUNÇÃO INTELIGENTE DE VINCULAR
   const handleVincular = async () => {
     if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha de Avarias.");
     if (!urlPlanilha.includes("docs.google.com/spreadsheets")) return toast.error("Link inválido. Insira um link do Google Sheets.");
@@ -54,7 +57,7 @@ export default function GestaoAvarias() {
         toast.error(`Falha no acesso: ${result.error?.message}`);
         setIsVinculado(false);
       } else if (result.data && result.data.length === 0) {
-        toast.warning("A planilha foi lida, mas parece estar vazia.");
+        toast.warning("A planilha foi lida, mas parece estar vazia ou sem o cabeçalho na linha 3.");
         setIsVinculado(true);
       } else {
         toast.success("Planilha de Avarias vinculada com sucesso!");
@@ -71,17 +74,15 @@ export default function GestaoAvarias() {
   const handleAtualizar = async () => {
     setIsSincronizando(true);
     const result = await refetch();
-    if (result.isError) {
-      toast.error(`Falha ao atualizar: ${result.error?.message}`);
-    } else {
-      toast.success("Dados de Avarias atualizados!");
-    }
+    if (result.isError) toast.error(`Falha ao atualizar: ${result.error?.message}`);
+    else toast.success("Dados de Avarias atualizados!");
     setIsSincronizando(false);
   };
 
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
+    setExpandedRow(null); // Reseta a linha expandida ao desvincular
     toast.info("Planilha desvinculada.");
   };
 
@@ -127,6 +128,12 @@ export default function GestaoAvarias() {
     );
   }, [todasAvarias, filtroSku]);
 
+  // Função para abrir/fechar a gaveta da linha
+  const toggleRow = (idx: number) => {
+    if (expandedRow === idx) setExpandedRow(null);
+    else setExpandedRow(idx);
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6 pb-10">
@@ -142,15 +149,13 @@ export default function GestaoAvarias() {
           )}
         </div>
 
-        {/* MÓDULO DE VINCULAÇÃO BLINDADO */}
+        {/* VINCULAÇÃO */}
         <Card className="p-4 border border-red-100 bg-red-50/30 shadow-sm flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-xs font-bold text-red-800 uppercase tracking-wider mb-1 block">Link da Planilha de Avarias</span>
             <Input 
-              placeholder="Cole o link aqui..." 
-              value={urlPlanilha} 
-              onChange={(e) => setUrlPlanilha(e.target.value)} 
-              disabled={isVinculado}
+              placeholder="Cole o link aqui..." value={urlPlanilha} 
+              onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado}
               className="bg-white border-red-200" 
             />
           </div>
@@ -187,18 +192,13 @@ export default function GestaoAvarias() {
                 <div className="relative w-full md:w-72">
                   <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                   <Input 
-                    placeholder="Buscar por REF/SKU..." 
-                    className="pl-10 bg-white" 
-                    value={filtroSku}
-                    onChange={(e) => setFiltroSku(e.target.value)}
+                    placeholder="Buscar por REF/SKU..." className="pl-10 bg-white" 
+                    value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)}
                   />
                 </div>
                 <div className="flex gap-2 text-xs">
                   <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-bold shadow-sm">
-                    <Clock size={12} /> {todasAvarias.filter((a: any) => a.STATUS === "PENDENTE").length} Pendentes
-                  </span>
-                  <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold shadow-sm">
-                    <Truck size={12} /> {todasAvarias.filter((a: any) => a.STATUS === "COLETADO" || a.STATUS === "CONCLUIDO").length} Finalizadas
+                    <Clock size={12} /> {todasAvarias.filter((a: any) => a.STATUS === "PENDENTE" || a.STATUS === "" || !a.STATUS).length} Abertas
                   </span>
                 </div>
               </div>
@@ -207,33 +207,123 @@ export default function GestaoAvarias() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white text-slate-500 text-xs uppercase sticky top-0 border-b z-10 shadow-sm">
                     <tr>
-                      <th className="px-4 py-3">Cód. Avaria</th>
-                      <th className="px-4 py-3">REF</th>
-                      <th className="px-4 py-3 w-1/4">Descrição</th>
-                      <th className="px-4 py-3">Motivo</th>
-                      <th className="px-4 py-3 text-center">Qtde</th>
-                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 w-10"></th>
+                      <th className="px-4 py-3 font-semibold">Cód. Avaria</th>
+                      <th className="px-4 py-3 font-semibold">REF</th>
+                      <th className="px-4 py-3 font-semibold w-1/4">Descrição</th>
+                      <th className="px-4 py-3 font-semibold text-center">Qtde</th>
+                      <th className="px-4 py-3 font-semibold">NF Entrada</th>
+                      <th className="px-4 py-3 font-semibold">Tratativa</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {avariasFiltradas.map((av: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 font-bold text-slate-900">{av.COD__AVARIA || '-'}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{av.REF_ || '-'}</td>
-                        <td className="px-4 py-3 text-slate-700">{av.DESCRICAO || '-'}</td>
-                        <td className="px-4 py-3 text-slate-500">{av.MOTIVO || '-'}</td>
-                        <td className="px-4 py-3 text-center font-bold text-red-600">{av.QTDE_ || '-'}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                            av.STATUS === 'PENDENTE' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            {av.STATUS || 'SEM STATUS'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {avariasFiltradas.map((av: any, idx: number) => {
+                      const isExpanded = expandedRow === idx;
+                      
+                      return (
+                        <React.Fragment key={idx}>
+                          {/* LINHA PRINCIPAL RESUMIDA */}
+                          <tr 
+                            onClick={() => toggleRow(idx)}
+                            className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}
+                          >
+                            <td className="px-4 py-4 text-slate-400">
+                              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-slate-900">{av.COD__AVARIA || '-'}</td>
+                            <td className="px-4 py-4 font-mono text-xs text-slate-600 bg-slate-100/50 rounded px-2">{av.REF_ || '-'}</td>
+                            <td className="px-4 py-4 text-slate-700 font-medium truncate max-w-[200px]" title={av.DESCRICAO}>{av.DESCRICAO || '-'}</td>
+                            <td className="px-4 py-4 text-center font-black text-red-600">{av.QTDE_ || '-'}</td>
+                            <td className="px-4 py-4 text-slate-600">{av.NOTA_FISCAL_DE_ENTRADA || '-'}</td>
+                            <td className="px-4 py-4">
+                              {av.TRATATIVA ? (
+                                <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold">{av.TRATATIVA}</span>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">Pendente</span>
+                              )}
+                            </td>
+                          </tr>
+
+                          {/* PAINEL EXPANSÍVEL COM OS DETALHES (SÓ APARECE SE CLICADO) */}
+                          {isExpanded && (
+                            <tr className="bg-slate-50 border-b border-blue-100">
+                              <td colSpan={7} className="p-0">
+                                <div className="p-6 pt-4 pb-8 animate-in fade-in slide-in-from-top-2 duration-200">
+                                  <div className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-4 border-b pb-2">
+                                    <Info size={16} className="text-blue-500" /> Detalhes Completos da Avaria
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    {/* Bloco 1: Origem */}
+                                    <div className="space-y-3">
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Data de Entrada</p>
+                                        <p className="text-sm font-medium">{av.DATA_DE_ENTRADA || '-'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Fábrica</p>
+                                        <p className="text-sm font-medium">{av.FABRICA || '-'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Responsável</p>
+                                        <p className="text-sm font-medium">{av.RESPONSAVEL || '-'}</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Bloco 2: Ocorrência */}
+                                    <div className="space-y-3 md:col-span-2">
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Motivo</p>
+                                        <p className="text-sm text-slate-700 bg-white border p-2 rounded mt-1 min-h-[60px]">
+                                          {av.MOTIVO || 'Nenhum motivo registrado.'}
+                                        </p>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4 pt-2">
+                                        <div>
+                                          <p className="text-[10px] font-bold text-slate-400 uppercase">No Sistema?</p>
+                                          <p className="text-sm font-medium">{av.FOI_LANCADO_NO_SISTEMA_ || '-'}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] font-bold text-slate-400 uppercase">Fisicamente?</p>
+                                          <p className="text-sm font-medium">{av.CONSTA_FISICAMENTE_ || '-'}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Bloco 3: Resolução */}
+                                    <div className="space-y-3 bg-white p-3 border rounded shadow-sm">
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Status Operacional</p>
+                                        <span className={`inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+                                          av.STATUS === 'PENDENTE' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 
+                                          av.STATUS ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+                                        }`}>
+                                          {av.STATUS || 'NÃO DEFINIDO'}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">NF de Saída</p>
+                                        <p className="text-sm font-medium">{av.NOTA_FISCAL_DE_SAIDA || '-'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">NF de Reposição</p>
+                                        <p className="text-sm font-medium">{av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Data da Coleta</p>
+                                        <p className="text-sm font-medium">{av.DATA_DA_COLETA || '-'}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                     {avariasFiltradas.length === 0 && (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Nenhum registro encontrado.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Nenhum registro encontrado.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -242,7 +332,7 @@ export default function GestaoAvarias() {
           </div>
         )}
 
-        {/* MODAL / FORMULÁRIO LATERAL */}
+        {/* MODAL / FORMULÁRIO LATERAL (MANTIDO INTACTO) */}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
             <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
@@ -258,8 +348,7 @@ export default function GestaoAvarias() {
                   <label className="text-xs font-bold uppercase text-slate-500 block mb-1">Fábrica *</label>
                   <select 
                     className="w-full border border-slate-300 p-2.5 rounded-md bg-slate-50 focus:ring-2 focus:ring-red-500 outline-none"
-                    value={form.fabrica}
-                    onChange={(e) => setForm({...form, fabrica: e.target.value})}
+                    value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})}
                   >
                     <option value="">Selecione a unidade...</option>
                     {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
@@ -291,9 +380,7 @@ export default function GestaoAvarias() {
                   <label className="text-xs font-bold uppercase text-slate-500 block mb-1">Motivo da Avaria</label>
                   <textarea 
                     className="w-full border border-slate-300 p-2.5 rounded-md text-sm h-24 bg-slate-50 focus:ring-2 focus:ring-red-500 outline-none resize-none"
-                    placeholder="Descreva o que aconteceu..."
-                    value={form.motivo}
-                    onChange={(e) => setForm({...form, motivo: e.target.value})}
+                    placeholder="Descreva o que aconteceu..." value={form.motivo} onChange={(e) => setForm({...form, motivo: e.target.value})}
                   />
                 </div>
 
@@ -304,8 +391,7 @@ export default function GestaoAvarias() {
 
                 <div className="pt-6 border-t mt-6 flex flex-col gap-3">
                   <button 
-                    onClick={handleSalvar}
-                    disabled={mutationAdd.isPending}
+                    onClick={handleSalvar} disabled={mutationAdd.isPending}
                     className="w-full bg-red-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition-all shadow-md disabled:bg-red-400"
                   >
                     {mutationAdd.isPending ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />} 
