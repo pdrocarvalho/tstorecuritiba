@@ -3,13 +3,13 @@
  */
 
 import { useState, useMemo } from "react";
-import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties } from "lucide-react";
+import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { toast } from "sonner"; // 🛡️ Importando a biblioteca de alertas
+import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -20,34 +20,25 @@ export default function RecebimentoFuturo() {
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
 
-  // 🛡️ Mudei enabled para false. Agora o sistema SÓ busca quando você manda.
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha }, 
     { enabled: false }
   );
 
   const handleVincular = async () => {
-    if (!urlPlanilha) {
-      toast.warning("Por favor, insira o link da planilha.");
-      return;
-    }
-    if (!urlPlanilha.includes("docs.google.com/spreadsheets")) {
-      toast.error("Link inválido. Certifique-se de colar um link válido do Google Sheets.");
-      return;
-    }
+    if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha.");
+    if (!urlPlanilha.includes("docs.google.com/spreadsheets")) return toast.error("Link inválido. Certifique-se de colar um link válido do Google Sheets.");
 
     setIsSincronizando(true);
     
     try {
-      // Aqui ele bate no servidor e aguarda a resposta real
       const result = await refetch();
-      
       if (result.isError) {
         toast.error(`Falha no acesso: ${result.error?.message}`);
-        setIsVinculado(false); // Aborta a vinculação
+        setIsVinculado(false);
       } else if (result.data && result.data.length === 0) {
-        toast.warning("A planilha foi lida, mas está vazia ou não possui as colunas REF e VOLUMES.");
-        setIsVinculado(true); // Vincula, mas avisa que está vazia
+        toast.warning("A planilha foi lida, mas está vazia ou não possui as colunas necessárias.");
+        setIsVinculado(true);
       } else {
         toast.success("Planilha vinculada e dados carregados com sucesso!");
         setIsVinculado(true);
@@ -113,6 +104,45 @@ export default function RecebimentoFuturo() {
       grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
     };
   }, [todosPedidos]);
+
+  // 🚀 A NOVA FUNÇÃO DE EXPORTAÇÃO
+  const handleExportarCSV = () => {
+    if (kpis.listaRecebimento.length === 0) {
+      toast.warning("Não há dados para exportar.");
+      return;
+    }
+
+    const headers = ["Remetente", "Nota Fiscal", "Ref. (SKU)", "Descrição", "Mundo", "Qtd. Total", "Previsão"];
+    
+    const rows = kpis.listaRecebimento.map(item => {
+      const qtdTotalUnitaria = item.quantidade * (item.qtdePorCaixa || 1);
+      const previsao = item.previsaoEntrega ? new Date(item.previsaoEntrega).toLocaleDateString('pt-BR') : '-';
+      
+      return [
+        `"${item.remetente || '-'}"`,
+        `"${item.notaFiscal || '-'}"`,
+        `"${item.produtoSku}"`,
+        `"${(item.descricao || 'Sem descrição').replace(/"/g, '""')}"`, 
+        `"${item.mundo || '-'}"`,
+        qtdTotalUnitaria,
+        `"${previsao}"`
+      ].join(";"); // Usamos ponto e vírgula para o Excel abrir direto em PT-BR
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(";"), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    
+    const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    link.setAttribute("download", `Recebimento_Futuro_${dataAtual}.csv`);
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Relatório baixado com sucesso!");
+  };
 
   return (
     <MainLayout>
@@ -234,9 +264,19 @@ export default function RecebimentoFuturo() {
 
             {mostrarLista && (
               <Card className="mt-6 shadow-md border-slate-200 overflow-hidden animate-in slide-in-from-top-4 duration-300">
-                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-                  <h2 className="font-bold text-slate-800 text-lg">Listagem de SKUs em Trânsito</h2>
-                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Mostrando QTDE TOTAL UNITÁRIA</span>
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-bold text-slate-800 text-lg">Listagem de SKUs em Trânsito</h2>
+                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">QTDE TOTAL UNITÁRIA</span>
+                  </div>
+                  
+                  {/* BOTÃO DE EXPORTAÇÃO AQUI */}
+                  <button 
+                    onClick={handleExportarCSV}
+                    className="flex items-center gap-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-4 py-2 rounded-md text-sm font-bold transition-colors"
+                  >
+                    <Download size={16} /> Exportar Excel / CSV
+                  </button>
                 </div>
                 
                 <div className="overflow-x-auto max-h-[600px]">
