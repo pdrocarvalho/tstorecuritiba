@@ -5,38 +5,24 @@
 import { eq, like } from "drizzle-orm";
 import { google } from "googleapis";
 import { 
-  insertPedidoRastreio, 
-  updatePedidoRastreio, 
-  upsertProduto, 
-  getDb, 
-  saveGoogleSheetsConfig 
+  insertPedidoRastreio, updatePedidoRastreio, upsertProduto, 
+  getDb, saveGoogleSheetsConfig 
 } from "../db";
 import { pedidosRastreio, produtos } from "../../drizzle/schema";
 import type { OrderStatus, NotificationStatus } from "../../drizzle/schema";
 
-export interface SyncResult {
-  novosPedidos: number;
-  novasPrevisoes: number;
-  chegadas: number;
-  erros: string[];
-}
+export interface SyncResult { novosPedidos: number; novasPrevisoes: number; chegadas: number; erros: string[]; }
 
-// ⏳ SISTEMA DE CACHE (30 SEGUNDOS)
-interface CacheEntry {
-  data: any[];
-  timestamp: number;
-}
-const sheetsCache: Record<string, CacheEntry> = {};
+const sheetsCache: Record<string, { data: any[]; timestamp: number }> = {};
 const CACHE_TTL_MS = 30 * 1000;
 
 function getGoogleAuth() {
   const client_email = process.env.GOOGLE_SERVICE_EMAIL;
   const private_key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (!client_email || !private_key) throw new Error("Credenciais do Google ausentes.");
-  
   return new google.auth.GoogleAuth({
     credentials: { client_email, private_key },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"], // Permissão total
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }
 
@@ -46,7 +32,18 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// 🛡️ PARSE DE DATA SEGURO
+// 🧠 NOVA INTELIGÊNCIA: Descobre qual é a aba exata olhando para o GID do link
+function getSheetNameFromUrl(url: string, spreadsheet: any): string {
+  const match = String(url).match(/[#&]gid=([0-9]+)/);
+  const gid = match ? parseInt(match[1], 10) : null;
+  
+  if (gid !== null) {
+    const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.sheetId === gid);
+    if (sheet && sheet.properties?.title) return sheet.properties.title;
+  }
+  return spreadsheet.data.sheets?.[0]?.properties?.title || "Página1";
+}
+
 function parseDateSafe(dateVal: any): Date | null {
   if (!dateVal) return null;
   const str = String(dateVal).trim();
@@ -54,11 +51,7 @@ function parseDateSafe(dateVal: any): Date | null {
   try {
     if (str.includes("/")) {
       const parts = str.split("/");
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const yearStr = parts[2]?.split(" ")[0] || "0";
-      const year = yearStr.length <= 2 ? 2000 + parseInt(yearStr, 10) : parseInt(yearStr, 10);
-      return new Date(year, month, day, 12, 0, 0);
+      return new Date(parseInt(parts[2]?.split(" ")[0] || "0", 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), 12, 0, 0);
     }
     const d = new Date(str);
     return isNaN(d.getTime()) ? null : d;
@@ -72,18 +65,13 @@ function resolveOrderStatus(previsao: Date | null, entrega: Date | null): OrderS
 }
 
 function pendingStatusFor(status: OrderStatus): NotificationStatus {
-  const map: Record<OrderStatus, NotificationStatus> = {
-    Faturado: "PENDING_FATURADO",
-    Previsto: "PENDING_PREVISTO",
-    Chegou: "PENDING_CHEGOU",
-  };
+  const map: Record<OrderStatus, NotificationStatus> = { Faturado: "PENDING_FATURADO", Previsto: "PENDING_PREVISTO", Chegou: "PENDING_CHEGOU" };
   return map[status];
 }
 
-// 🚀 BUSCA "SOB DEMANDA" COM IDENTIFICAÇÃO DE LINHA
+// 🚀 LEITURA INTELIGENTE SOB DEMANDA
 export async function fetchLiveGoogleSheet(sheetsUrl: string) {
   if (!sheetsUrl) throw new Error("URL não fornecida.");
-  
   const now = Date.now();
   if (sheetsCache[sheetsUrl] && (now - sheetsCache[sheetsUrl].timestamp < CACHE_TTL_MS)) {
     return sheetsCache[sheetsUrl].data;
@@ -95,26 +83,36 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
   
-  // ✅ Adicionado "as string" para o TypeScript não reclamar
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
+  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet); // Pega a aba certa!
 
-  if (!firstSheetName) throw new Error("Página da planilha não encontrada.");
   const response = await sheets.spreadsheets.values.get({ 
-    spreadsheetId: spreadsheetId as string, // ✅ Correção aqui
-    range: firstSheetName 
+    spreadsheetId: spreadsheetId as string, 
+    range: targetSheetName 
   });
   const rows = response.data.values;
-  
   if (!rows || rows.length === 0) return [];
 
-  const headers = rows[0].map((h: any) => String(h || "").toUpperCase().trim());
+  // 🧠 NOVA INTELIGÊNCIA: Escaneia até a linha 10 para achar o verdadeiro cabeçalho
+  let headerRowIndex = 0;
+  let headers: string[] = [];
+
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const currentHeaders = rows[i].map((h: any) => String(h || "").toUpperCase().trim());
+    // Se a linha tem uma dessas palavras, achamos o cabeçalho!
+    if (currentHeaders.includes("CÓD. AVARIA") || currentHeaders.includes("REF.") || currentHeaders.includes("FÁBRICA")) {
+      headerRowIndex = i;
+      headers = currentHeaders;
+      break;
+    }
+  }
+
+  if (headers.length === 0) {
+    headers = rows[0].map((h: any) => String(h || "").toUpperCase().trim());
+  }
   
-  const data = rows.slice(1).map((row, index) => {
-    const obj: any = {
-      // 📍 O SEGREDO: Guardamos o número da linha real (Índice + Cabeçalho + Base 1)
-      rowNumber: index + 2 
-    };
+  const data = rows.slice(headerRowIndex + 1).map((row, index) => {
+    const obj: any = { rowNumber: headerRowIndex + index + 2 };
 
     headers.forEach((header, idx) => {
       let val = row[idx] || "";
@@ -122,17 +120,20 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string) {
       obj[key] = val;
     });
 
-    if (obj.REF) obj.produtoSku = String(obj.REF).trim();
+    if (obj.REF_) obj.produtoSku = String(obj.REF_).trim();
     if (obj.VOLUMES) obj.quantidade = parseInt(String(obj.VOLUMES).replace(/\D/g, ""), 10) || 0;
 
     return obj;
   });
 
-  sheetsCache[sheetsUrl] = { data, timestamp: Date.now() };
-  return data;
+  // Remove linhas totalmente vazias (caso você tenha linhas em branco no meio ou no fim da planilha)
+  const dadosValidos = data.filter((d: any) => d.COD__AVARIA || d.REF_ || d.FABRICA);
+
+  sheetsCache[sheetsUrl] = { data: dadosValidos, timestamp: Date.now() };
+  return dadosValidos;
 }
 
-// ✍️ ADICIONAR NOVA LINHA (CREATE)
+// ✍️ ADICIONAR E EDITAR (Atualizados para respeitar a Aba correta)
 export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL inválida.");
@@ -140,11 +141,11 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  const sheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
+  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: spreadsheetId as string, // ✅ Correção aqui
-    range: `${sheetName}!A:A`,
+    spreadsheetId: spreadsheetId as string,
+    range: `'${targetSheetName}'!A:A`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [rowData] },
   });
@@ -153,7 +154,6 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   return { success: true };
 }
 
-// ✏️ EDITAR CÉLULA ESPECÍFICA (UPDATE)
 export async function updateSheetRow(sheetsUrl: string, rowNumber: number, columnLetter: string, newValue: string) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL inválida.");
@@ -161,11 +161,11 @@ export async function updateSheetRow(sheetsUrl: string, rowNumber: number, colum
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  const sheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
+  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: spreadsheetId as string, // ✅ Correção aqui
-    range: `${sheetName}!${columnLetter}${rowNumber}`,
+    spreadsheetId: spreadsheetId as string,
+    range: `'${targetSheetName}'!${columnLetter}${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[newValue]] },
   });
@@ -174,10 +174,7 @@ export async function updateSheetRow(sheetsUrl: string, rowNumber: number, colum
   return { success: true };
 }
 
-// ==========================================
-// FUNÇÕES ANTIGAS MANTIDAS PARA O COMPORTAMENTO DE E-MAIL
-// ==========================================
-
+// ... as funções antigas mantêm-se iguais abaixo
 export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<SyncResult> {
   const result: SyncResult = { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] };
   const db = await getDb();
@@ -189,8 +186,6 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
   try {
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
-    
-    // ✅ Correção aqui
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
     const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title;
 
@@ -198,7 +193,6 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
 
     if (!firstSheetName) return result;
     
-    // ✅ Correção aqui
     const response = await sheets.spreadsheets.values.get({ 
       spreadsheetId: spreadsheetId as string, 
       range: firstSheetName 
@@ -253,11 +247,7 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
       const mundo = idxMundo !== -1 && rowData[idxMundo] ? String(rowData[idxMundo]).trim() : null;
 
       try {
-        if (!processedSkus.has(sku)) {
-          await upsertProduto({ sku, descricao });
-          processedSkus.add(sku);
-        }
-
+        if (!processedSkus.has(sku)) { await upsertProduto({ sku, descricao }); processedSkus.add(sku); }
         const orderStatus = resolveOrderStatus(previsao, entrega);
         const existing = todosPedidosDB.find(p => p.produtoSku === sku && p.quantidade === volumes && p.notaFiscal === notaFiscal && !validDbIds.has(p.id));
 
@@ -268,16 +258,10 @@ export async function syncPedidosFromGoogleSheets(sheetsUrl: string): Promise<Sy
           }).returning({ id: pedidosRastreio.id });
           validDbIds.add(inserted[0].id);
           result.novosPedidos++;
-        } else {
-          validDbIds.add(existing.id);
-        }
-      } catch (dbError) {
-        console.error(`Erro SKU ${sku}:`, dbError);
-      }
+        } else { validDbIds.add(existing.id); }
+      } catch (dbError) {}
     }
-  } catch (error: any) {
-    result.erros.push(`Falha: ${error.message}`);
-  }
+  } catch (error: any) { result.erros.push(`Falha: ${error.message}`); }
   return result;
 }
 
@@ -318,5 +302,4 @@ export async function updateNotificationStatus(pedidoId: number, newStatus: stri
   try { await updatePedidoRastreio(pedidoId, { notificationSentStatus: newStatus }); return true; } 
   catch (error) { return false; }
 }
-
 export async function testarLeituraRobo(url: string) { return {}; }
