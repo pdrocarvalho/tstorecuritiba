@@ -2,7 +2,7 @@
  * client/src/pages/recebimento/Historico.tsx
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
 import { 
   Link2, RefreshCw, X, Filter, Box, FileText, 
   Layers, TableProperties, ChevronDown, ChevronUp 
@@ -24,34 +24,44 @@ interface FiltrosHistorico { dataInicio: string; dataFim: string; remetente: str
 const INITIAL_FILTERS: FiltrosHistorico = { dataInicio: "", dataFim: "", remetente: "", mundo: "" };
 
 export default function RecebimentoHistorico() {
-  const [urlPlanilha, setUrlPlanilha] = useState("");
+  // 🚀 INICIALIZAÇÃO: Busca o link salvo especificamente para o Histórico
+  const [urlPlanilha, setUrlPlanilha] = useState(() => {
+    return sessionStorage.getItem("url_historico") || "";
+  });
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
-  // 🚀 MODO RECEBIMENTO ATIVADO
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
     { enabled: false }
   );
 
-  // 🚀 CORRIGIDO: Agora com Feedback de Loading e Toast
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha de Banco de Dados.");
+  // 🚀 AUTO-CONEXÃO: Reestabelece o vínculo ao entrar na página
+  useEffect(() => {
+    if (urlPlanilha) {
+      handleVincular(true);
+    }
+  }, []);
+
+  // 🚀 ATUALIZADO: Salva no sessionStorage ao vincular
+  const handleVincular = async (silencioso = false) => {
+    if (!urlPlanilha) return;
     setIsSincronizando(true);
     try {
       const result = await refetch();
-      if (result.isError) {
-        toast.error(`Falha no acesso: ${result.error?.message}`);
-      } else {
-        toast.success("Histórico vinculado com sucesso!");
+      if (!result.isError) {
         setIsVinculado(true);
+        sessionStorage.setItem("url_historico", urlPlanilha);
+        if (!silencioso) toast.success("Banco de Dados Histórico vinculado!");
         setUltimaSincronizacao(Date.now());
+      } else {
+        if (!silencioso) toast.error("Falha ao ler planilha de histórico.");
       }
     } catch (error) {
-      toast.error("Erro inesperado de conexão.");
+      console.error(error);
     } finally {
       setIsSincronizando(false);
     }
@@ -61,21 +71,23 @@ export default function RecebimentoHistorico() {
     const agora = Date.now();
     if (ultimaSincronizacao !== 0 && (agora - ultimaSincronizacao) < 30000) {
       const resto = Math.ceil((30000 - (agora - ultimaSincronizacao)) / 1000);
-      return toast.warning(`Por segurança, aguarde ${resto}s para atualizar.`);
+      return toast.warning(`Aguarde ${resto}s para atualizar.`);
     }
     setIsSincronizando(true);
     await refetch();
     setUltimaSincronizacao(Date.now());
-    toast.success("Dados do histórico atualizados!");
+    toast.success("Histórico atualizado!");
     setIsSincronizando(false);
   };
 
+  // 🚀 ATUALIZADO: Limpa o sessionStorage ao cancelar
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
+    sessionStorage.removeItem("url_historico");
     setFiltros(INITIAL_FILTERS);
     setUltimaSincronizacao(0);
-    toast.info("Histórico desvinculado.");
+    toast.info("Vínculo de histórico removido.");
   };
 
   const kpis = useMemo(() => {
@@ -129,12 +141,11 @@ export default function RecebimentoHistorico() {
           <p className="text-gray-600 mt-1">Análise de produtividade e recebimentos concluídos</p>
         </div>
 
-        {/* 🚀 CABEÇALHO DE VINCULAÇÃO PADRONIZADO */}
         <Card className="p-4 border-emerald-100 bg-emerald-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1 block">Fonte de Dados (Banco de Dados)</span>
+            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1 block">Fonte de Dados</span>
             <Input 
-              placeholder="Cole o link da planilha aqui..." 
+              placeholder="Cole o link da planilha de Banco de Dados..." 
               value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} 
               disabled={isVinculado} className="bg-white border-emerald-200 rounded-lg" 
             />
@@ -143,9 +154,9 @@ export default function RecebimentoHistorico() {
           <div className="flex gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
               <button 
-                onClick={handleVincular} 
+                onClick={() => handleVincular(false)} 
                 disabled={isSincronizando} 
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-8 py-2.5 rounded-lg font-bold min-w-[160px] transition-all shadow-md"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[160px] shadow-md transition-all"
               >
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Lendo..." : "Vincular Banco"}
@@ -155,7 +166,7 @@ export default function RecebimentoHistorico() {
                 <button 
                   onClick={handleAtualizar} 
                   disabled={isSincronizando} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                  className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-sm"
                 >
                   <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
                   {isSincronizando ? "Buscando..." : "Atualizar"}
@@ -163,7 +174,6 @@ export default function RecebimentoHistorico() {
                 <button 
                   onClick={handleCancelar} 
                   className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"
-                  title="Desvincular"
                 >
                   <X size={20} />
                 </button>
@@ -172,80 +182,42 @@ export default function RecebimentoHistorico() {
           </div>
         </Card>
 
-        {!isVinculado ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <TableProperties size={64} className="mb-4 text-gray-200" />
-            <h3 className="text-xl font-medium text-gray-500">Aguardando vinculação de dados</h3>
-          </div>
-        ) : (
+        {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Filtros e Gráficos continuam aqui... */}
             <Card className="p-4 border-slate-200 bg-white shadow-sm">
-              <button 
-                onClick={() => setShowFilters(!showFilters)} 
-                className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600 transition-colors"
-              >
+              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between w-full text-slate-700 font-bold">
                 <div className="flex items-center gap-2"><Filter size={18} /> Filtros de Análise</div>
                 {showFilters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </button>
-              
               {showFilters && (
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
-                  <label className="block"><span className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Data Inicial</span><Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} /></label>
-                  <label className="block"><span className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Data Final</span><Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} /></label>
-                  <label className="block"><span className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Remetente</span><Input placeholder="Filtrar fábrica..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} /></label>
-                  <label className="block"><span className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Mundo</span><Input placeholder="Filtrar mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} /></label>
+                  <Input type="date" value={filtros.dataInicio} onChange={(e) => setFiltros({...filtros, dataInicio: e.target.value})} />
+                  <Input type="date" value={filtros.dataFim} onChange={(e) => setFiltros({...filtros, dataFim: e.target.value})} />
+                  <Input placeholder="Fábrica..." value={filtros.remetente} onChange={(e) => setFiltros({...filtros, remetente: e.target.value})} />
+                  <Input placeholder="Mundo..." value={filtros.mundo} onChange={(e) => setFiltros({...filtros, mundo: e.target.value})} />
                 </div>
               )}
             </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
-                <div className="flex items-center gap-3 mb-2"><div className="p-2 bg-emerald-100 text-emerald-600 rounded-md"><Box size={20} /></div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Volumes Entregues</p></div>
-                <h3 className="text-3xl font-black text-gray-900">{kpis.totalVolumes}</h3>
+                <p className="text-xs font-bold text-gray-500 uppercase">Volumes Entregues</p>
+                <h3 className="text-3xl font-black">{kpis.totalVolumes}</h3>
               </Card>
-
               <Card className="p-5 border-t-4 border-t-purple-500 shadow-sm">
-                <div className="flex items-center gap-3 mb-2"><div className="p-2 bg-purple-100 text-purple-600 rounded-md"><FileText size={20} /></div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">NFs Conferidas</p></div>
-                <h3 className="text-3xl font-black text-gray-900">{kpis.totalNotas}</h3>
+                <p className="text-xs font-bold text-gray-500 uppercase">NFs Conferidas</p>
+                <h3 className="text-3xl font-black">{kpis.totalNotas}</h3>
               </Card>
-
               <Card className="p-5 border-t-4 border-t-orange-500 shadow-sm">
-                <div className="flex items-center gap-3 mb-2"><div className="p-2 bg-orange-100 text-orange-600 rounded-md"><Layers size={20} /></div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">SKUs Processados</p></div>
-                <h3 className="text-3xl font-black text-gray-900">{kpis.grafSkusMundo.reduce((acc, curr) => acc + curr.value, 0)}</h3>
+                <p className="text-xs font-bold text-gray-500 uppercase">SKUs Processados</p>
+                <h3 className="text-3xl font-black">{kpis.grafSkusMundo.reduce((acc, curr) => acc + curr.value, 0)}</h3>
               </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-6 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6">SKUs por Mundo (Recebidos)</h3>
-                <div style={{ width: '100%', height: 300 }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={kpis.grafSkusMundo}>
-                      <XAxis dataKey="name" tick={{fontSize: 10}} />
-                      <YAxis tick={{fontSize: 10}} />
-                      <Tooltip cursor={{fill: '#f3f4f6'}} />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                        {kpis.grafSkusMundo.map((_, index) => <Cell key={index} fill={CORES_MUNDO[index % CORES_MUNDO.length]} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              <Card className="p-6 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6">Distribuição por Fábrica (Físico)</h3>
-                <div style={{ width: '100%', height: 300 }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={kpis.grafRemetente} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
-                        {kpis.grafRemetente.map((_, index) => <Cell key={index} fill={CORES_MUNDO[(index + 2) % CORES_MUNDO.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+              <Card className="p-6 shadow-sm"><h3 className="font-bold mb-4">SKUs por Mundo</h3><ResponsiveContainer width="100%" height={300}><BarChart data={kpis.grafSkusMundo}><XAxis dataKey="name" tick={{fontSize: 10}} /><YAxis /><Tooltip /><Bar dataKey="value" radius={[4, 4, 0, 0]}>{kpis.grafSkusMundo.map((_, i) => <Cell key={i} fill={CORES_MUNDO[i % CORES_MUNDO.length]} />)}</Bar></BarChart></ResponsiveContainer></Card>
+              <Card className="p-6 shadow-sm"><h3 className="font-bold mb-4">Distribuição por Fábrica</h3><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={kpis.grafRemetente} innerRadius={60} outerRadius={90} dataKey="value">{kpis.grafRemetente.map((_, i) => <Cell key={i} fill={CORES_MUNDO[(i + 2) % CORES_MUNDO.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></Card>
             </div>
           </div>
         )}

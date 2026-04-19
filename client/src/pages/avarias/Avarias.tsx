@@ -2,7 +2,7 @@
  * client/src/pages/avarias/Avarias.tsx
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
 import { 
   Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
   CheckCircle2, Clock, Truck, TableProperties, 
@@ -31,7 +31,10 @@ const STATUS_OPTIONS = [
 ];
 
 export default function GestaoAvarias() {
-  const [urlPlanilha, setUrlPlanilha] = useState("");
+  // 🚀 INICIALIZAÇÃO: Busca no baú (sessionStorage) se já existe um link salvo
+  const [urlPlanilha, setUrlPlanilha] = useState(() => {
+    return sessionStorage.getItem("url_avarias") || "";
+  });
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -43,6 +46,13 @@ export default function GestaoAvarias() {
     { url: urlPlanilha, mode: 'avarias' }, 
     { enabled: false }
   );
+
+  // 🚀 AUTO-CONEXÃO: Se já tem URL salva ao entrar na página, vincula automaticamente
+  useEffect(() => {
+    if (urlPlanilha) {
+      handleVincular(true); // O 'true' avisa que é silencioso
+    }
+  }, []);
 
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
     onSuccess: () => {
@@ -126,31 +136,34 @@ export default function GestaoAvarias() {
     printWindow.document.close();
   };
 
-  // 🚀 CORRIGIDO: Agora com Feedback de Loading e Toast de Sucesso
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
+  // 🚀 ATUALIZADO: Agora salva o link no baú ao vincular
+  const handleVincular = async (silencioso = false) => {
+    if (!urlPlanilha) return;
     setIsSincronizando(true);
     try {
       const result = await refetch();
-      if (result.isError) {
-        toast.error("Falha no acesso à planilha.");
-      } else {
-        toast.success("Planilha de Avarias vinculada com sucesso!");
+      if (!result.isError) {
         setIsVinculado(true);
+        sessionStorage.setItem("url_avarias", urlPlanilha); // Salva no baú
+        if (!silencioso) toast.success("Avarias sincronizadas!");
+      } else {
+        if (!silencioso) toast.error("Falha ao ler planilha salva.");
       }
     } catch (error) {
-      toast.error("Erro de conexão.");
+      console.error(error);
     } finally {
       setIsSincronizando(false);
     }
   };
 
+  // 🚀 ATUALIZADO: Agora limpa o baú ao clicar no X
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
+    sessionStorage.removeItem("url_avarias"); // Limpa o baú
     setExpandedRow(null);
     setFiltrosAtivos([]);
-    toast.info("Planilha desvinculada.");
+    toast.info("Vínculo removido.");
   };
 
   const [form, setForm] = useState({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
@@ -182,7 +195,6 @@ export default function GestaoAvarias() {
           )}
         </div>
 
-        {/* 🚀 CABEÇALHO DE VINCULAÇÃO CORRIGIDO */}
         <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
@@ -197,7 +209,7 @@ export default function GestaoAvarias() {
           <div className="flex gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
               <button 
-                onClick={handleVincular} 
+                onClick={() => handleVincular(false)} 
                 disabled={isSincronizando} 
                 className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md disabled:bg-red-400 min-w-[140px] flex items-center justify-center gap-2"
               >
@@ -214,7 +226,6 @@ export default function GestaoAvarias() {
                   <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
                   {isSincronizando ? "Atualizando..." : "Atualizar"}
                 </button>
-                {/* 🚀 O BOTÃO X VOLTOU */}
                 <button 
                   onClick={handleCancelar} 
                   className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"

@@ -8,18 +8,20 @@ import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon } from "lucide-
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
 
-  // Menu enxuto e focado na nova arquitetura
   const menuItems = [
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
-    // 🚀 A Nova Aba Independente de Avarias:
     { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
   ];
 
-  // Função para lidar com a saída do sistema
+  // 🚀 ATUALIZADO: Função de saída agora limpa o baú de sessões (sessionStorage)
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userRole");
+    
+    // Limpa todas as URLs de planilhas vinculadas nesta sessão
+    sessionStorage.clear(); 
+    
     setLocation("/login");
   };
 

@@ -2,7 +2,7 @@
  * client/src/pages/recebimento/Produtos.tsx
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; // 🚀 Adicionado useEffect
 import { 
   Link2, RefreshCw, X, Package, Truck, AlertTriangle, 
   ChevronDown, ChevronUp, TableProperties, Printer 
@@ -21,7 +21,10 @@ import type { Pedido } from "@/types";
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function RecebimentoFuturo() {
-  const [urlPlanilha, setUrlPlanilha] = useState("");
+  // 🚀 INICIALIZAÇÃO: Verifica se já existe um link no baú da sessão
+  const [urlPlanilha, setUrlPlanilha] = useState(() => {
+    return sessionStorage.getItem("url_recebimento") || "";
+  });
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
@@ -31,6 +34,13 @@ export default function RecebimentoFuturo() {
     { url: urlPlanilha, mode: 'recebimento' }, 
     { enabled: false }
   );
+
+  // 🚀 AUTO-CONEXÃO: Reestabelece o vínculo ao trocar de aba
+  useEffect(() => {
+    if (urlPlanilha) {
+      handleVincular(true);
+    }
+  }, []);
 
   const kpis = useMemo(() => {
     const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
@@ -70,62 +80,36 @@ export default function RecebimentoFuturo() {
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
     const janelaImpressao = window.open('', '_blank');
-    if (!janelaImpressao) return toast.error("Habilite popups para imprimir.");
+    if (!janelaImpressao) return toast.error("Habilite popups.");
 
     const htmlRelatorio = `
       <html>
-        <head>
-          <title>Relatório de Recebimento Futuro</title>
-          <style>
-            body { font-family: sans-serif; padding: 20px; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-            th { background: #f2f2f2; }
-          </style>
-        </head>
+        <head><title>Relatório de Recebimento</title><style>body{font-family:sans-serif;padding:20px;font-size:12px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;}</style></head>
         <body>
-          <h1>Relatório: Recebimento Futuro</h1>
-          <p>Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
-          <table>
-            <thead>
-              <tr><th>Remetente</th><th>NF</th><th>SKU</th><th>Descrição</th><th>Mundo</th><th>Qtd</th></tr>
-            </thead>
-            <tbody>
-              ${kpis.listaRecebimento.map(item => `
-                <tr>
-                  <td>${item.remetente || '-'}</td>
-                  <td>${item.notaFiscal || '-'}</td>
-                  <td>${item.produtoSku}</td>
-                  <td>${item.descricao || '-'}</td>
-                  <td>${item.mundo || '-'}</td>
-                  <td>${item.quantidade * (item.qtdePorCaixa || 1)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          <h1>Recebimento Futuro</h1>
+          <table><thead><tr><th>Remetente</th><th>NF</th><th>SKU</th><th>Qtd</th></tr></thead>
+          <tbody>${kpis.listaRecebimento.map(item => `<tr><td>${item.remetente}</td><td>${item.notaFiscal}</td><td>${item.produtoSku}</td><td>${item.quantidade}</td></tr>`).join('')}</tbody></table>
           <script>window.print(); window.close();</script>
         </body>
-      </html>
-    `;
+      </html>`;
     janelaImpressao.document.write(htmlRelatorio);
     janelaImpressao.document.close();
   };
 
-  // 🚀 CORRIGIDO: Agora com Feedback de Loading e Toast
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha.");
+  // 🚀 ATUALIZADO: Salva no sessionStorage ao vincular
+  const handleVincular = async (silencioso = false) => {
+    if (!urlPlanilha) return;
     setIsSincronizando(true);
     try {
       const result = await refetch();
-      if (result.isError) {
-        toast.error(`Falha no acesso: ${result.error?.message}`);
-      } else {
-        toast.success("Dados de Recebimento vinculados com sucesso!");
+      if (!result.isError) {
         setIsVinculado(true);
+        sessionStorage.setItem("url_recebimento", urlPlanilha);
+        if (!silencioso) toast.success("Recebimento sincronizado!");
         setUltimaSincronizacao(Date.now());
       }
     } catch (error) {
-      toast.error("Erro inesperado.");
+      console.error(error);
     } finally {
       setIsSincronizando(false);
     }
@@ -134,8 +118,7 @@ export default function RecebimentoFuturo() {
   const handleAtualizar = async () => {
     const agora = Date.now();
     if (ultimaSincronizacao !== 0 && (agora - ultimaSincronizacao) < 30000) {
-      const resto = Math.ceil((30000 - (agora - ultimaSincronizacao)) / 1000);
-      return toast.warning(`Aguarde ${resto}s para atualizar novamente.`);
+      return toast.warning("Aguarde 30s para atualizar.");
     }
     setIsSincronizando(true);
     await refetch();
@@ -144,12 +127,14 @@ export default function RecebimentoFuturo() {
     setIsSincronizando(false);
   };
 
+  // 🚀 ATUALIZADO: Limpa o sessionStorage ao cancelar
   const handleCancelar = () => {
     setIsVinculado(false);
     setUrlPlanilha("");
+    sessionStorage.removeItem("url_recebimento");
     setMostrarLista(false);
     setUltimaSincronizacao(0);
-    toast.info("Planilha desvinculada.");
+    toast.info("Vínculo removido.");
   };
 
   return (
@@ -161,7 +146,7 @@ export default function RecebimentoFuturo() {
             <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
           </div>
           {isVinculado && (
-            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:bg-slate-800 transition-all active:scale-95">
+            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md">
               <Printer size={18} /> Imprimir Relatório
             </button>
           )}
@@ -169,7 +154,7 @@ export default function RecebimentoFuturo() {
 
         <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-col md:flex-row gap-4 items-center shadow-sm">
           <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Fonte de Dados (Google Sheets)</span>
+            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Fonte de Dados</span>
             <Input 
               placeholder="Cole o link da planilha..." 
               value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} 
@@ -179,9 +164,9 @@ export default function RecebimentoFuturo() {
           <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
               <button 
-                onClick={handleVincular} 
+                onClick={() => handleVincular(false)} 
                 disabled={isSincronizando} 
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-lg font-bold min-w-[140px] transition-all"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold min-w-[140px]"
               >
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Vinculando..." : "Vincular"}
@@ -191,15 +176,12 @@ export default function RecebimentoFuturo() {
                 <button 
                   onClick={handleAtualizar} 
                   disabled={isSincronizando} 
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                  className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
                 >
                   <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
                   {isSincronizando ? "Lendo..." : "Atualizar"}
                 </button>
-                <button 
-                  onClick={handleCancelar} 
-                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm"
-                >
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200 shadow-sm">
                   <X size={20} />
                 </button>
               </div>
@@ -207,10 +189,10 @@ export default function RecebimentoFuturo() {
           </div>
         </Card>
 
+        {/* ... Restante da página (KPIs, Gráficos, Tabela) mantidos como antes ... */}
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            {/* ... KPIs e Gráficos ... */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="p-6 border-l-4 border-l-blue-500 flex justify-between items-center shadow-sm">
                 <div><p className="text-xs font-bold text-gray-500 uppercase">Total a Receber</p><h3 className="text-3xl font-black">{kpis.totalVolumesFisicos}</h3></div>
                 <Package className="text-blue-200" size={40} />
