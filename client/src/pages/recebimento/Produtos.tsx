@@ -3,12 +3,18 @@
  */
 
 import { useState, useMemo } from "react";
-import { Link2, RefreshCw, X, Package, Truck, AlertTriangle, ChevronDown, ChevronUp, TableProperties, Printer } from "lucide-react";
+import { 
+  Link2, RefreshCw, X, Package, Truck, AlertTriangle, 
+  ChevronDown, ChevronUp, TableProperties, Printer 
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { 
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, 
+  Tooltip, ResponsiveContainer, Legend 
+} from "recharts";
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
@@ -19,12 +25,11 @@ export default function RecebimentoFuturo() {
   const [isVinculado, setIsVinculado] = useState(false);
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
-  
-  // ⏱️ NOVO ESTADO: Guarda a hora exata da última leitura
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
+  // 🚀 MODO RECEBIMENTO ATIVADO AQUI
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
-    { url: urlPlanilha }, 
+    { url: urlPlanilha, mode: 'recebimento' }, 
     { enabled: false }
   );
 
@@ -54,7 +59,9 @@ export default function RecebimentoFuturo() {
     });
 
     return {
-      listaRecebimento: futuros, totalVolumesFisicos, notasEmTransito: notasEmTransitoSet.size,
+      listaRecebimento: futuros, 
+      totalVolumesFisicos, 
+      notasEmTransito: notasEmTransitoSet.size,
       atrasados: notasAtrasadasSet.size,
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })).sort((a, b) => b.value - a.value),
       grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
@@ -62,274 +69,142 @@ export default function RecebimentoFuturo() {
   }, [todosPedidos]);
 
   const gerarRelatorioImpressao = () => {
-    if (kpis.listaRecebimento.length === 0) {
-      return toast.warning("Não há dados para imprimir.");
-    }
-
+    if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
     const janelaImpressao = window.open('', '_blank');
-    if (!janelaImpressao) return toast.error("Por favor, habilite popups para imprimir o relatório.");
+    if (!janelaImpressao) return toast.error("Habilite popups para imprimir.");
 
     const htmlRelatorio = `
       <html>
         <head>
-          <title>Relatório de Recebimento Futuro - T Store</title>
+          <title>Relatório de Recebimento Futuro</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-            body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; color: #333; }
-            .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
-            .header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
-            .header p { margin: 0; font-size: 12px; color: #666; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-            th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 8px; font-size: 10px; text-transform: uppercase; text-align: left; }
-            td { border: 1px solid #ccc; padding: 6px 8px; font-size: 10px; word-wrap: break-word; }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            @page { size: A4 portrait; margin: 1cm; }
-            tr { page-break-inside: avoid; }
-            thead { display: table-header-group; }
+            body { font-family: sans-serif; padding: 20px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+            th { background: #f2f2f2; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div>
-              <h1>Relatório: Recebimento Futuro</h1>
-              <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
-            </div>
-            <div class="text-right">
-              <p>Total de Itens: <b>${kpis.listaRecebimento.length}</b></p>
-              <p>Volumes Físicos: <b>${kpis.totalVolumesFisicos}</b></p>
-            </div>
-          </div>
+          <h1>Relatório: Recebimento Futuro</h1>
+          <p>Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
           <table>
             <thead>
-              <tr>
-                <th style="width: 15%">Remetente</th>
-                <th style="width: 12%">Nota Fiscal</th>
-                <th style="width: 12%">Ref. (SKU)</th>
-                <th style="width: 32%">Descrição</th>
-                <th style="width: 10%">Mundo</th>
-                <th style="width: 10%" class="text-center">Previsão</th>
-                <th style="width: 9%" class="text-right">Qtd. Unid</th>
-              </tr>
+              <tr><th>Remetente</th><th>NF</th><th>SKU</th><th>Descrição</th><th>Mundo</th><th>Qtd</th></tr>
             </thead>
             <tbody>
               ${kpis.listaRecebimento.map(item => `
                 <tr>
                   <td>${item.remetente || '-'}</td>
                   <td>${item.notaFiscal || '-'}</td>
-                  <td class="font-bold">${item.produtoSku}</td>
+                  <td>${item.produtoSku}</td>
                   <td>${item.descricao || '-'}</td>
                   <td>${item.mundo || '-'}</td>
-                  <td class="text-center">${item.previsaoEntrega ? new Date(item.previsaoEntrega).toLocaleDateString('pt-BR') : '-'}</td>
-                  <td class="text-right font-bold">${item.quantidade * (item.qtdePorCaixa || 1)}</td>
+                  <td>${item.quantidade * (item.qtdePorCaixa || 1)}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-          <div style="margin-top: 20px; font-size: 8px; color: #999; text-align: center;">
-            T Store Admin - Sistema de Gestão Logística
-          </div>
+          <script>window.print(); window.close();</script>
         </body>
       </html>
     `;
-
     janelaImpressao.document.write(htmlRelatorio);
     janelaImpressao.document.close();
-    
-    setTimeout(() => {
-      janelaImpressao.print();
-      janelaImpressao.close();
-    }, 500);
   };
 
   const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Por favor, insira o link da planilha.");
-    setIsSincronizando(true);
-    try {
-      const result = await refetch();
-      if (result.isError) {
-        toast.error(`Falha no acesso: ${result.error?.message}`);
-        setIsVinculado(false);
-      } else {
-        toast.success("Dados carregados com sucesso!");
-        setIsVinculado(true);
-        // ⏱️ Salva a hora exata que leu com sucesso
-        setUltimaSincronizacao(Date.now());
-      }
-    } catch (error) {
-      toast.error("Erro inesperado.");
-      setIsVinculado(false);
-    } finally {
-      setIsSincronizando(false);
-    }
-  };
-
-  // ⏱️ A NOVA LÓGICA DE ATUALIZAÇÃO TRANSPARENTE
-  const handleAtualizar = async () => {
-    const agora = Date.now();
-    const tempoDecorrido = agora - ultimaSincronizacao;
-    const tempoEspera = 30000; // 30 segundos
-
-    // Se ainda não passaram 30 segundos, barra a ação e avisa
-    if (ultimaSincronizacao !== 0 && tempoDecorrido < tempoEspera) {
-      const segundosRestantes = Math.ceil((tempoEspera - tempoDecorrido) / 1000);
-      return toast.warning(`Por segurança contra bloqueios, aguarde ${segundosRestantes} segundos para atualizar novamente.`);
-    }
-
+    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
     setIsSincronizando(true);
     const result = await refetch();
-    
-    if (result.isError) {
-      toast.error(`Falha ao atualizar: ${result.error?.message}`);
-    } else {
-      setUltimaSincronizacao(Date.now()); // Reseta o relógio
-      toast.success("Atualização real concluída buscando os dados mais recentes do Google!");
+    if (!result.isError) {
+      toast.success("Dados carregados!");
+      setIsVinculado(true);
+      setUltimaSincronizacao(Date.now());
     }
     setIsSincronizando(false);
   };
 
-  const handleCancelar = () => {
-    setIsVinculado(false);
-    setUrlPlanilha("");
-    setMostrarLista(false);
-    setUltimaSincronizacao(0); // Reseta o relógio
+  const handleAtualizar = async () => {
+    const agora = Date.now();
+    if (ultimaSincronizacao !== 0 && (agora - ultimaSincronizacao) < 30000) {
+      return toast.warning("Aguarde 30s para atualizar novamente.");
+    }
+    setIsSincronizando(true);
+    await refetch();
+    setUltimaSincronizacao(Date.now());
+    toast.success("Atualizado!");
+    setIsSincronizando(false);
   };
 
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
-            <p className="text-gray-600 mt-1">Gestão inteligente e sob demanda das mercadorias em trânsito</p>
+            <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
           </div>
-          
           {isVinculado && (
-            <button 
-              onClick={gerarRelatorioImpressao}
-              className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold shadow-md transition-all active:scale-95"
-            >
+            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md">
               <Printer size={18} /> Imprimir Relatório
             </button>
           )}
         </div>
 
-        <Card className="p-4 border border-blue-100 bg-blue-50/50 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Link do Google Sheets</span>
-            <Input 
-              placeholder="Cole o link da planilha..." 
-              value={urlPlanilha} 
-              onChange={(e) => setUrlPlanilha(e.target.value)} 
-              disabled={isVinculado}
-              className="bg-white border-blue-200"
-            />
-          </div>
-          <div className="flex items-end gap-2 pt-5 w-full md:w-auto">
-            {!isVinculado ? (
-              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2.5 rounded-md font-medium">
-                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} Vincular
+        <Card className="p-4 border-blue-100 bg-blue-50/50 flex gap-4 items-center">
+          <Input 
+            placeholder="Link da planilha de Recebimento..." 
+            value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} 
+            disabled={isVinculado} className="flex-1 bg-white" 
+          />
+          {!isVinculado ? (
+            <button onClick={handleVincular} disabled={isSincronizando} className="bg-blue-600 text-white px-6 py-2.5 rounded-md font-medium">Vincular</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={handleAtualizar} disabled={isSincronizando} className="bg-emerald-600 text-white px-6 py-2.5 rounded-md font-medium flex items-center gap-2">
+                <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> Atualizar
               </button>
-            ) : (
-              <>
-                <button onClick={handleAtualizar} disabled={isSincronizando} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-md font-medium">
-                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> Atualizar
-                </button>
-                <button onClick={handleCancelar} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 px-6 py-2.5 rounded-md font-medium">
-                  <X size={18} /> Cancelar
-                </button>
-              </>
-            )}
-          </div>
+              <button onClick={() => { setIsVinculado(false); setUrlPlanilha(""); }} className="bg-red-100 text-red-700 px-3 py-2.5 rounded-md"><X size={18} /></button>
+            </div>
+          )}
         </Card>
 
-        {!isVinculado && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <TableProperties size={64} className="mb-4 text-gray-300" />
-            <h3 className="text-xl font-medium text-gray-500">Nenhuma planilha vinculada</h3>
-          </div>
-        )}
-
         {isVinculado && (
-          <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-gray-500 uppercase">Total a Receber</p>
-                  <h3 className="text-3xl font-extrabold text-gray-900">{kpis.totalVolumesFisicos}</h3>
-                </div>
-                <div className="p-3 bg-blue-100 text-blue-600 rounded-full"><Package size={28} /></div>
+              <Card className="p-6 border-l-4 border-l-blue-500 flex justify-between items-center">
+                <div><p className="text-xs font-bold text-gray-500 uppercase">Total a Receber</p><h3 className="text-3xl font-black">{kpis.totalVolumesFisicos}</h3></div>
+                <Package className="text-blue-200" size={40} />
               </Card>
-              <Card className="p-6 border-l-4 border-l-emerald-500 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-gray-500 uppercase">Notas em Trânsito</p>
-                  <h3 className="text-3xl font-extrabold text-gray-900">{kpis.notasEmTransito}</h3>
-                </div>
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full"><Truck size={28} /></div>
+              <Card className="p-6 border-l-4 border-l-emerald-500 flex justify-between items-center">
+                <div><p className="text-xs font-bold text-gray-500 uppercase">Notas em Trânsito</p><h3 className="text-3xl font-black">{kpis.notasEmTransito}</h3></div>
+                <Truck className="text-emerald-200" size={40} />
               </Card>
-              <Card className={`p-6 border-l-4 shadow-sm flex items-center justify-between ${kpis.atrasados > 0 ? 'border-l-red-500' : 'border-l-gray-300'}`}>
-                <div>
-                  <p className="text-sm font-bold text-gray-500 uppercase">Atrasos</p>
-                  <h3 className="text-3xl font-extrabold text-red-600">{kpis.atrasados}</h3>
-                </div>
-                <div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={28} /></div>
+              <Card className="p-6 border-l-4 border-l-red-500 flex justify-between items-center">
+                <div><p className="text-xs font-bold text-gray-500 uppercase">Em Atraso</p><h3 className="text-3xl font-black text-red-600">{kpis.atrasados}</h3></div>
+                <AlertTriangle className="text-red-200" size={40} />
               </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-6 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6">SKUs por Mundo</h3>
-                <div style={{ width: '100%', height: 250 }}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie data={kpis.grafSkusMundo} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                        {kpis.grafSkusMundo.map((_, index) => <Cell key={index} fill={CORES_MUNDO[index % CORES_MUNDO.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-              <Card className="p-6 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6">Volume por Remetente</h3>
-                <div style={{ width: '100%', height: 250 }}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={kpis.grafRemetente} layout="vertical">
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+              <Card className="p-6"><h3 className="font-bold mb-4">SKUs por Mundo</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={kpis.grafSkusMundo} innerRadius={60} outerRadius={80} dataKey="value">{kpis.grafSkusMundo.map((_, i) => <Cell key={i} fill={CORES_MUNDO[i % CORES_MUNDO.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></Card>
+              <Card className="p-6"><h3 className="font-bold mb-4">Top Remetentes (Volumes)</h3><ResponsiveContainer width="100%" height={250}><BarChart data={kpis.grafRemetente} layout="vertical"><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} /><Tooltip /><Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></Card>
             </div>
 
-            <div className="flex flex-col items-center">
-              <button 
-                onClick={() => setMostrarLista(!mostrarLista)}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-8 py-3 rounded-full font-bold shadow-sm transition-all"
-              >
-                {mostrarLista ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                {mostrarLista ? "Ocultar Lista no App" : "Ver Lista Completa no App"}
+            <div className="flex justify-center">
+              <button onClick={() => setMostrarLista(!mostrarLista)} className="flex items-center gap-2 bg-slate-100 px-8 py-3 rounded-full font-bold shadow-sm">
+                {mostrarLista ? <ChevronUp size={20} /> : <ChevronDown size={20} />} {mostrarLista ? "Ocultar Detalhes" : "Ver Detalhes dos Itens"}
               </button>
             </div>
 
             {mostrarLista && (
-              <Card className="mt-6 shadow-md border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto max-h-[500px]">
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto max-h-[400px]">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-600 text-xs uppercase sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 border-b">Remetente</th>
-                        <th className="px-4 py-3 border-b">Nota Fiscal</th>
-                        <th className="px-4 py-3 border-b">Ref</th>
-                        <th className="px-4 py-3 border-b">Descrição</th>
-                        <th className="px-4 py-3 border-b text-right">Qtd</th>
-                      </tr>
+                    <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-bold text-slate-500">
+                      <tr><th className="px-4 py-3">Remetente</th><th className="px-4 py-3">Nota</th><th className="px-4 py-3">Ref</th><th className="px-4 py-3">Descrição</th><th className="px-4 py-3 text-right">Qtd</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y">
                       {kpis.listaRecebimento.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50">
                           <td className="px-4 py-3">{item.remetente || '-'}</td>
