@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
-import { getAllPedidosWithDescricao, getPendingNotifications, updateNotificationStatus, fetchLiveGoogleSheet } from "../engines/sync.engine";
+import { 
+  getAllPedidosWithDescricao, 
+  getPendingNotifications, 
+  updateNotificationStatus, 
+  fetchLiveGoogleSheet,
+  addRowToSheet // ✍️ IMPORTAMOS A NOSSA NOVA FUNÇÃO DE ESCRITA AQUI
+} from "../engines/sync.engine";
 import { generatePendingEmails } from "../engines/notification.engine";
 import { sendBulkEmails } from "../services/gmail.service";
 
@@ -11,6 +17,13 @@ export const notificationRouter = router({
     .query(async ({ input }) => {
       if (!input.url || input.url.trim() === "") return [];
       return fetchLiveGoogleSheet(input.url);
+    }),
+
+  // ✍️ NOVA ROTA DE ESCRITA: Envia a nova avaria para o Google Sheets
+  addAvaria: publicProcedure
+    .input(z.object({ url: z.string(), row: z.array(z.any()) }))
+    .mutation(async ({ input }) => {
+      return await addRowToSheet(input.url, input.row);
     }),
 
   // Mantemos as rotas antigas abaixo apenas para não quebrar o motor de E-mails
