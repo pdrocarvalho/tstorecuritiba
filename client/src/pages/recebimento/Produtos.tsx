@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
-// 🎨 NOVA PALETA DE CORES (TONS FORTES)
+// 🎨 PALETA DE CORES VIBRANTES
 const MUNDO_COLORS: Record<string, string> = {
   "CORTAR": "#e57373",
   "FESTEJAR": "#9575cd",
@@ -48,7 +48,6 @@ export default function RecebimentoFuturo() {
     const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
     let totalVolumesFisicos = 0;
     const notasEmTransitoSet = new Set<string>();
-    const notasAtrasadasSet = new Set<string>();
     const skusPorMundo: Record<string, Set<string>> = {};
     const volumesPorRemetente: Record<string, number> = {};
 
@@ -72,6 +71,60 @@ export default function RecebimentoFuturo() {
       grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
     };
   }, [todosPedidos]);
+
+  // 🚀 FUNÇÃO DE IMPRESSÃO RESTAURADA
+  const gerarRelatorioImpressao = () => {
+    if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados para imprimir.");
+    const janelaImpressao = window.open('', '_blank');
+    if (!janelaImpressao) return toast.error("Habilite popups para imprimir.");
+
+    const htmlRelatorio = `
+      <html>
+        <head>
+          <title>Relatório de Recebimento Futuro</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; font-size: 11px; color: #333; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 10px; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .mundo-badge { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Relatório: Recebimento Futuro</h2>
+            <span>Gerado em: ${new Date().toLocaleString('pt-BR')}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Mundo</th>
+                <th>Remetente</th>
+                <th>NF</th>
+                <th>SKU</th>
+                <th>Qtd</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${kpis.listaRecebimento.map(item => `
+                <tr>
+                  <td>${item.mundo || '-'}</td>
+                  <td>${item.remetente || '-'}</td>
+                  <td>${item.notaFiscal || '-'}</td>
+                  <td>${item.produtoSku}</td>
+                  <td>${item.quantidade}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `;
+    janelaImpressao.document.write(htmlRelatorio);
+    janelaImpressao.document.close();
+  };
 
   const handleVincular = async () => {
     if (!urlPlanilha) return toast.warning("Insira o link.");
@@ -100,29 +153,46 @@ export default function RecebimentoFuturo() {
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        <h1 className="text-3xl font-bold text-gray-900">Recebimento Futuro</h1>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Recebimento Futuro</h1>
+            <p className="text-gray-600">Mercadorias em trânsito para a loja</p>
+          </div>
+          
+          {/* 🚀 BOTÃO IMPRIMIR RESTAURADO NO CABEÇALHO */}
+          {isVinculado && (
+            <button 
+              onClick={gerarRelatorioImpressao} 
+              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:bg-slate-800 transition-all active:scale-95"
+            >
+              <Printer size={18} /> Imprimir Relatório
+            </button>
+          )}
+        </div>
 
         <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-xs font-bold text-blue-800 uppercase mb-1 block">Fonte de Dados</span>
-            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white" />
+            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-blue-200" />
           </div>
           <div className="flex gap-2 pt-5">
             {!isVinculado ? (
-              <button onClick={handleVincular} disabled={isSincronizando} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold">
-                {isSincronizando ? <RefreshCw className="animate-spin" /> : <Link2 />} Vincular
+              <button onClick={handleVincular} disabled={isSincronizando} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2">
+                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} Vincular
               </button>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => refetch()} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold">Atualizar</button>
-                <button onClick={handleCancelar} className="p-2.5 text-slate-400 bg-white rounded-lg border"><X /></button>
+                <button onClick={() => refetch()} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2">
+                  <RefreshCw size={18} /> Atualizar
+                </button>
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
               </div>
             )}
           </div>
         </Card>
 
         {isVinculado && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="p-6">
                 <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest">SKUs por Mundo</h3>
@@ -157,13 +227,13 @@ export default function RecebimentoFuturo() {
             </div>
 
             <div className="flex justify-center">
-              <button onClick={() => setMostrarLista(!mostrarLista)} className="bg-slate-900 text-white px-8 py-3 rounded-full font-bold">
+              <button onClick={() => setMostrarLista(!mostrarLista)} className="bg-slate-900 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-all">
                 {mostrarLista ? "Ocultar Detalhes" : "Ver Detalhes dos Itens"}
               </button>
             </div>
 
             {mostrarLista && (
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden border-slate-200 shadow-xl">
                 <div className="overflow-x-auto max-h-[450px]">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-100 sticky top-0 uppercase text-[10px] font-black text-slate-600 border-b">
