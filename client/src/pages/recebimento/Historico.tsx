@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner"; 
 import type { Pedido } from "@/types";
 
-// 🎨 PALETA DE CORES VIBRANTES (PADRONIZADA)
+// 🎨 PALETA DE CORES VIBRANTES
 const MUNDO_COLORS: Record<string, string> = {
   "CORTAR": "#e57373",
   "FESTEJAR": "#9575cd",
@@ -81,12 +81,16 @@ export default function RecebimentoHistorico() {
 
     let totalVolumes = 0;
     const notasSet = new Set<string>();
+    const todosSkusSet = new Set<string>(); // 🚀 NOVO: Balde global para TODOS os SKUs
     const skusPorMundo: Record<string, Set<string>> = {};
     const volumesPorRemetente: Record<string, number> = {};
 
     filtrados.forEach((p) => {
       totalVolumes += p.quantidade;
       if (p.notaFiscal) notasSet.add(p.notaFiscal.trim());
+      
+      // 🚀 Conta o SKU para a métrica global
+      if (p.produtoSku) todosSkusSet.add(p.produtoSku.trim());
       
       const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
       if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
@@ -99,12 +103,12 @@ export default function RecebimentoHistorico() {
     return {
       totalVolumes, 
       totalNotas: notasSet.size,
-      diversidadeSkus: Object.keys(skusPorMundo).length,
+      diversidadeSkus: todosSkusSet.size, // 🚀 CORRIGIDO: Agora retorna o tamanho real do balde de SKUs
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })),
       grafRemetente: Object.entries(volumesPorRemetente)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 10) // Top 10 remetentes para não poluir
+        .slice(0, 10) 
     };
   }, [todosPedidos, filtros]);
 
@@ -200,7 +204,7 @@ export default function RecebimentoHistorico() {
                 </div>
               </Card>
 
-              {/* BARRA: VOLUMES POR REMETENTE (RESTAURADO 🚀) */}
+              {/* BARRA: VOLUMES POR REMETENTE */}
               <Card className="p-6 shadow-sm">
                 <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">Volumes por Remetente</h3>
                 <div style={{ width: '100%', height: 350 }}>
