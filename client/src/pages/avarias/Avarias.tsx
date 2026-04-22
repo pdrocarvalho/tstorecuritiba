@@ -7,8 +7,8 @@ import {
   Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
   CheckCircle2, Clock, Truck, TableProperties, 
   ChevronDown, ChevronUp, Info, Tag, Timer, PackageCheck, 
-  HelpCircle, Printer, Filter
-} from "lucide-react"; // 🚀 CORRIGIDO: lucide-react
+  HelpCircle, Printer, Filter, Save
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
@@ -31,14 +31,8 @@ const STATUS_OPTIONS = [
 ];
 
 export default function GestaoAvarias() {
-  // 🚀 PERSISTÊNCIA: Inicializa estados buscando no sessionStorage
-  const [urlPlanilha, setUrlPlanilha] = useState(() => {
-    return sessionStorage.getItem("url_avarias") || "";
-  });
-
-  const [isVinculado, setIsVinculado] = useState(() => {
-    return sessionStorage.getItem("vinculado_avarias") === "true";
-  });
+  const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_avarias") || "");
+  const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_avarias") === "true");
 
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -46,23 +40,20 @@ export default function GestaoAvarias() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
-  // 🚀 QUERY: Habilitada automaticamente se já houver URL e status de vinculado
   const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' }, 
     { enabled: isVinculado && !!urlPlanilha }
   );
 
-  // 🚀 AUTO-REFETCH: Garante que os dados carreguem ao trocar de aba
   useEffect(() => {
-    if (isVinculado && urlPlanilha) {
-      refetch();
-    }
+    if (isVinculado && urlPlanilha) refetch();
   }, []);
 
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
     onSuccess: () => {
       toast.success("Avaria registrada com sucesso!");
       setShowModal(false);
+      setForm({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" }); // Limpa o form
       refetch();
     },
     onError: (err) => toast.error("Erro ao salvar: " + err.message)
@@ -99,6 +90,7 @@ export default function GestaoAvarias() {
   }, [todasAvarias, filtroSku, filtrosAtivos]);
 
   const handlePrint = () => {
+    // ... código de print mantido intacto ...
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     const html = `
@@ -119,7 +111,7 @@ export default function GestaoAvarias() {
               <tr><th>Cód.</th><th>REF</th><th>Descrição</th><th>Qtd</th><th>NF Entrada</th><th>Tratativa</th></tr>
             </thead>
             <tbody>
-              ${avariasFiltradas.map(av => `
+              ${avariasFiltradas.map((av: any) => `
                 <tr>
                   <td>${av.COD__AVARIA || ""}</td>
                   <td>${av.REF_ || ""}</td>
@@ -178,6 +170,7 @@ export default function GestaoAvarias() {
     const num = codigos.length > 0 ? Math.max(...codigos.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
     const codAvaria = `${fabrica?.prefixo}${String(num).padStart(4, '0')}`;
     
+    // Formata os dados para a planilha
     const novaLinha = [new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, form.qtde, form.nfEntrada, form.motivo, form.responsavel, "NÃO", "PENDENTE", "SIM", "PENDENTE", "", "", ""];
     mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
   };
@@ -193,11 +186,12 @@ export default function GestaoAvarias() {
           {isVinculado && (
             <div className="flex gap-3">
               <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-colors"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
 
+        {/* ... Card de Vinculação ... */}
         <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
@@ -214,7 +208,7 @@ export default function GestaoAvarias() {
               <button 
                 onClick={handleVincular} 
                 disabled={isSincronizando} 
-                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2"
+                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 hover:bg-red-700"
               >
                 {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
                 {isSincronizando ? "Vinculando..." : "Vincular"}
@@ -241,6 +235,7 @@ export default function GestaoAvarias() {
           </div>
         </Card>
 
+        {/* ... Tabela ... */}
         {isVinculado && (
           <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
              <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
@@ -288,6 +283,7 @@ export default function GestaoAvarias() {
                         {isExpanded && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={7} className="px-10 py-8">
+                              {/* ... Detalhes Expansíveis ... */}
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
@@ -325,6 +321,94 @@ export default function GestaoAvarias() {
           </Card>
         )}
       </div>
+
+      {/* 🚀 AQUI ESTÁ O MODAL DE NOVA AVARIA */}
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Cabeçalho do Modal */}
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2 text-slate-800">
+                <AlertOctagon size={20} className="text-red-500" />
+                <h2 className="font-bold text-lg tracking-tight">Registrar Nova Avaria</h2>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Corpo do Modal (Formulário) */}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Fábrica <span className="text-red-500">*</span></label>
+                <select 
+                  className="w-full flex h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  value={form.fabrica}
+                  onChange={(e) => setForm({...form, fabrica: e.target.value})}
+                >
+                  <option value="">Selecione...</option>
+                  {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Responsável</label>
+                <Input placeholder="Seu nome..." value={form.responsavel} onChange={(e) => setForm({...form, responsavel: e.target.value})} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">SKU / REF <span className="text-red-500">*</span></label>
+                <Input placeholder="Ex: 12345" value={form.ref} onChange={(e) => setForm({...form, ref: e.target.value})} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Quantidade <span className="text-red-500">*</span></label>
+                <Input type="number" min="1" value={form.qtde} onChange={(e) => setForm({...form, qtde: e.target.value})} />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Descrição do Produto</label>
+                <Input placeholder="Nome do produto..." value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">NF de Entrada</label>
+                <Input placeholder="Opcional" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Motivo da Avaria</label>
+                <textarea 
+                  className="w-full min-h-[80px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  placeholder="Descreva o dano (ex: Caixa amassada, produto quebrado...)"
+                  value={form.motivo}
+                  onChange={(e) => setForm({...form, motivo: e.target.value})}
+                />
+              </div>
+            </div>
+
+            {/* Rodapé do Modal (Botões) */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                disabled={mutationAdd.isPending}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSalvar}
+                disabled={mutationAdd.isPending}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md transition-colors disabled:opacity-50"
+              >
+                {mutationAdd.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                {mutationAdd.isPending ? "Salvando..." : "Salvar Avaria"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </MainLayout>
   );
 }
