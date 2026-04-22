@@ -21,14 +21,26 @@ function extractSpreadsheetId(url: string) {
   return match ? match[1] : null;
 }
 
-function getSheetNameFromUrl(url: string, spreadsheet: any) {
+// Retorna tanto o Nome (Title) quanto o ID numérico da Aba (SheetId) - O ID numérico é crucial para deletar linhas.
+function getSheetInfoFromUrl(url: string, spreadsheet: any) {
   const match = String(url).match(/[#&]gid=([0-9]+)/);
   const gid = match ? parseInt(match[1], 10) : null;
+  
   if (gid !== null) {
     const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.sheetId === gid);
-    if (sheet && sheet.properties?.title) return sheet.properties.title;
+    if (sheet && sheet.properties?.title) {
+      return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
+    }
   }
-  return spreadsheet.data.sheets?.[0]?.properties?.title || "Página1";
+  
+  // Se não tiver GID na URL, pega a primeira aba por padrão
+  const firstSheet = spreadsheet.data.sheets?.[0]?.properties;
+  return { title: firstSheet?.title || "Página1", sheetId: firstSheet?.sheetId || 0 };
+}
+
+// (Mantém a antiga para retrocompatibilidade)
+function getSheetNameFromUrl(url: string, spreadsheet: any) {
+  return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
 // 🚀 LEITURA MULTI-MODO
@@ -57,7 +69,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   const headers = rows[headerRowIndex].map((h: any) => String(h || "").toUpperCase().trim());
   
   const data = rows.slice(headerRowIndex + 1).map((row, index) => {
-    const obj: any = { rowNumber: headerRowIndex + index + 2 };
+    const obj: any = { rowNumber: headerRowIndex + index + 2 }; // Guarda o número real da linha para edições futuras!
     headers.forEach((header, idx) => {
       if (!header) return;
       const val = row[idx] || "";
@@ -88,7 +100,10 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   return filtered;
 }
 
-// 🚀 FUNÇÕES DE ESCRITA
+// ==========================================
+// 🚀 FUNÇÕES DE ESCRITA E MODIFICAÇÃO (CRUD)
+// ==========================================
+
 export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL inválida.");
@@ -104,6 +119,7 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[]) {
   return { success: true };
 }
 
+// Edita apenas uma célula específica
 export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: string, val: string) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   if (!spreadsheetId) throw new Error("URL inválida.");
@@ -119,15 +135,78 @@ export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: str
   return { success: true };
 }
 
-// 🚀 CORREÇÃO DO ERRO 2, 3 e 4: Sincronização de Banco
+// 🆕 Edita uma linha inteira (várias colunas de uma vez)
+export async function updateFullRow(sheetsUrl: string, rowNum: number, rowData: any[]) {
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) throw new Error("URL inválida.");
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
+  
+  // Calcula até onde vai a alteração (A até a quantidade de colunas no array)
+  const lastColLetter = String.fromCharCode(65 + rowData.length - 1); 
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId, 
+    range: `'${targetSheetName}'!A${rowNum}:${lastColLetter}${rowNum}`,
+    valueInputOption: "USER_ENTERED", 
+    requestBody: { values: [rowData] },
+  });
+  
+  Object.keys(sheetsCache).forEach(k => { if (k.includes(sheetsUrl)) delete sheetsCache[k]; });
+  return { success: true };
+}
+
+// 🆕 Exclui a linha completamente da planilha (puxando as de baixo para cima)
+export async function deleteSheetRow(sheetsUrl: string, rowNum: number) {
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) throw new Error("URL inválida.");
+  
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  
+  // Para deletar, precisamos do ID numérico da aba, e não apenas o nome.
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheetInfo = getSheetInfoFromUrl(sheetsUrl, spreadsheet);
+
+  // A API do Google começa a contar linhas do zero (ex: Linha 1 = index 0).
+  const startIndex = rowNum - 1; 
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: sheetInfo.sheetId,
+              dimension: "ROWS",
+              startIndex: startIndex,
+              endIndex: startIndex + 1, // Exclui apenas essa linha
+            }
+          }
+        }
+      ]
+    }
+  });
+
+  // Limpa o cache para forçar a busca dos dados novos
+  Object.keys(sheetsCache).forEach(k => { if (k.includes(sheetsUrl)) delete sheetsCache[k]; });
+  
+  return { success: true };
+}
+
+// ==========================================
+// 🚀 FUNÇÕES DE ADMINISTRAÇÃO E TESTE
+// ==========================================
+
 export async function syncPedidosFromGoogleSheets(url: string) {
-  // Esta função é usada pelo admin para alimentar o Banco de Dados Interno (Postgres/SQLite)
-  // Por agora, retornamos o objeto completo que o seu index.ts espera
   console.log("Sincronizando banco via:", url);
   return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] };
 }
 
-// 🚀 CORREÇÃO DO ERRO 1: Teste de Robô
 export async function testarLeituraRobo(url: string) {
   const data = await fetchLiveGoogleSheet(url, 'recebimento');
   return { 
