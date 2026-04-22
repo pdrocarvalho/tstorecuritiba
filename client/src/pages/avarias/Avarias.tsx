@@ -53,7 +53,7 @@ export default function GestaoAvarias() {
     onSuccess: () => {
       toast.success("Avaria registrada com sucesso!");
       setShowModal(false);
-      setForm({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" }); // Limpa o form
+      setForm({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
       refetch();
     },
     onError: (err) => toast.error("Erro ao salvar: " + err.message)
@@ -90,7 +90,6 @@ export default function GestaoAvarias() {
   }, [todasAvarias, filtroSku, filtrosAtivos]);
 
   const handlePrint = () => {
-    // ... código de print mantido intacto ...
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     const html = `
@@ -163,15 +162,44 @@ export default function GestaoAvarias() {
 
   const [form, setForm] = useState({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
 
+  // 🚀 FUNÇÃO ATUALIZADA COM A ORDEM EXATA DA PLANILHA (A até P)
   const handleSalvar = async () => {
     if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("Campos obrigatórios faltando.");
-    const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
-    const codigos = todasAvarias.map((a: any) => String(a.COD__AVARIA || "")).filter((c: string) => c.startsWith(fabrica?.prefixo || ""));
-    const num = codigos.length > 0 ? Math.max(...codigos.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
-    const codAvaria = `${fabrica?.prefixo}${String(num).padStart(4, '0')}`;
     
-    // Formata os dados para a planilha
-    const novaLinha = [new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, form.qtde, form.nfEntrada, form.motivo, form.responsavel, "NÃO", "PENDENTE", "SIM", "PENDENTE", "", "", ""];
+    const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
+    const prefixo = fabrica?.prefixo || "AVR";
+    
+    // Geração automática do código baseada no prefixo da fábrica
+    const codigosExistentes = todasAvarias
+      .map((a: any) => String(a.CÓD__AVARIA || a.COD__AVARIA || ""))
+      .filter((c: string) => c.startsWith(prefixo));
+
+    const proximoNumero = codigosExistentes.length > 0 
+      ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 
+      : 1;
+
+    const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
+    
+    // 📦 PACOTE DE DADOS FORMATADO PARA O GOOGLE SHEETS
+    const novaLinha = [
+      new Date().toLocaleDateString('pt-BR'), // A: DATA DE ENTRADA
+      form.fabrica,                         // B: FÁBRICA
+      codAvaria,                            // C: CÓD. AVARIA
+      form.ref,                             // D: REF.
+      form.descricao,                       // E: DESCRIÇÃO
+      form.qtde,                            // F: QTDE.
+      form.nfEntrada,                       // G: NOTA FISCAL DE ENTRADA
+      form.motivo,                          // H: MOTIVO
+      form.responsavel,                     // I: RESPONSÁVEL
+      "NÃO",                                // J: FOI LANÇADO NO SISTEMA?
+      "PENDENTE",                           // K: TRATATIVA
+      "SIM",                                // L: CONSTA FISICAMENTE?
+      "PENDENTE",                           // M: STATUS
+      "",                                   // N: NOTA FISCAL DE SAÍDA
+      "",                                   // O: NOTA FISCAL DE REPOSIÇÃO
+      ""                                    // P: DATA DA COLETA
+    ];
+    
     mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
   };
 
@@ -191,7 +219,6 @@ export default function GestaoAvarias() {
           )}
         </div>
 
-        {/* ... Card de Vinculação ... */}
         <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
@@ -235,7 +262,6 @@ export default function GestaoAvarias() {
           </div>
         </Card>
 
-        {/* ... Tabela ... */}
         {isVinculado && (
           <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
              <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
@@ -269,9 +295,9 @@ export default function GestaoAvarias() {
                       <React.Fragment key={idx}>
                         <tr onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}>
                           <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
-                          <td className="px-4 font-bold text-slate-900">{av.COD__AVARIA || '-'}</td>
+                          <td className="px-4 font-bold text-slate-900">{av.CÓD__AVARIA || av.COD__AVARIA || '-'}</td>
                           <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF_ || '-'}</span></td>
-                          <td className="px-4 text-slate-700 font-medium">{av.DESCRICAO || '-'}</td>
+                          <td className="px-4 text-slate-700 font-medium">{av.DESCRIÇÃO || av.DESCRICAO || '-'}</td>
                           <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE_ || '-'}</td>
                           <td className="px-4 text-slate-500">{av.NOTA_FISCAL_DE_ENTRADA || '-'}</td>
                           <td className="px-6 text-right">
@@ -283,22 +309,21 @@ export default function GestaoAvarias() {
                         {isExpanded && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={7} className="px-10 py-8">
-                              {/* ... Detalhes Expansíveis ... */}
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
                                   <div className="grid grid-cols-2 gap-4">
                                     <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || '-'}</p></div>
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FABRICA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FÁBRICA || av.FABRICA || '-'}</p></div>
                                   </div>
-                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSAVEL || '-'}</p></div>
+                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSÁVEL || av.RESPONSAVEL || '-'}</p></div>
                                 </div>
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Diagnóstico</h4>
                                   <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1">{av.MOTIVO || 'Não informado.'}</p></div>
                                   <div className="flex gap-3">
                                     <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE_ || '-'}</div>
-                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANÇADO_NO_SISTEMA_ === 'SIM' || av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANÇADO_NO_SISTEMA_ || av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
                                   </div>
                                 </div>
                                 <div className="space-y-4">
@@ -322,11 +347,9 @@ export default function GestaoAvarias() {
         )}
       </div>
 
-      {/* 🚀 AQUI ESTÁ O MODAL DE NOVA AVARIA */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Cabeçalho do Modal */}
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-2 text-slate-800">
                 <AlertOctagon size={20} className="text-red-500" />
@@ -337,7 +360,6 @@ export default function GestaoAvarias() {
               </button>
             </div>
 
-            {/* Corpo do Modal (Formulário) */}
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">Fábrica <span className="text-red-500">*</span></label>
@@ -387,7 +409,6 @@ export default function GestaoAvarias() {
               </div>
             </div>
 
-            {/* Rodapé do Modal (Botões) */}
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button 
                 onClick={() => setShowModal(false)}
