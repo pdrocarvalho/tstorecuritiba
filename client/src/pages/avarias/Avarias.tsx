@@ -7,7 +7,7 @@ import {
   Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
   CheckCircle2, Clock, Truck, TableProperties, 
   ChevronDown, ChevronUp, Info, Tag, Timer, PackageCheck, 
-  HelpCircle, Printer, Filter, Save
+  HelpCircle, Printer, Filter, Save, Edit, Trash2, Lock
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,12 @@ const STATUS_OPTIONS = [
   { id: "CONCLUÍDA", label: "Concluída", color: "emerald" },
 ];
 
+const FORM_VAZIO = {
+  fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", 
+  tratativa: "PENDENTE", status: "PENDENTE", constaFisicamente: "SIM", lancadoSistema: "NÃO",
+  nfSaida: "", nfReposicao: "", dataColeta: ""
+};
+
 export default function GestaoAvarias() {
   const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_avarias") || "");
   const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_avarias") === "true");
@@ -40,6 +46,13 @@ export default function GestaoAvarias() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
+  // 🚀 ESTADOS DO CRUD E SEGURANÇA
+  const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
+  const [form, setForm] = useState(FORM_VAZIO);
+  
+  const [pinModal, setPinModal] = useState<{ isOpen: boolean, action: 'edit' | 'delete' | null, avariaTarget?: any }>({ isOpen: false, action: null });
+  const [pinValue, setPinValue] = useState("");
+
   const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' }, 
     { enabled: isVinculado && !!urlPlanilha }
@@ -49,15 +62,134 @@ export default function GestaoAvarias() {
     if (isVinculado && urlPlanilha) refetch();
   }, []);
 
+  // ==========================================
+  // MUTATIONS (As setas para o Backend)
+  // ==========================================
+
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
     onSuccess: () => {
       toast.success("Avaria registrada com sucesso!");
-      setShowModal(false);
-      setForm({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
+      fecharModais();
       refetch();
     },
     onError: (err) => toast.error("Erro ao salvar: " + err.message)
   });
+
+  const mutationEdit = trpc.notifications.editAvariaFull.useMutation({
+    onSuccess: () => {
+      toast.success("Avaria atualizada com sucesso!");
+      fecharModais();
+      refetch();
+    },
+    onError: (err) => toast.error("Erro na edição: " + err.message)
+  });
+
+  const mutationDelete = trpc.notifications.deleteAvariaRow.useMutation({
+    onSuccess: () => {
+      toast.success("Avaria excluída permanentemente.");
+      fecharModais();
+      refetch();
+    },
+    onError: (err) => toast.error("Erro ao excluir: " + err.message)
+  });
+
+  // ==========================================
+  // FUNÇÕES DE CONTROLE
+  // ==========================================
+
+  const fecharModais = () => {
+    setShowModal(false);
+    setPinModal({ isOpen: false, action: null });
+    setEditingAvaria(null);
+    setForm(FORM_VAZIO);
+    setPinValue("");
+  };
+
+  const abrirModalNova = () => {
+    setEditingAvaria(null);
+    setForm(FORM_VAZIO);
+    setShowModal(true);
+  };
+
+  const abrirModalEdicao = (av: any) => {
+    setEditingAvaria(av);
+    setForm({
+      fabrica: av.FÁBRICA || av.FABRICA || "",
+      ref: av.REF_ || "",
+      descricao: av.DESCRIÇÃO || av.DESCRICAO || "",
+      qtde: av.QTDE_ || "1",
+      nfEntrada: av.NOTA_FISCAL_DE_ENTRADA || "",
+      motivo: av.MOTIVO || "",
+      responsavel: av.RESPONSÁVEL || av.RESPONSAVEL || "",
+      tratativa: av.TRATATIVA || "PENDENTE",
+      status: av.STATUS || "PENDENTE",
+      constaFisicamente: av.CONSTA_FISICAMENTE_ || "NÃO",
+      lancadoSistema: av.FOI_LANÇADO_NO_SISTEMA_ || av.FOI_LANCADO_NO_SISTEMA_ || "NÃO",
+      nfSaida: av.NOTA_FISCAL_DE_SAÍDA || av.NOTA_FISCAL_DE_SAIDA || "",
+      nfReposicao: av.NOTA_FISCAL_DE_REPOSIÇÃO || av.NOTA_FISCAL_DE_REPOSICAO || "",
+      dataColeta: av.DATA_DA_COLETA || ""
+    });
+    setShowModal(true);
+  };
+
+  const handleSalvarClicked = () => {
+    if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("Campos obrigatórios faltando.");
+    
+    if (editingAvaria) {
+      // Se for edição, pede o PIN
+      setPinModal({ isOpen: true, action: 'edit' });
+    } else {
+      // Se for novo, salva direto sem PIN
+      const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
+      const prefixo = fabrica?.prefixo || "AVR";
+      const codigosExistentes = todasAvarias.map((a: any) => String(a.CÓD__AVARIA || a.COD__AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
+      const proximoNumero = codigosExistentes.length > 0 ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
+      const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
+      
+      const novaLinha = [
+        new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, form.qtde, 
+        form.nfEntrada, form.motivo, form.responsavel, "NÃO", "PENDENTE", "SIM", "PENDENTE", "", "", ""
+      ];
+      mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
+    }
+  };
+
+  // Executa a ação após digitar a senha
+  const executarAcaoComPin = () => {
+    if (!pinValue) return toast.warning("Digite a senha de gerente.");
+
+    if (pinModal.action === 'delete' && pinModal.avariaTarget) {
+      if (!pinModal.avariaTarget.rowNumber) return toast.error("Erro interno: Número da linha não encontrado.");
+      mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.avariaTarget.rowNumber, pin: pinValue });
+    } 
+    
+    else if (pinModal.action === 'edit' && editingAvaria) {
+      if (!editingAvaria.rowNumber) return toast.error("Erro interno: Número da linha não encontrado.");
+      const linhaAtualizada = [
+        editingAvaria.DATA_DE_ENTRADA, // A (Não muda a data original)
+        form.fabrica,                  // B
+        editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA, // C (Não muda o código)
+        form.ref,                      // D
+        form.descricao,                // E
+        form.qtde,                     // F
+        form.nfEntrada,                // G
+        form.motivo,                   // H
+        form.responsavel,              // I
+        form.lancadoSistema,           // J
+        form.tratativa,                // K
+        form.constaFisicamente,        // L
+        form.status,                   // M
+        form.nfSaida,                  // N
+        form.nfReposicao,              // O
+        form.dataColeta                // P
+      ];
+      mutationEdit.mutate({ url: urlPlanilha, rowNumber: editingAvaria.rowNumber, row: linhaAtualizada, pin: pinValue });
+    }
+  };
+
+  // ==========================================
+  // FILTROS E ESTILOS
+  // ==========================================
 
   const getTratativaStyle = (texto: string) => {
     if (!texto) return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
@@ -69,139 +201,19 @@ export default function GestaoAvarias() {
     return { class: "bg-slate-100 text-slate-600 border-slate-200", icon: <Tag size={10}/> };
   };
 
-  const toggleFiltro = (statusId: string) => {
-    setFiltrosAtivos(prev => 
-      prev.includes(statusId) ? prev.filter(s => s !== statusId) : [...prev, statusId]
-    );
-  };
-
   const avariasFiltradas = useMemo(() => {
     return todasAvarias.filter((a: any) => {
       const search = filtroSku.toLowerCase();
-      const matchesSearch = !filtroSku || 
-        String(a.REF_ || "").toLowerCase().includes(search) ||
-        String(a.COD__AVARIA || "").toLowerCase().includes(search);
-
+      const matchesSearch = !filtroSku || String(a.REF_ || "").toLowerCase().includes(search) || String(a.CÓD__AVARIA || a.COD__AVARIA || "").toLowerCase().includes(search);
       const tratativaRow = String(a.TRATATIVA || "PENDENTE").toUpperCase().trim();
       const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(tratativaRow);
-
       return matchesSearch && matchesStatus;
     });
   }, [todasAvarias, filtroSku, filtrosAtivos]);
 
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    const html = `
-      <html>
-        <head>
-          <title>Relatório de Avarias - T Store</title>
-          <style>
-            body { font-family: sans-serif; padding: 20px; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background: #f4f4f4; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h2>Relatório de Gestão de Avarias</h2>
-          <table>
-            <thead>
-              <tr><th>Cód.</th><th>REF</th><th>Descrição</th><th>Qtd</th><th>NF Entrada</th><th>Tratativa</th></tr>
-            </thead>
-            <tbody>
-              ${avariasFiltradas.map((av: any) => `
-                <tr>
-                  <td>${av.COD__AVARIA || ""}</td>
-                  <td>${av.REF_ || ""}</td>
-                  <td>${av.DESCRICAO || ""}</td>
-                  <td>${av.QTDE_ || ""}</td>
-                  <td>${av.NOTA_FISCAL_DE_ENTRADA || ""}</td>
-                  <td>${av.TRATATIVA || "PENDENTE"}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `;
-    printWindow.document.write(html);
-    printWindow.document.close();
-  };
-
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Insira o link da planilha.");
-    setIsSincronizando(true);
-    try {
-      const result = await refetch();
-      if (result.isError) {
-        toast.error("Falha no acesso à planilha.");
-      } else {
-        setIsVinculado(true);
-        sessionStorage.setItem("url_avarias", urlPlanilha);
-        sessionStorage.setItem("vinculado_avarias", "true");
-        toast.success("Avarias vinculadas!");
-      }
-    } catch (error) {
-      toast.error("Erro de conexão.");
-    } finally {
-      setIsSincronizando(false);
-    }
-  };
-
-  const handleCancelar = () => {
-    setIsVinculado(false);
-    setUrlPlanilha("");
-    sessionStorage.removeItem("url_avarias");
-    sessionStorage.removeItem("vinculado_avarias");
-    setExpandedRow(null);
-    setFiltrosAtivos([]);
-    toast.info("Vínculo removido.");
-  };
-
-  const [form, setForm] = useState({ fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", status: "PENDENTE" });
-
-  // 🚀 FUNÇÃO ATUALIZADA COM A ORDEM EXATA DA PLANILHA (A até P)
-  const handleSalvar = async () => {
-    if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("Campos obrigatórios faltando.");
-    
-    const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
-    const prefixo = fabrica?.prefixo || "AVR";
-    
-    // Geração automática do código baseada no prefixo da fábrica
-    const codigosExistentes = todasAvarias
-      .map((a: any) => String(a.CÓD__AVARIA || a.COD__AVARIA || ""))
-      .filter((c: string) => c.startsWith(prefixo));
-
-    const proximoNumero = codigosExistentes.length > 0 
-      ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 
-      : 1;
-
-    const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
-    
-    // 📦 PACOTE DE DADOS FORMATADO PARA O GOOGLE SHEETS
-    const novaLinha = [
-      new Date().toLocaleDateString('pt-BR'), // A: DATA DE ENTRADA
-      form.fabrica,                         // B: FÁBRICA
-      codAvaria,                            // C: CÓD. AVARIA
-      form.ref,                             // D: REF.
-      form.descricao,                       // E: DESCRIÇÃO
-      form.qtde,                            // F: QTDE.
-      form.nfEntrada,                       // G: NOTA FISCAL DE ENTRADA
-      form.motivo,                          // H: MOTIVO
-      form.responsavel,                     // I: RESPONSÁVEL
-      "NÃO",                                // J: FOI LANÇADO NO SISTEMA?
-      "PENDENTE",                           // K: TRATATIVA
-      "SIM",                                // L: CONSTA FISICAMENTE?
-      "PENDENTE",                           // M: STATUS
-      "",                                   // N: NOTA FISCAL DE SAÍDA
-      "",                                   // O: NOTA FISCAL DE REPOSIÇÃO
-      ""                                    // P: DATA DA COLETA
-    ];
-    
-    mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
-  };
+  const handleVincular = async () => { setIsSincronizando(true); try { const result = await refetch(); if (!result.isError) { setIsVinculado(true); sessionStorage.setItem("url_avarias", urlPlanilha); sessionStorage.setItem("vinculado_avarias", "true"); toast.success("Avarias vinculadas!"); } } catch { toast.error("Erro de conexão."); } finally { setIsSincronizando(false); } };
+  const handleCancelar = () => { setIsVinculado(false); setUrlPlanilha(""); sessionStorage.removeItem("url_avarias"); sessionStorage.removeItem("vinculado_avarias"); setExpandedRow(null); setFiltrosAtivos([]); };
+  const handlePrint = () => { window.print(); }; 
 
   return (
     <MainLayout>
@@ -214,7 +226,7 @@ export default function GestaoAvarias() {
           {isVinculado && (
             <div className="flex gap-3">
               <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-colors"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={abrirModalNova} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-colors"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
@@ -222,41 +234,19 @@ export default function GestaoAvarias() {
         <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
             <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
-            <Input 
-              placeholder="Cole o link do Google Sheets..." 
-              value={urlPlanilha} 
-              onChange={(e) => setUrlPlanilha(e.target.value)} 
-              disabled={isVinculado} 
-              className="bg-white border-red-200 rounded-lg" 
-            />
+            <Input placeholder="Cole o link do Google Sheets..." value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-red-200 rounded-lg" />
           </div>
           <div className="flex gap-2 pt-5 w-full md:w-auto">
             {!isVinculado ? (
-              <button 
-                onClick={handleVincular} 
-                disabled={isSincronizando} 
-                className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 hover:bg-red-700"
-              >
-                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />}
-                {isSincronizando ? "Vinculando..." : "Vincular"}
+              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 hover:bg-red-700">
+                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} {isSincronizando ? "Vinculando..." : "Vincular"}
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => refetch()} 
-                  disabled={isSincronizando}
-                  className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50 transition-colors"
-                >
-                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> 
-                  {isSincronizando ? "Atualizando..." : "Atualizar"}
+                <button onClick={() => refetch()} disabled={isSincronizando} className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50">
+                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> {isSincronizando ? "Atualizando..." : "Atualizar"}
                 </button>
-                <button 
-                  onClick={handleCancelar} 
-                  className="p-2.5 text-slate-400 hover:text-red-600 transition-colors bg-white rounded-lg border border-slate-200"
-                  title="Desvincular"
-                >
-                  <X size={20}/>
-                </button>
+                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 bg-white rounded-lg border border-slate-200"><X size={20}/></button>
               </div>
             )}
           </div>
@@ -268,17 +258,6 @@ export default function GestaoAvarias() {
               <div className="relative w-full lg:w-96">
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <Input placeholder="Buscar por REF ou Código..." className="pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map(s => (
-                  <button 
-                    key={s.id} 
-                    onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? `bg-${s.color}-600 text-white border-${s.color}-700` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -308,8 +287,18 @@ export default function GestaoAvarias() {
                         </tr>
                         {isExpanded && (
                           <tr className="bg-slate-50/80">
-                            <td colSpan={7} className="px-10 py-8">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <td colSpan={7} className="px-10 py-8 relative">
+                              {/* 🚀 BOTÕES DE AÇÃO (CRUD) NO TOPO DA ÁREA EXPANDIDA */}
+                              <div className="absolute top-4 right-10 flex gap-2">
+                                <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-2 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors">
+                                  <Edit size={14} /> Editar
+                                </button>
+                                <button onClick={() => setPinModal({ isOpen: true, action: 'delete', avariaTarget: av })} className="flex items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors">
+                                  <Trash2 size={14} /> Excluir
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
                                   <div className="grid grid-cols-2 gap-4">
@@ -347,83 +336,156 @@ export default function GestaoAvarias() {
         )}
       </div>
 
+      {/* 🚀 MODAL PRINCIPAL (NOVA OU EDITA AVARIA) */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <div className="flex items-center gap-2 text-slate-800">
-                <AlertOctagon size={20} className="text-red-500" />
-                <h2 className="font-bold text-lg tracking-tight">Registrar Nova Avaria</h2>
+                {editingAvaria ? <Edit size={20} className="text-blue-600" /> : <AlertOctagon size={20} className="text-red-500" />}
+                <h2 className="font-bold text-lg tracking-tight">{editingAvaria ? `Editar Avaria (${editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA})` : "Registrar Nova Avaria"}</h2>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors">
-                <X size={20} />
-              </button>
+              <button onClick={fecharModais} className="text-slate-400 hover:text-slate-700 transition-colors"><X size={20} /></button>
             </div>
 
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Fábrica <span className="text-red-500">*</span></label>
-                <select 
-                  className="w-full flex h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  value={form.fabrica}
-                  onChange={(e) => setForm({...form, fabrica: e.target.value})}
-                >
-                  <option value="">Selecione...</option>
-                  {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
-                </select>
+            <div className="p-6">
+              {/* BLOCO 1: Informações Básicas (Sempre Visível) */}
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Dados Principais</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Fábrica <span className="text-red-500">*</span></label>
+                  <select className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-red-500" value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})} disabled={!!editingAvaria}>
+                    <option value="">Selecione...</option>
+                    {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Responsável</label>
+                  <Input placeholder="Seu nome..." value={form.responsavel} onChange={(e) => setForm({...form, responsavel: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">SKU / REF <span className="text-red-500">*</span></label>
+                  <Input placeholder="Ex: 12345" value={form.ref} onChange={(e) => setForm({...form, ref: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Quantidade <span className="text-red-500">*</span></label>
+                  <Input type="number" min="1" value={form.qtde} onChange={(e) => setForm({...form, qtde: e.target.value})} />
+                </div>
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Descrição do Produto</label>
+                  <Input placeholder="Nome do produto..." value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">NF de Entrada</label>
+                  <Input placeholder="Opcional" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} />
+                </div>
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Motivo da Avaria</label>
+                  <textarea className="w-full min-h-[80px] rounded-md border border-slate-200 p-3 text-sm focus:ring-2 focus:ring-red-500" value={form.motivo} onChange={(e) => setForm({...form, motivo: e.target.value})} />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Responsável</label>
-                <Input placeholder="Seu nome..." value={form.responsavel} onChange={(e) => setForm({...form, responsavel: e.target.value})} />
-              </div>
+              {/* BLOCO 2: Logística e Resolução (Aparece só na Edição) */}
+              {editingAvaria && (
+                <>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mt-8 mb-4 border-t pt-6">Logística e Tratativa</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Tratativa Externa</label>
+                      <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.tratativa} onChange={(e) => setForm({...form, tratativa: e.target.value})}>
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="AGUARDANDO COLETA">Aguardando Coleta</option>
+                        <option value="EM PROCESSO">Em Processo</option>
+                        <option value="CONCLUÍDA">Concluída</option>
+                      </select>
+                    </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">SKU / REF <span className="text-red-500">*</span></label>
-                <Input placeholder="Ex: 12345" value={form.ref} onChange={(e) => setForm({...form, ref: e.target.value})} />
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Status Interno</label>
+                      <Input className="h-9 text-xs" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} />
+                    </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Quantidade <span className="text-red-500">*</span></label>
-                <Input type="number" min="1" value={form.qtde} onChange={(e) => setForm({...form, qtde: e.target.value})} />
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Data da Coleta</label>
+                      <Input className="h-9 text-xs" value={form.dataColeta} onChange={(e) => setForm({...form, dataColeta: e.target.value})} placeholder="DD/MM/AAAA" />
+                    </div>
 
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Descrição do Produto</label>
-                <Input placeholder="Nome do produto..." value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} />
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Consta Fisicamente?</label>
+                      <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.constaFisicamente} onChange={(e) => setForm({...form, constaFisicamente: e.target.value})}>
+                        <option value="SIM">SIM</option>
+                        <option value="NÃO">NÃO</option>
+                      </select>
+                    </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">NF de Entrada</label>
-                <Input placeholder="Opcional" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} />
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Lançado no Sistema?</label>
+                      <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.lancadoSistema} onChange={(e) => setForm({...form, lancadoSistema: e.target.value})}>
+                        <option value="SIM">SIM</option>
+                        <option value="NÃO">NÃO</option>
+                      </select>
+                    </div>
 
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Motivo da Avaria</label>
-                <textarea 
-                  className="w-full min-h-[80px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-                  placeholder="Descreva o dano (ex: Caixa amassada, produto quebrado...)"
-                  value={form.motivo}
-                  onChange={(e) => setForm({...form, motivo: e.target.value})}
-                />
-              </div>
+                    <div className="col-span-full grid grid-cols-2 gap-5 mt-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">NF de Saída</label>
+                        <Input className="h-9 text-xs" value={form.nfSaida} onChange={(e) => setForm({...form, nfSaida: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">NF de Reposição</label>
+                        <Input className="h-9 text-xs" value={form.nfReposicao} onChange={(e) => setForm({...form, nfReposicao: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button 
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
-                disabled={mutationAdd.isPending}
-              >
-                Cancelar
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0 z-10">
+              <button onClick={fecharModais} className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
+              <button onClick={handleSalvarClicked} className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md transition-colors ${editingAvaria ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                {editingAvaria ? <Save size={16} /> : <Plus size={16} />}
+                {editingAvaria ? "Salvar Alterações" : "Registrar Nova Avaria"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 MODAL DA SENHA DE GERENTE */}
+      {pinModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 duration-200">
+            <div className="mx-auto w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-700">
+              <Lock size={24} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-1">Acesso Restrito</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {pinModal.action === 'delete' 
+                ? "Digite a Senha de Gerente para confirmar a exclusão permanente." 
+                : "Digite a Senha de Gerente para autorizar a modificação."}
+            </p>
+            
+            <Input 
+              type="password" 
+              placeholder="Digite o PIN numérico..." 
+              className="text-center text-lg tracking-widest font-bold mb-6"
+              value={pinValue}
+              onChange={(e) => setPinValue(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && executarAcaoComPin()}
+            />
+
+            <div className="flex gap-3">
+              <button onClick={() => setPinModal({ isOpen: false, action: null })} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
               <button 
-                onClick={handleSalvar}
-                disabled={mutationAdd.isPending}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md transition-colors disabled:opacity-50"
+                onClick={executarAcaoComPin} 
+                disabled={mutationDelete.isPending || mutationEdit.isPending}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-bold text-white shadow-md flex items-center justify-center gap-2 ${pinModal.action === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
               >
-                {mutationAdd.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
-                {mutationAdd.isPending ? "Salvando..." : "Salvar Avaria"}
+                {(mutationDelete.isPending || mutationEdit.isPending) ? <RefreshCw size={16} className="animate-spin"/> : <CheckCircle2 size={16} />}
+                Confirmar
               </button>
             </div>
           </div>
