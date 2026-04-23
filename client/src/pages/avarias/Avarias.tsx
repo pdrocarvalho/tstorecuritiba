@@ -201,6 +201,12 @@ export default function GestaoAvarias() {
     return { class: "bg-slate-100 text-slate-600 border-slate-200", icon: <Tag size={10}/> };
   };
 
+  const toggleFiltro = (statusId: string) => {
+    setFiltrosAtivos(prev => 
+      prev.includes(statusId) ? prev.filter(s => s !== statusId) : [...prev, statusId]
+    );
+  };
+
   const avariasFiltradas = useMemo(() => {
     return todasAvarias.filter((a: any) => {
       const search = filtroSku.toLowerCase();
@@ -254,10 +260,23 @@ export default function GestaoAvarias() {
 
         {isVinculado && (
           <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
-             <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
+            <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
               <div className="relative w-full lg:w-96">
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <Input placeholder="Buscar por REF ou Código..." className="pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
+              </div>
+              
+              {/* 🚀 FILTROS RESTAURADOS AQUI! */}
+              <div className="flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map(s => (
+                  <button 
+                    key={s.id} 
+                    onClick={() => toggleFiltro(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? `bg-${s.color}-600 text-white border-${s.color}-700` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
 
