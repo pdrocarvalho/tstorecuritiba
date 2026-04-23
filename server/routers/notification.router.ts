@@ -33,8 +33,13 @@ export const notificationsRouter = router({
     .mutation(async ({ input }) => {
       const result = await addRowToSheet(input.url, input.row);
       
-      // Dispara o E-mail após salvar no Sheets
-      const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8] };
+      // Dispara o E-mail após salvar no Sheets (CRIADA)
+      const data = { 
+          codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], 
+          qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], 
+          responsavel: input.row[8], tratativa: input.row[10] || 'PENDENTE',
+          status: input.row[12] || 'PENDENTE'
+      };
       sendAvariaNotification('CRIADA', data); 
       
       return result;
@@ -51,11 +56,19 @@ export const notificationsRouter = router({
     .mutation(async ({ input }) => {
       validateAdminPin(input.pin);
       
+      // 🚀 LÊ OS DADOS ANTES DA EDIÇÃO
+      const rows = await fetchLiveGoogleSheet(input.url, 'avarias');
+      const previousData = rows.find((r: any) => r.rowNumber === input.rowNumber);
+      
       const result = await updateFullRow(input.url, input.rowNumber, input.row);
       
-      // Dispara o E-mail de Edição
-      const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8] };
-      sendAvariaNotification('EDITADA', data);
+      // Dispara o E-mail de Edição, enviando também os dados anteriores
+      const data = { 
+          codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], 
+          qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], 
+          responsavel: input.row[8], tratativa: input.row[10], status: input.row[12]
+      };
+      sendAvariaNotification('EDITADA', data, previousData);
       
       return result;
     }),
