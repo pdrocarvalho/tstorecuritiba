@@ -219,7 +219,51 @@ export default function GestaoAvarias() {
 
   const handleVincular = async () => { setIsSincronizando(true); try { const result = await refetch(); if (!result.isError) { setIsVinculado(true); sessionStorage.setItem("url_avarias", urlPlanilha); sessionStorage.setItem("vinculado_avarias", "true"); toast.success("Avarias vinculadas!"); } } catch { toast.error("Erro de conexão."); } finally { setIsSincronizando(false); } };
   const handleCancelar = () => { setIsVinculado(false); setUrlPlanilha(""); sessionStorage.removeItem("url_avarias"); sessionStorage.removeItem("vinculado_avarias"); setExpandedRow(null); setFiltrosAtivos([]); };
-  const handlePrint = () => { window.print(); }; 
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const html = `
+      <html>
+        <head>
+          <title>Relatório de Avarias - T Store</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #f4f4f4; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h2>Relatório de Gestão de Avarias</h2>
+          <table>
+            <thead>
+              <tr><th>Cód.</th><th>REF</th><th>Descrição</th><th>Qtd</th><th>NF Entrada</th><th>Tratativa</th></tr>
+            </thead>
+            <tbody>
+              ${avariasFiltradas.map((av: any) => `
+                <tr>
+                  <td>${av.CÓD__AVARIA || av.COD__AVARIA || ""}</td>
+                  <td>${av.REF_ || ""}</td>
+                  <td>${av.DESCRIÇÃO || av.DESCRICAO || ""}</td>
+                  <td><strong style="color: red;">${av.QTDE_ || ""}</strong></td>
+                  <td>${av.NOTA_FISCAL_DE_ENTRADA || ""}</td>
+                  <td>${av.TRATATIVA || "PENDENTE"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   return (
     <MainLayout>
