@@ -82,8 +82,12 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       const key = header.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
       
+      // 🚀 PADRONIZAÇÃO: Agora ambos os modos buscam por "REF." ou "REF"
+      const isColunaReferencia = header === "REF." || header === "REF";
+
       if (mode === 'recebimento') {
-        if (header === "REF." || header === "REF") obj.produtoSku = String(val).trim();
+        if (isColunaReferencia) obj.produtoSku = String(val).trim();
+        
         if (header.includes("DESCRI")) obj.descricao = val;
         if (header.includes("REMETENTE")) obj.remetente = val;
         if (header.includes("NOTA FISCAL")) obj.notaFiscal = val;
@@ -111,7 +115,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (header.includes("CONSULTOR")) obj.consultor = val;
           if (header.includes("CLIENTE")) obj.cliente = val;
           if (header.includes("CONTATO")) obj.contato = val;
-          if (header.includes("REFER")) obj.referencia = String(val).trim();
+          if (isColunaReferencia) obj.referencia = String(val).trim(); // 🚀 Mudado para bater com "REF."
           if (header.includes("STATUS")) obj.status = val;
       }
     });
@@ -143,7 +147,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   return filtered;
 }
 
-// 🚀 ADICIONAR LINHA - VERSÃO BULLETPROOF (À PROVA DE FALHAS)
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
     if (!spreadsheetId) throw new Error("URL inválida.");
@@ -151,28 +154,23 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
     
-    // 1. Busca todas as abas que existem fisicamente na planilha conectada
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
     const abasDisponiveis = spreadsheet.data.sheets?.map(s => s.properties?.title) || [];
 
     let targetSheetName = targetTab;
 
     if (targetTab) {
-        // 2. Procura a aba solicitada ignorando espaços em branco e letras maiúsculas/minúsculas
         const abaEncontrada = abasDisponiveis.find(
             aba => aba?.trim().toUpperCase() === targetTab.trim().toUpperCase()
         );
-
-        // 3. Se não achar, lança um erro CLARO mostrando quais abas o sistema está enxergando
         if (!abaEncontrada) {
-            throw new Error(`A aba não existe no arquivo vinculado! Abas encontradas no arquivo: [${abasDisponiveis.join(' | ')}]`);
+            throw new Error(`A aba não existe no arquivo! Abas: [${abasDisponiveis.join(' | ')}]`);
         }
         targetSheetName = abaEncontrada;
     } else {
         targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
     }
 
-    // 4. Grava os dados na aba exata que foi encontrada
     await sheets.spreadsheets.values.append({
         spreadsheetId,
         range: `'${targetSheetName}'!A:Z`,
@@ -182,7 +180,7 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
     });
 }
 
-// Funções mantidas como base
+// Funções base mantidas
 export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: string, val: string) { }
 export async function updateFullRow(sheetsUrl: string, rowNum: number, rowData: any[]) { }
 export async function deleteSheetRow(sheetsUrl: string, rowNum: number) { }
