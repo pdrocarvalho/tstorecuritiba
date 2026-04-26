@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../_core/trpc"; 
-import { google } from "googleapis"; // <-- Importado para atualizar células específicas
+import { google } from "googleapis";
 import { 
   fetchLiveGoogleSheet, 
   addRowToSheet, 
@@ -14,7 +14,6 @@ import {
   extractSpreadsheetId
 } from "../engines/sync.engine";
 
-// 🚀 Importa os serviços de E-mail
 import { sendAvariaNotification, sendDemandaNotification } from "../services/gmail.service"; 
 
 const validateAdminPin = (pinEnviado: string) => {
@@ -24,7 +23,6 @@ const validateAdminPin = (pinEnviado: string) => {
   }
 };
 
-// 🛠️ Função Auxiliar: Atualiza EXATAMENTE a célula de Status na aba correta
 async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: number, novoStatus: string) {
   const spreadsheetId = extractSpreadsheetId(url);
   if (!spreadsheetId) return;
@@ -39,7 +37,6 @@ async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: numb
 
   const sheets = google.sheets({ version: "v4", auth });
   
-  // Coluna E é a 5ª coluna, onde fica o STATUS
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${aba}'!E${rowNumber}`, 
@@ -52,7 +49,7 @@ async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: numb
 export const notificationsRouter = router({
   
   // --------------------------------------------------------
-  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS
+  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (ATUALIZADO)
   // --------------------------------------------------------
   rodarAutomacaoDemandas: publicProcedure
     .input(z.object({ 
@@ -60,12 +57,10 @@ export const notificationsRouter = router({
       urlDemandas: z.string() 
     }))
     .mutation(async ({ input }) => {
-      // 1. Puxa todos os dados
       const estoque = await fetchLiveGoogleSheet(input.urlRecebimento, 'recebimento').catch(() => []);
       const alertas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-ALERTA_DE_DEMANDA').catch(() => []);
       const vendas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-VENDA_FUTURA').catch(() => []);
 
-      // 2. Mapeia o estoque para busca ultra-rápida
       const estoqueMap = new Map<string, any>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
 
@@ -73,6 +68,7 @@ export const notificationsRouter = router({
         if (!item.produtoSku) continue;
         const sku = String(item.produtoSku).trim().toUpperCase();
         
+        // 🚀 LÓGICA ATUALIZADA: Se o SKU está no estoque, no mínimo ele está FATURADO
         let estagio = "FATURADO";
         let dataFormatada = "";
         
@@ -80,16 +76,17 @@ export const notificationsRouter = router({
           estagio = "CHEGOU";
           dataFormatada = item.dataEntrega instanceof Date ? item.dataEntrega.toLocaleDateString('pt-BR') : item.dataEntrega;
         } else if (item.previsaoEntrega) {
+          // Se não chegou, mas tem data de previsão, sobe para PREVISAO
           estagio = "PREVISAO";
           dataFormatada = item.previsaoEntrega instanceof Date ? item.previsaoEntrega.toLocaleDateString('pt-BR') : item.previsaoEntrega;
         }
+        // Se cair aqui sem os "ifs" acima, permanece como FATURADO (mesmo sem datas)
 
         const atual = estoqueMap.get(sku);
-        // Só salva no mapa se for um estágio mais avançado
         if (!atual || pesoEstagio[estagio as keyof typeof pesoEstagio] > pesoEstagio[atual.estagio as keyof typeof pesoEstagio]) {
           estoqueMap.set(sku, {
             estagio,
-            notaFiscal: item.notaFiscal || "",
+            notaFiscal: item.notaFiscal || "Verificar no Sistema",
             previsao: estagio === "PREVISAO" ? dataFormatada : "",
             dataChegada: estagio === "CHEGOU" ? dataFormatada : "",
             quantidade: item.quantidade || 0
@@ -97,7 +94,6 @@ export const notificationsRouter = router({
         }
       }
 
-      // 3. Função que cruza e envia os e-mails
       const processar = async (lista: any[], tipo: "ALERTA" | "VENDA", abaNome: string) => {
         let notificados = 0;
         
@@ -112,9 +108,7 @@ export const notificationsRouter = router({
             const pesoAtual = pesoEstagio[statusAtual as keyof typeof pesoEstagio] || 0;
             const pesoNovo = pesoEstagio[itemEstoque.estagio as keyof typeof pesoEstagio] || 0;
 
-            // Se o produto AVANÇOU de fase no estoque comparado à planilha de demandas
             if (pesoNovo > pesoAtual) {
-              // Dispara E-mail
               await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
                 consultor: row.consultor || "Consultor",
                 cliente: row.cliente || "Cliente",
@@ -122,7 +116,6 @@ export const notificationsRouter = router({
                 referencia: sku
               }, itemEstoque);
               
-              // Atualiza silenciosamente a Coluna STATUS no Sheets
               await atualizarStatusPlanilha(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
               notificados++;
             }
@@ -131,7 +124,6 @@ export const notificationsRouter = router({
         return notificados;
       };
 
-      // 4. Executa para as duas abas
       const alertasNotificados = await processar(alertas, "ALERTA", "DB-ALERTA_DE_DEMANDA");
       const vendasNotificadas = await processar(vendas, "VENDA", "DB-VENDA_FUTURA");
 
@@ -139,9 +131,6 @@ export const notificationsRouter = router({
     }),
 
 
-  // --------------------------------------------------------
-  // ROTAS ORIGINAIS MANTIDAS
-  // --------------------------------------------------------
   getLiveData: publicProcedure
     .input(z.object({ 
         url: z.string(), 
