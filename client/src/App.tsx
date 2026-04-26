@@ -9,7 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 
 // 🚀 Importando a nossa nova Home
-import Home from "./pages/home";
+import Home from "./pages/home/index";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
