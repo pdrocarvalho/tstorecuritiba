@@ -58,7 +58,7 @@ export default function RecebimentoHistorico() {
   }, []);
 
   const kpis = useMemo(() => {
-    const filtrados = (todosPedidos as Pedido[]).filter((p) => {
+    const filtrados = (todosPedidos as any[]).filter((p) => {
       if (!p.dataEntrega) return false;
 
       const dataEnt = new Date(p.dataEntrega);
@@ -81,15 +81,18 @@ export default function RecebimentoHistorico() {
 
     let totalVolumes = 0;
     const notasSet = new Set<string>();
-    const todosSkusSet = new Set<string>(); // 🚀 NOVO: Balde global para TODOS os SKUs
+    const todosSkusSet = new Set<string>(); 
     const skusPorMundo: Record<string, Set<string>> = {};
     const volumesPorRemetente: Record<string, number> = {};
 
     filtrados.forEach((p) => {
-      totalVolumes += p.quantidade;
+      // 🚀 CORREÇÃO: Usa 'volumesCaixas' em vez de 'quantidade' para métricas físicas
+      const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
+      
+      totalVolumes += qtdeCaixas;
+      
       if (p.notaFiscal) notasSet.add(p.notaFiscal.trim());
       
-      // 🚀 Conta o SKU para a métrica global
       if (p.produtoSku) todosSkusSet.add(p.produtoSku.trim());
       
       const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
@@ -97,13 +100,13 @@ export default function RecebimentoHistorico() {
       skusPorMundo[mundo].add(p.produtoSku);
 
       const rem = p.remetente || "Desconhecido";
-      volumesPorRemetente[rem] = (volumesPorRemetente[rem] || 0) + p.quantidade;
+      volumesPorRemetente[rem] = (volumesPorRemetente[rem] || 0) + qtdeCaixas;
     });
 
     return {
       totalVolumes, 
       totalNotas: notasSet.size,
-      diversidadeSkus: todosSkusSet.size, // 🚀 CORRIGIDO: Agora retorna o tamanho real do balde de SKUs
+      diversidadeSkus: todosSkusSet.size, 
       grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })),
       grafRemetente: Object.entries(volumesPorRemetente)
         .map(([name, value]) => ({ name, value }))
