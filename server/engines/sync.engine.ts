@@ -70,18 +70,25 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   
   const data = rows.slice(headerRowIndex + 1).map((row, index) => {
     const obj: any = { rowNumber: headerRowIndex + index + 2 }; // Guarda o número real da linha para edições futuras!
+    
+    // Variáveis temporárias para a matemática do Recebimento Futuro
+    let tempQtdeCaixa = 0;
+    let tempVolumes = 0;
+    let hasQtdeCaixa = false;
+
     headers.forEach((header, idx) => {
       if (!header) return;
       const val = row[idx] || "";
       const key = header.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
+      
       if (mode === 'recebimento') {
         if (header === "REF." || header === "REF") obj.produtoSku = String(val).trim();
-        if (header === "VOLUMES") obj.quantidade = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
         if (header.includes("DESCRI")) obj.descricao = val;
         if (header.includes("REMETENTE")) obj.remetente = val;
         if (header.includes("NOTA FISCAL")) obj.notaFiscal = val;
         if (header.includes("MUNDO")) obj.mundo = val;
+        
         if (header.includes("PREVIS")) {
             const p = String(val).split("/");
             obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
@@ -90,8 +97,34 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
             const p = String(val).split("/");
             obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
         }
+
+        // 🚀 Captura os números para nossa lógica matemática
+        if (header === "VOLUMES") {
+            tempVolumes = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
+        }
+        if (header.includes("QTDE") && header.includes("CAIXA") || header === "QTDE. POR CAIXA") {
+            tempQtdeCaixa = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
+            hasQtdeCaixa = true;
+        }
       }
     });
+
+    // 🚀 APLICA A MATEMÁTICA INTELIGENTE (Somente no Recebimento Futuro)
+    if (mode === 'recebimento') {
+        if (hasQtdeCaixa) {
+            if (tempVolumes === 0) {
+                // Se zerou o volume na planilha, garante a quantidade unitária de 1 caixa
+                obj.quantidade = tempQtdeCaixa; 
+            } else {
+                // Multiplicação normal: Volumes x Qtde por Caixa
+                obj.quantidade = tempQtdeCaixa * tempVolumes; 
+            }
+        } else {
+            // Se a coluna "QTDE POR CAIXA" não existir na planilha, usa apenas o Volume
+            obj.quantidade = tempVolumes; 
+        }
+    }
+
     return obj;
   });
 

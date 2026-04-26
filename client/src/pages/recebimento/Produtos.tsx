@@ -28,12 +28,23 @@ const MUNDO_COLORS: Record<string, string> = {
 };
 const COR_PADRAO = "#94a3b8";
 
+// Formatador de Data seguro
+const formatarData = (dataStr?: string | Date | null) => {
+  if (!dataStr) return "-";
+  try {
+    const d = new Date(dataStr);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("pt-BR", { timeZone: 'UTC' });
+  } catch {
+    return "-";
+  }
+};
+
 export default function RecebimentoFuturo() {
   const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_recebimento") || "");
   const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_rece_futuro") === "true");
   const [isSincronizando, setIsSincronizando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
-  const [ultimaSincronizacao, setUltimaSincronizacao] = useState<number>(0);
 
   const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
@@ -82,7 +93,7 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 IMPRESSÃO OTIMIZADA PARA A4 COM CÉLULAS PINTADAS
+  // 🚀 IMPRESSÃO OTIMIZADA PARA A4 COM A NOVA COLUNA DE PREVISÃO
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados.");
     const janelaImpressao = window.open('', '_blank');
@@ -100,12 +111,13 @@ export default function RecebimentoFuturo() {
             th, td { border: 1px solid #000; padding: 6px 4px; text-align: left; word-wrap: break-word; }
             th { background-color: #eee !important; -webkit-print-color-adjust: exact; font-weight: bold; text-transform: uppercase; }
             
-            /* 🚀 COLUNAS LARGURA DINÂMICA */
-            .col-rem { width: 18%; }
-            .col-desc { width: 27%; }
-            .col-ref { width: 12%; }
-            .col-mundo { width: 15%; text-align: center; }
-            .col-nf { width: 18%; }
+            /* 🚀 COLUNAS LARGURA DINÂMICA AJUSTADAS */
+            .col-rem { width: 16%; }
+            .col-desc { width: 25%; }
+            .col-ref { width: 10%; }
+            .col-mundo { width: 12%; text-align: center; }
+            .col-nf { width: 15%; }
+            .col-prev { width: 12%; }
             .col-qtd { width: 10%; text-align: right; }
 
             /* 🚀 ESTILO DA CÉLULA PINTADA */
@@ -130,6 +142,7 @@ export default function RecebimentoFuturo() {
                 <th class="col-ref">Ref.</th>
                 <th class="col-mundo">Mundo</th>
                 <th class="col-nf">Nota Fiscal</th>
+                <th class="col-prev">Previsão</th>
                 <th class="col-qtd">Qtde</th>
               </tr>
             </thead>
@@ -145,6 +158,7 @@ export default function RecebimentoFuturo() {
                       ${item.mundo || '-'}
                     </td>
                     <td><b>${item.notaFiscal || '-'}</b></td>
+                    <td>${formatarData(item.previsaoEntrega)}</td>
                     <td style="text-align: right;"><b>${item.quantidade}</b></td>
                   </tr>
                 `;
@@ -265,6 +279,7 @@ export default function RecebimentoFuturo() {
                         <th className="px-4 py-4">Ref.</th>
                         <th className="px-4 py-4">Mundo</th>
                         <th className="px-4 py-4">Nota Fiscal</th>
+                        <th className="px-4 py-4">Previsão</th>
                         <th className="px-4 py-4 text-right">Qtde</th>
                       </tr>
                     </thead>
@@ -283,6 +298,7 @@ export default function RecebimentoFuturo() {
                             </span>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">{item.notaFiscal || '-'}</td>
+                          <td className="px-4 py-3 font-medium text-slate-700">{formatarData(item.previsaoEntrega)}</td>
                           <td className="px-4 py-3 text-right font-black text-blue-600">{item.quantidade}</td>
                         </tr>
                       ))}
