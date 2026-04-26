@@ -4,7 +4,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 
@@ -24,8 +23,10 @@ interface PainelOperacoesProps {
 }
 
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
-  const [urlPlanilha] = useState(() => sessionStorage.getItem("url_recebimento") || "");
+  // 🚀 LÊ TUDO DO COFRE CENTRAL
+  const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
+  
   const isVinculado = !!urlPlanilha;
 
   // 1. Busca os dados de recebimento (Gráficos principais)
@@ -34,7 +35,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     { enabled: isVinculado, refetchInterval: 60000 } 
   );
 
-  // 2. 🚀 O GATILHO DO ROBÔ AUTOMÁTICO
+  // 2. O GATILHO DO ROBÔ AUTOMÁTICO
   const [resultadoAutomacao, setResultadoAutomacao] = useState<{ alertas: number, vendas: number } | null>(null);
   
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
@@ -94,16 +95,23 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         <p className="text-slate-500 font-medium">Aqui está a visão geral do trânsito de mercadorias no momento.</p>
       </div>
 
-      {!isVinculado && (
+      {/* 🚀 AVISO INTELIGENTE: Pede para ir para as Configurações */}
+      {(!urlPlanilha || !urlDemandas) && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3 text-amber-800">
             <AlertTriangle size={20} />
-            <p className="text-sm font-bold">O painel está zerado pois a fonte de dados do Recebimento Futuro não foi vinculada.</p>
+            <p className="text-sm font-bold">
+              {!urlPlanilha && !urlDemandas 
+                ? "As fontes de dados do painel não foram configuradas." 
+                : !urlPlanilha 
+                  ? "A fonte de dados de Recebimento Futuro não foi configurada." 
+                  : "A fonte de dados de Demandas não foi configurada."}
+            </p>
           </div>
-          <Link href="/recebimento-futuro">
-            <Button className="bg-amber-600 text-white hover:bg-amber-700 font-bold">
-              Vincular Planilha
-            </Button>
+          <Link href="/configuracoes">
+            <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors whitespace-nowrap">
+              Ir para Configurações
+            </button>
           </Link>
         </div>
       )}
@@ -155,7 +163,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         </div>
       </div>
 
-      {/* 🚀 BLOCO 3: ALERTAS E DEMANDAS (AGORA DINÂMICO) */}
+      {/* BLOCO 3: ALERTAS E DEMANDAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
         
         {/* Card Alertas */}
