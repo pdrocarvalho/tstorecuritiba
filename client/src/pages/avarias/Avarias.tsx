@@ -4,7 +4,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { 
-  Plus, Search, RefreshCw, Link2, X, AlertOctagon, 
+  Plus, Search, RefreshCw, X, AlertOctagon, 
   CheckCircle2, Clock, Truck, TableProperties, 
   ChevronDown, ChevronUp, Info, Tag, Timer, PackageCheck, 
   HelpCircle, Printer, Filter, Save, Edit, Trash2, Lock
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 const FABRICAS = [
   { nome: "Cutelaria", prefixo: "CTL" },
@@ -37,30 +38,30 @@ const FORM_VAZIO = {
 };
 
 export default function GestaoAvarias() {
-  const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_avarias") || "");
-  const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_avarias") === "true");
+  // 🚀 ATUALIZADO: Agora busca a URL diretamente do cofre central (localStorage)
+  const [urlPlanilha] = useState(() => localStorage.getItem("url_avarias") || "");
+  const isVinculado = !!urlPlanilha;
 
-  const [isSincronizando, setIsSincronizando] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [filtroSku, setFiltroSku] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
-  // 🚀 ESTADOS DO CRUD E SEGURANÇA
+  // ESTADOS DO CRUD E SEGURANÇA
   const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
   
   const [pinModal, setPinModal] = useState<{ isOpen: boolean, action: 'edit' | 'delete' | null, avariaTarget?: any }>({ isOpen: false, action: null });
   const [pinValue, setPinValue] = useState("");
 
-  const { data: todasAvarias = [], refetch } = trpc.notifications.getLiveData.useQuery(
+  const { data: todasAvarias = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' }, 
-    { enabled: isVinculado && !!urlPlanilha }
+    { enabled: isVinculado }
   );
 
   useEffect(() => {
-    if (isVinculado && urlPlanilha) refetch();
-  }, []);
+    if (isVinculado) refetch();
+  }, [isVinculado]);
 
   // ==========================================
   // MUTATIONS (As setas para o Backend)
@@ -136,10 +137,8 @@ export default function GestaoAvarias() {
     if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("Campos obrigatórios faltando.");
     
     if (editingAvaria) {
-      // Se for edição, pede o PIN
       setPinModal({ isOpen: true, action: 'edit' });
     } else {
-      // Se for novo, salva direto sem PIN
       const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
       const prefixo = fabrica?.prefixo || "AVR";
       const codigosExistentes = todasAvarias.map((a: any) => String(a.CÓD__AVARIA || a.COD__AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
@@ -154,7 +153,6 @@ export default function GestaoAvarias() {
     }
   };
 
-  // Executa a ação após digitar a senha
   const executarAcaoComPin = () => {
     if (!pinValue) return toast.warning("Digite a senha de gerente.");
 
@@ -166,22 +164,22 @@ export default function GestaoAvarias() {
     else if (pinModal.action === 'edit' && editingAvaria) {
       if (!editingAvaria.rowNumber) return toast.error("Erro interno: Número da linha não encontrado.");
       const linhaAtualizada = [
-        editingAvaria.DATA_DE_ENTRADA, // A (Não muda a data original)
-        form.fabrica,                  // B
-        editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA, // C (Não muda o código)
-        form.ref,                      // D
-        form.descricao,                // E
-        form.qtde,                     // F
-        form.nfEntrada,                // G
-        form.motivo,                   // H
-        form.responsavel,              // I
-        form.lancadoSistema,           // J
-        form.tratativa,                // K
-        form.constaFisicamente,        // L
-        form.status,                   // M
-        form.nfSaida,                  // N
-        form.nfReposicao,              // O
-        form.dataColeta                // P
+        editingAvaria.DATA_DE_ENTRADA, 
+        form.fabrica,                  
+        editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA, 
+        form.ref,                      
+        form.descricao,                
+        form.qtde,                     
+        form.nfEntrada,                
+        form.motivo,                   
+        form.responsavel,              
+        form.lancadoSistema,           
+        form.tratativa,                
+        form.constaFisicamente,        
+        form.status,                   
+        form.nfSaida,                  
+        form.nfReposicao,              
+        form.dataColeta                
       ];
       mutationEdit.mutate({ url: urlPlanilha, rowNumber: editingAvaria.rowNumber, row: linhaAtualizada, pin: pinValue });
     }
@@ -217,8 +215,6 @@ export default function GestaoAvarias() {
     });
   }, [todasAvarias, filtroSku, filtrosAtivos]);
 
-  const handleVincular = async () => { setIsSincronizando(true); try { const result = await refetch(); if (!result.isError) { setIsVinculado(true); sessionStorage.setItem("url_avarias", urlPlanilha); sessionStorage.setItem("vinculado_avarias", "true"); toast.success("Avarias vinculadas!"); } } catch { toast.error("Erro de conexão."); } finally { setIsSincronizando(false); } };
-  const handleCancelar = () => { setIsVinculado(false); setUrlPlanilha(""); sessionStorage.removeItem("url_avarias"); sessionStorage.removeItem("vinculado_avarias"); setExpandedRow(null); setFiltrosAtivos([]); };
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -275,42 +271,38 @@ export default function GestaoAvarias() {
           </div>
           {isVinculado && (
             <div className="flex gap-3">
-              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50"><Printer size={18}/> Imprimir</button>
+              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 shadow-sm transition-colors"><Printer size={18}/> Imprimir</button>
+              <button onClick={() => refetch()} className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors">
+                <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
+              </button>
               <button onClick={abrirModalNova} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-colors"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
 
-        <Card className="p-4 border-red-100 bg-red-50/30 flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex-1 w-full">
-            <span className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1 block">Fonte de Dados</span>
-            <Input placeholder="Cole o link do Google Sheets..." value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-red-200 rounded-lg" />
-          </div>
-          <div className="flex gap-2 pt-5 w-full md:w-auto">
-            {!isVinculado ? (
-              <button onClick={handleVincular} disabled={isSincronizando} className="flex-1 bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 hover:bg-red-700">
-                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} {isSincronizando ? "Vinculando..." : "Vincular"}
+        {/* 🚀 AVISO SE NÃO ESTIVER VINCULADO */}
+        {!isVinculado && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3 text-amber-800">
+              <AlertOctagon size={20} />
+              <p className="text-sm font-bold">O painel está zerado pois a fonte de dados de Avarias não foi configurada.</p>
+            </div>
+            <Link href="/configuracoes">
+              <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors">
+                Ir para Configurações
               </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button onClick={() => refetch()} disabled={isSincronizando} className="bg-white border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-50">
-                  <RefreshCw size={18} className={isSincronizando ? "animate-spin" : ""} /> {isSincronizando ? "Atualizando..." : "Atualizar"}
-                </button>
-                <button onClick={handleCancelar} className="p-2.5 text-slate-400 hover:text-red-600 bg-white rounded-lg border border-slate-200"><X size={20}/></button>
-              </div>
-            )}
+            </Link>
           </div>
-        </Card>
+        )}
 
         {isVinculado && (
           <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
             <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
               <div className="relative w-full lg:w-96">
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                <Input placeholder="Buscar por REF ou Código..." className="pl-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
+                <Input placeholder="Buscar por REF ou Código..." className="pl-10 bg-white" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
               </div>
               
-              {/* 🚀 FILTROS RESTAURADOS AQUI! */}
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map(s => (
                   <button 
@@ -351,7 +343,6 @@ export default function GestaoAvarias() {
                         {isExpanded && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={7} className="px-10 py-8 relative">
-                              {/* 🚀 BOTÕES DE AÇÃO (CRUD) NO TOPO DA ÁREA EXPANDIDA */}
                               <div className="absolute top-4 right-10 flex gap-2">
                                 <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-2 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors">
                                   <Edit size={14} /> Editar
@@ -399,7 +390,7 @@ export default function GestaoAvarias() {
         )}
       </div>
 
-      {/* 🚀 MODAL PRINCIPAL (NOVA OU EDITA AVARIA) */}
+      {/* MODAL PRINCIPAL (NOVA OU EDITA AVARIA) */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
@@ -412,7 +403,6 @@ export default function GestaoAvarias() {
             </div>
 
             <div className="p-6">
-              {/* BLOCO 1: Informações Básicas (Sempre Visível) */}
               <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Dados Principais</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
                 <div className="space-y-1">
@@ -448,7 +438,6 @@ export default function GestaoAvarias() {
                 </div>
               </div>
 
-              {/* BLOCO 2: Logística e Resolução (Aparece só na Edição) */}
               {editingAvaria && (
                 <>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mt-8 mb-4 border-t pt-6">Logística e Tratativa</h4>
