@@ -1,8 +1,8 @@
 /**
  * client/src/pages/home/PainelOperacoes.tsx
  */
-import { useState, useMemo } from "react";
-import { Box, Globe, AlertTriangle, TrendingUp } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,13 +25,34 @@ interface PainelOperacoesProps {
 
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const [urlPlanilha] = useState(() => sessionStorage.getItem("url_recebimento") || "");
+  const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
   const isVinculado = !!urlPlanilha;
 
+  // 1. Busca os dados de recebimento (Gráficos principais)
   const { data: todosPedidos = [] } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
     { enabled: isVinculado, refetchInterval: 60000 } 
   );
 
+  // 2. 🚀 O GATILHO DO ROBÔ AUTOMÁTICO
+  const [resultadoAutomacao, setResultadoAutomacao] = useState<{ alertas: number, vendas: number } | null>(null);
+  
+  const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
+    onSuccess: (data) => {
+      setResultadoAutomacao({ alertas: data.alertasNotificados, vendas: data.vendasNotificadas });
+    }
+  });
+
+  // Assim que a tela carrega, manda o robô cruzar os dados!
+  useEffect(() => {
+    if (urlPlanilha && urlDemandas) {
+      automacao.mutate({ urlRecebimento: urlPlanilha, urlDemandas: urlDemandas });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPlanilha, urlDemandas]);
+
+
+  // 3. Cálculos dos KPIs Superiores
   const kpis = useMemo(() => {
     if (!isVinculado) return { caixasPorFabrica: {}, skusPorMundo: {} };
 
@@ -62,6 +83,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
 
     return { caixasPorFabrica, skusPorMundo };
   }, [todosPedidos, isVinculado]);
+
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
@@ -133,27 +155,52 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         </div>
       </div>
 
-      {/* BLOCO 3: ALERTAS E DEMANDAS */}
+      {/* 🚀 BLOCO 3: ALERTAS E DEMANDAS (AGORA DINÂMICO) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+        
+        {/* Card Alertas */}
         <Card className="p-0 overflow-hidden border-2 border-red-200 shadow-sm flex flex-col">
           <div className="bg-red-100 text-red-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-red-200 flex items-center justify-center gap-2">
             <AlertTriangle size={16} /> Alerta de Demanda
           </div>
-          <div className="p-8 text-center bg-white flex-1 flex flex-col justify-center">
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Aguardando Lógica...</p>
+          <div className="p-6 text-center bg-white flex-1 flex flex-col justify-center items-center gap-2">
+            {!urlDemandas ? (
+              <p className="text-sm font-bold text-slate-400 uppercase">Planilha não vinculada</p>
+            ) : automacao.isPending ? (
+              <p className="text-sm font-bold text-slate-400 uppercase flex items-center gap-2"><RefreshCw className="animate-spin text-red-500" size={16}/> Lendo estoque...</p>
+            ) : resultadoAutomacao ? (
+              <>
+                <span className="text-4xl font-black text-red-600">{resultadoAutomacao.alertas}</span>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={14} className="text-green-500"/> Notificações Enviadas Hoje</p>
+              </>
+            ) : (
+              <p className="text-sm font-bold text-slate-400 uppercase">Aguardando dados...</p>
+            )}
           </div>
         </Card>
 
+        {/* Card Vendas Futuras */}
         <Card className="p-0 overflow-hidden border-2 border-blue-200 shadow-sm flex flex-col">
           <div className="bg-blue-100 text-blue-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-blue-200 flex items-center justify-center gap-2">
             <TrendingUp size={16} /> Venda Futura
           </div>
-          <div className="p-8 text-center bg-white flex-1 flex flex-col justify-center">
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Aguardando Lógica...</p>
+          <div className="p-6 text-center bg-white flex-1 flex flex-col justify-center items-center gap-2">
+            {!urlDemandas ? (
+              <p className="text-sm font-bold text-slate-400 uppercase">Planilha não vinculada</p>
+            ) : automacao.isPending ? (
+              <p className="text-sm font-bold text-slate-400 uppercase flex items-center gap-2"><RefreshCw className="animate-spin text-blue-500" size={16}/> Lendo estoque...</p>
+            ) : resultadoAutomacao ? (
+              <>
+                <span className="text-4xl font-black text-blue-600">{resultadoAutomacao.vendas}</span>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={14} className="text-green-500"/> Notificações Enviadas Hoje</p>
+              </>
+            ) : (
+              <p className="text-sm font-bold text-slate-400 uppercase">Aguardando dados...</p>
+            )}
           </div>
         </Card>
-      </div>
 
+      </div>
     </div>
   );
 }
