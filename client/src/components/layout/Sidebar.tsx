@@ -3,7 +3,7 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon } from "lucide-react";
+import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList } from "lucide-react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -11,6 +11,7 @@ export default function Sidebar() {
   const menuItems = [
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
+    { path: "/demandas", label: "Registro de Demandas", icon: ClipboardList },
     { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
   ];
 

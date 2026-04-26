@@ -8,11 +8,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 
-// 🚀 Importando a nossa nova Home
+// 🚀 Importando a nossa nova Home e a nova tela de Demandas
 import Home from "./pages/home/index";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
+import RegistroDemandas from "./pages/demandas/RegistroDemandas"; // <-- ADICIONADO
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -38,7 +39,7 @@ export default function App() {
             {/* Rotas públicas */}
             <Route path="/login" component={Login} />
             
-            {/* 🚀 Rota Raiz (A própria Home já decide se mostra o Dashboard ou a Tela Visitante) */}
+            {/* 🚀 Rota Raiz */}
             <Route path="/" component={Home} />
             <Route path={ROUTES.home} component={Home} />
             
@@ -46,6 +47,7 @@ export default function App() {
             <ProtectedRoute path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <ProtectedRoute path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
             <ProtectedRoute path={ROUTES.avarias} component={GestaoAvarias} />
+            <ProtectedRoute path="/demandas" component={RegistroDemandas} /> {/* <-- ADICIONADO */}
             
             <Route component={NotFound} />
           </Switch>
