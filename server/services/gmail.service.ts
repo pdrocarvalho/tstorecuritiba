@@ -66,7 +66,7 @@ export async function sendBulkEmails(emails: EmailPayload[]): Promise<number> {
 }
 
 // =============================================================================
-// 🚀 NOTIFICAÇÕES ESPECÍFICAS DE AVARIAS (MODELO INFO-BLOCKS)
+// 🚀 NOTIFICAÇÕES ESPECÍFICAS DE AVARIAS (MODELO INFO-BLOCKS APRIMORADO)
 // =============================================================================
 
 export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXCLUÍDA', data: any, previousData?: any) {
@@ -91,7 +91,43 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
       titleColor = '#16a34a'; // Verde
   }
 
-  // Lógica para formatar o texto "De/Para" se houver dados anteriores
+  // 🚀 LÓGICA DE RESUMO DE ALTERAÇÕES
+  let changesSummaryHtml = "";
+  if (action === 'EDITADA' && previousData) {
+    const changes: string[] = [];
+    
+    // Função auxiliar para comparar um campo
+    const compareAndAdd = (label: string, newVal: any, oldVal: any) => {
+      const n = String(newVal || '').trim();
+      const o = String(oldVal || '').trim();
+      if (n !== o) {
+         changes.push(`<li style="margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed #d1d5db;">Editado o campo <strong>${label}</strong>:<br> De: <span style="color: #6b7280; text-decoration: line-through;">${o || '(Vazio)'}</span> &rarr; Para: <strong style="color: #15803d;">${n || '(Vazio)'}</strong></li>`);
+      }
+    };
+
+    // Compara todos os campos relevantes
+    compareAndAdd("Quantidade", data.qtde || data.QTDE_, previousData.QTDE_);
+    compareAndAdd("Fábrica", data.fabrica || data.FABRICA, previousData.FABRICA);
+    compareAndAdd("SKU/REF", data.ref || data.REF_, previousData.REF_);
+    compareAndAdd("Descrição", data.descricao || data.DESCRICAO, previousData.DESCRICAO);
+    compareAndAdd("Motivo", data.motivo || data.MOTIVO, previousData.MOTIVO);
+    compareAndAdd("Origem da Demanda", data.responsavel || data.RESPONSAVEL, previousData.RESPONSAVEL);
+    compareAndAdd("Tratativa Externa", data.tratativa || data.TRATATIVA, previousData.TRATATIVA);
+    compareAndAdd("Status Interno", data.status || data.STATUS, previousData.STATUS);
+
+    if (changes.length > 0) {
+       changesSummaryHtml = `
+         <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; margin: 20px 0; border-radius: 8px;">
+           <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: bold; color: #166534; text-transform: uppercase;">✅ Resumo de Alterações:</p>
+           <ul style="margin: 0; padding-left: 0; font-size: 13px; color: #374151; line-height: 1.6; list-style-type: none;">
+             ${changes.join('')}
+           </ul>
+         </div>
+       `;
+    }
+  }
+
+  // Lógica para formatar o texto "De/Para" nos blocos detalhados
   const formatChange = (newValue: any, oldValue: any) => {
     if (action === 'EDITADA' && oldValue !== undefined && newValue !== oldValue) {
       return `De <span style="color: #9ca3af; text-decoration: line-through;">${oldValue || '-'}</span> Para <strong style="color: #166534;">${newValue || '-'}</strong>`;
@@ -105,8 +141,10 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
         AVARIA ${action}
       </h2>
       
-      <p style="font-size: 13px;">Olá, a avaria <strong>${data.codAvaria || data.COD__AVARIA || '-'}</strong> sofreu a seguinte ação no sistema: <strong style="color: ${titleColor};">${action}</strong>. Veja os detalhes abaixo:</p>
+      <p style="font-size: 13px; line-height: 1.5;">Olá, a avaria <strong>${data.codAvaria || data.COD__AVARIA || '-'}</strong> sofreu a seguinte ação no sistema: <strong style="color: ${titleColor};">${action}</strong>.</p>
       
+      ${changesSummaryHtml}
+
       <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
         <h4 style="margin: 0 0 10px 0; color: #4b5563; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">📦 Informações do Produto</h4>
         <div style="font-size: 13px; line-height: 1.6;">
@@ -130,7 +168,7 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
       <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
         <h4 style="margin: 0 0 10px 0; color: #4b5563; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">👤 Origem da Demanda</h4>
         <div style="font-size: 13px; line-height: 1.6;">
-          <p style="margin: 4px 0;">Identificada por: <strong>${data.responsavel || data.RESPONSAVEL || data.RESPONSÁVEL || '-'}</strong></p>
+          <p style="margin: 4px 0;">Identificada por: ${formatChange(data.responsavel || data.RESPONSAVEL, previousData?.RESPONSAVEL)}</p>
         </div>
       </div>
 
