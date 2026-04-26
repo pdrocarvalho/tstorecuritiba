@@ -16,7 +16,7 @@ function getGoogleAuth() {
   });
 }
 
-function extractSpreadsheetId(url: string) {
+export function extractSpreadsheetId(url: string) {
   const match = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
   return match ? match[1] : null;
 }
@@ -40,9 +40,9 @@ function getSheetNameFromUrl(url: string, spreadsheet: any) {
   return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
-// 🚀 LEITURA MULTI-MODO
-export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' = 'recebimento') {
-  const cacheKey = `${mode}-${sheetsUrl}`;
+// 🚀 LEITURA MULTI-MODO (Agora suporta 'demandas')
+export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' | 'demandas' = 'recebimento', targetTab?: string) {
+  const cacheKey = `${mode}-${targetTab || sheetsUrl}`;
   const now = Date.now();
   if (sheetsCache[cacheKey] && (now - sheetsCache[cacheKey].timestamp < CACHE_TTL_MS)) return sheetsCache[cacheKey].data;
 
@@ -51,8 +51,13 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
 
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-  const targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
+  
+  // Se não passar a aba alvo (targetTab), tenta descobrir pela URL
+  let targetSheetName = targetTab;
+  if (!targetSheetName) {
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+      targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
+  }
 
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId, range: `'${targetSheetName}'!A:Z` 
@@ -102,11 +107,19 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
             hasQtdeCaixa = true;
         }
       }
+
+      // 🚀 Mapeamento simplificado para a aba de Demandas
+      if (mode === 'demandas') {
+          if (header.includes("CONSULTOR")) obj.consultor = val;
+          if (header.includes("CLIENTE")) obj.cliente = val;
+          if (header.includes("CONTATO")) obj.contato = val;
+          if (header.includes("REFER")) obj.referencia = String(val).trim();
+          if (header.includes("STATUS")) obj.status = val;
+      }
     });
 
     if (mode === 'recebimento') {
-        obj.volumesCaixas = tempVolumes; // 🚀 Salva os volumes reais (Caixas)
-
+        obj.volumesCaixas = tempVolumes; 
         if (hasQtdeCaixa) {
             if (tempVolumes === 0) {
                 obj.quantidade = tempQtdeCaixa; 
@@ -116,21 +129,48 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
         } else {
             obj.quantidade = tempVolumes; 
         }
-
-        obj.quantidadePecas = obj.quantidade; // 🚀 Alias para não quebrar compatibilidade
+        obj.quantidadePecas = obj.quantidade; 
     }
 
     return obj;
   });
 
-  const filtered = data.filter(d => mode === 'avarias' ? (d.COD__AVARIA || d.REF_) : (d.produtoSku || d.REF_));
+  // Filtra dependendo do modo
+  const filtered = data.filter(d => {
+      if (mode === 'avarias') return d.COD__AVARIA || d.REF_;
+      if (mode === 'demandas') return d.referencia;
+      return d.produtoSku || d.REF_;
+  });
+  
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
 
-export async function addRowToSheet(sheetsUrl: string, rowData: any[]) { /* ... mantido ... */ }
-export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: string, val: string) { /* ... mantido ... */ }
-export async function updateFullRow(sheetsUrl: string, rowNum: number, rowData: any[]) { /* ... mantido ... */ }
-export async function deleteSheetRow(sheetsUrl: string, rowNum: number) { /* ... mantido ... */ }
+// 🚀 ADICIONAR LINHA (Agora com suporte a nome de aba específico)
+export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
+    const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+    if (!spreadsheetId) throw new Error("URL inválida.");
+
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    
+    let targetSheetName = targetTab;
+    if (!targetSheetName) {
+        const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+        targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
+    }
+
+    await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `'${targetSheetName}'!A:Z`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [rowData] }
+    });
+}
+
+// Funções mantidas como base para compatibilidade
+export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: string, val: string) { }
+export async function updateFullRow(sheetsUrl: string, rowNum: number, rowData: any[]) { }
+export async function deleteSheetRow(sheetsUrl: string, rowNum: number) { }
 export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] }; }
-export async function testarLeituraRobo(url: string) { /* ... mantido ... */ return { status: "success", linhasLidas: 0, exemplo: "" }; }
+export async function testarLeituraRobo(url: string) { return { status: "success", linhasLidas: 0, exemplo: "" }; }

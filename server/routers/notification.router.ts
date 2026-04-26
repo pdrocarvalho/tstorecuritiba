@@ -22,10 +22,27 @@ const validateAdminPin = (pinEnviado: string) => {
 };
 
 export const notificationsRouter = router({
+  // 🚀 ATUALIZADO: Agora aceita o modo "demandas" também
   getLiveData: publicProcedure
-    .input(z.object({ url: z.string(), mode: z.enum(["recebimento", "avarias"]).optional().default("recebimento") }))
+    .input(z.object({ 
+        url: z.string(), 
+        mode: z.enum(["recebimento", "avarias", "demandas"]).optional().default("recebimento") 
+    }))
     .query(async ({ input }) => {
       return await fetchLiveGoogleSheet(input.url, input.mode);
+    }),
+
+  // 🚀 NOVA ROTA: Salva Alertas e Vendas Futuras
+  saveDemanda: publicProcedure
+    .input(z.object({ 
+        url: z.string(), 
+        aba: z.string(), // Qual aba do sheets? (DB-ALERTA_DE_DEMANDA ou DB-VENDA_FUTURA)
+        dados: z.array(z.any()) 
+    }))
+    .mutation(async ({ input }) => {
+      // Repassa para o nosso engine que agora sabe salvar em abas específicas
+      const result = await addRowToSheet(input.url, input.dados, input.aba);
+      return { success: true, result };
     }),
 
   addAvaria: publicProcedure
