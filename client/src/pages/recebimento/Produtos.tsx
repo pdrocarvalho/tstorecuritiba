@@ -56,7 +56,7 @@ export default function RecebimentoFuturo() {
   }, []);
 
   const kpis = useMemo(() => {
-    const futuros = (todosPedidos as Pedido[]).filter((p) => !p.dataEntrega);
+    const futuros = (todosPedidos as any[]).filter((p) => !p.dataEntrega);
     
     // 🚀 ORDENAÇÃO: Por Remetente (A-Z) e depois por Nota Fiscal
     const listaOrdenada = [...futuros].sort((a, b) => {
@@ -75,13 +75,18 @@ export default function RecebimentoFuturo() {
     const volumesPorRemetente: Record<string, number> = {};
 
     listaOrdenada.forEach((p) => {
-      totalVolumesFisicos += p.quantidade;
+      // 🚀 CORREÇÃO: Usa 'volumesCaixas' para somar nos gráficos de volumes físicos
+      const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
+
+      totalVolumesFisicos += qtdeCaixas;
       if (p.notaFiscal) notasEmTransitoSet.add(p.notaFiscal);
+      
       const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
       if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
       skusPorMundo[mundo].add(p.produtoSku);
+      
       const remetente = p.remetente || "Desconhecido";
-      volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + p.quantidade;
+      volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + qtdeCaixas;
     });
 
     return {
