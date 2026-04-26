@@ -13,7 +13,8 @@ import Home from "./pages/home/index";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
-import RegistroDemandas from "./pages/demandas/RegistroDemandas"; // <-- ADICIONADO
+import RegistroDemandas from "./pages/demandas/RegistroDemandas";
+import VincularArquivos from "./pages/configuracoes/VincularArquivos"; // <-- NOVA TELA DE CONFIGURAÇÕES ADICIONADA
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -47,7 +48,8 @@ export default function App() {
             <ProtectedRoute path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <ProtectedRoute path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
             <ProtectedRoute path={ROUTES.avarias} component={GestaoAvarias} />
-            <ProtectedRoute path="/demandas" component={RegistroDemandas} /> {/* <-- ADICIONADO */}
+            <ProtectedRoute path="/demandas" component={RegistroDemandas} />
+            <ProtectedRoute path="/configuracoes" component={VincularArquivos} /> {/* <-- ROTA ADICIONADA */}
             
             <Route component={NotFound} />
           </Switch>
