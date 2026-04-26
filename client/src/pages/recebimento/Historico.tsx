@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { 
-  Link2, RefreshCw, X, Filter, ChevronDown, ChevronUp 
+  RefreshCw, Filter, ChevronDown, ChevronUp, AlertTriangle 
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis
 } from "recharts";
-import { toast } from "sonner"; 
-import type { Pedido } from "@/types";
+import { Link } from "wouter";
 
 // 🎨 PALETA DE CORES VIBRANTES
 const MUNDO_COLORS: Record<string, string> = {
@@ -42,20 +41,21 @@ const INITIAL_FILTERS: FiltrosHistorico = {
 };
 
 export default function RecebimentoHistorico() {
-  const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_historico") || "");
-  const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_historico") === "true");
+  // 🚀 LÊ DO COFRE CENTRAL: O Histórico usa a MESMA base do Recebimento Futuro!
+  const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
+  const isVinculado = !!urlPlanilha;
   
   const [showFilters, setShowFilters] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorico>(INITIAL_FILTERS);
 
-  const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
+  const { data: todosPedidos = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
-    { enabled: isVinculado && !!urlPlanilha }
+    { enabled: isVinculado }
   );
 
   useEffect(() => {
-    if (isVinculado && urlPlanilha) refetch();
-  }, []);
+    if (isVinculado) refetch();
+  }, [isVinculado]);
 
   const kpis = useMemo(() => {
     const filtrados = (todosPedidos as any[]).filter((p) => {
@@ -86,7 +86,6 @@ export default function RecebimentoHistorico() {
     const volumesPorRemetente: Record<string, number> = {};
 
     filtrados.forEach((p) => {
-      // 🚀 CORREÇÃO: Usa 'volumesCaixas' em vez de 'quantidade' para métricas físicas
       const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
       
       totalVolumes += qtdeCaixas;
@@ -115,51 +114,42 @@ export default function RecebimentoHistorico() {
     };
   }, [todosPedidos, filtros]);
 
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Insira o link.");
-    try {
-      const result = await refetch();
-      if (!result.isError) {
-        setIsVinculado(true);
-        sessionStorage.setItem("url_historico", urlPlanilha);
-        sessionStorage.setItem("vinculado_historico", "true");
-        toast.success("Histórico vinculado!");
-      }
-    } catch (e) { toast.error("Erro ao vincular."); }
-  };
-
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Histórico de Entregas</h1>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Histórico de Entregas</h1>
+            <p className="text-gray-600 mt-1">Métricas e relatórios de mercadorias já recebidas na loja.</p>
+          </div>
+          {isVinculado && (
+            <button onClick={() => refetch()} className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors">
+              <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
+            </button>
+          )}
+        </div>
 
-        <Card className="p-4 border-emerald-100 bg-emerald-50/50 flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-emerald-800 uppercase mb-1 block">Banco de Dados Histórico</span>
-            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-emerald-200" />
-          </div>
-          <div className="flex gap-2 pt-5">
-            {!isVinculado ? (
-              <button onClick={handleVincular} className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md">
-                <Link2 size={18} /> Vincular
+        {/* 🚀 AVISO INTELIGENTE SE NÃO ESTIVER VINCULADO */}
+        {!isVinculado && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3 text-amber-800">
+              <AlertTriangle size={20} />
+              <p className="text-sm font-bold">A fonte de dados base do Recebimento não foi configurada.</p>
+            </div>
+            <Link href="/configuracoes">
+              <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors">
+                Ir para Configurações
               </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => refetch()} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2">
-                  <RefreshCw size={18} /> Atualizar
-                </button>
-                <button onClick={() => {setIsVinculado(false); sessionStorage.clear();}} className="p-2.5 text-slate-400 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
-              </div>
-            )}
+            </Link>
           </div>
-        </Card>
+        )}
 
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
             
             {/* SEÇÃO DE FILTROS */}
             <Card className="p-4 border-slate-200 bg-white shadow-sm">
-              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600">
+              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between w-full text-slate-700 font-bold hover:text-blue-600 transition-colors">
                 <div className="flex items-center gap-2"><Filter size={18} /> Filtros de Pesquisa</div>
                 {showFilters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </button>
@@ -176,15 +166,15 @@ export default function RecebimentoHistorico() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="p-5 border-t-4 border-t-emerald-500 shadow-sm">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Volumes Recebidos</p>
-                <h3 className="text-3xl font-black">{kpis.totalVolumes}</h3>
+                <h3 className="text-3xl font-black text-slate-800">{kpis.totalVolumes}</h3>
               </Card>
               <Card className="p-5 border-t-4 border-t-purple-500 shadow-sm">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notas Processadas</p>
-                <h3 className="text-3xl font-black">{kpis.totalNotas}</h3>
+                <h3 className="text-3xl font-black text-slate-800">{kpis.totalNotas}</h3>
               </Card>
               <Card className="p-5 border-t-4 border-t-orange-500 shadow-sm">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Diversidade de SKUs</p>
-                <h3 className="text-3xl font-black">{kpis.diversidadeSkus}</h3>
+                <h3 className="text-3xl font-black text-slate-800">{kpis.diversidadeSkus}</h3>
               </Card>
             </div>
 
