@@ -40,7 +40,7 @@ function getSheetNameFromUrl(url: string, spreadsheet: any) {
   return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
-// 🚀 LEITURA MULTI-MODO (Agora suporta 'demandas')
+// 🚀 LEITURA MULTI-MODO
 export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' | 'demandas' = 'recebimento', targetTab?: string) {
   const cacheKey = `${mode}-${targetTab || sheetsUrl}`;
   const now = Date.now();
@@ -52,7 +52,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
   
-  // Se não passar a aba alvo (targetTab), tenta descobrir pela URL
   let targetSheetName = targetTab;
   if (!targetSheetName) {
       const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
@@ -108,7 +107,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
         }
       }
 
-      // 🚀 Mapeamento simplificado para a aba de Demandas
       if (mode === 'demandas') {
           if (header.includes("CONSULTOR")) obj.consultor = val;
           if (header.includes("CLIENTE")) obj.cliente = val;
@@ -135,7 +133,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
     return obj;
   });
 
-  // Filtra dependendo do modo
   const filtered = data.filter(d => {
       if (mode === 'avarias') return d.COD__AVARIA || d.REF_;
       if (mode === 'demandas') return d.referencia;
@@ -146,7 +143,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   return filtered;
 }
 
-// 🚀 ADICIONAR LINHA (CORRIGIDO: Removido o '!A:Z' para evitar erro de parse do Google)
+// 🚀 ADICIONAR LINHA - VERSÃO BULLETPROOF (À PROVA DE FALHAS)
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
     if (!spreadsheetId) throw new Error("URL inválida.");
@@ -154,22 +151,38 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
     
+    // 1. Busca todas as abas que existem fisicamente na planilha conectada
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const abasDisponiveis = spreadsheet.data.sheets?.map(s => s.properties?.title) || [];
+
     let targetSheetName = targetTab;
-    if (!targetSheetName) {
-        const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+
+    if (targetTab) {
+        // 2. Procura a aba solicitada ignorando espaços em branco e letras maiúsculas/minúsculas
+        const abaEncontrada = abasDisponiveis.find(
+            aba => aba?.trim().toUpperCase() === targetTab.trim().toUpperCase()
+        );
+
+        // 3. Se não achar, lança um erro CLARO mostrando quais abas o sistema está enxergando
+        if (!abaEncontrada) {
+            throw new Error(`A aba não existe no arquivo vinculado! Abas encontradas no arquivo: [${abasDisponiveis.join(' | ')}]`);
+        }
+        targetSheetName = abaEncontrada;
+    } else {
         targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
     }
 
+    // 4. Grava os dados na aba exata que foi encontrada
     await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: targetSheetName, // 🚀 Ajuste crítico feito aqui
+        range: `'${targetSheetName}'!A:Z`,
         valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS", // 🚀 Garante a inserção correta
+        insertDataOption: "INSERT_ROWS",
         requestBody: { values: [rowData] }
     });
 }
 
-// Funções mantidas como base para compatibilidade
+// Funções mantidas como base
 export async function updateSheetRow(sheetsUrl: string, rowNum: number, col: string, val: string) { }
 export async function updateFullRow(sheetsUrl: string, rowNum: number, rowData: any[]) { }
 export async function deleteSheetRow(sheetsUrl: string, rowNum: number) { }
