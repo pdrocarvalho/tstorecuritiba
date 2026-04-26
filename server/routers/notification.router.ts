@@ -48,7 +48,7 @@ async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: numb
 export const notificationsRouter = router({
   
   // --------------------------------------------------------
-  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (VERSÃO BLINDADA)
+  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (COM LOGS DE DIAGNÓSTICO)
   // --------------------------------------------------------
   rodarAutomacaoDemandas: publicProcedure
     .input(z.object({ 
@@ -60,17 +60,22 @@ export const notificationsRouter = router({
       const alertas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-ALERTA_DE_DEMANDA').catch(() => []);
       const vendas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-VENDA_FUTURA').catch(() => []);
 
+      // 🚀 LOG DE DIAGNÓSTICO INICIAL
+      console.log("--------------------------------------------------");
+      console.log("📊 [DIAGNÓSTICO ROBÔ] Iniciando Cruzamento...");
+      console.log(`- Linhas no Recebimento: ${estoque.length}`);
+      console.log(`- Linhas em Alerta de Demanda: ${alertas.length}`);
+      console.log(`- Linhas em Venda Futura: ${vendas.length}`);
+
       const estoqueMap = new Map<string, any>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
 
-      // 🚀 FUNÇÃO DE LIMPEZA: Remove tudo que não é letra ou número para garantir o match
       const limparSKU = (sku: any) => String(sku || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
 
       for (const item of estoque) {
         if (!item.produtoSku) continue;
         const skuLimpo = limparSKU(item.produtoSku);
         
-        // Se o SKU existe no estoque, o estágio base é FATURADO (mesmo sem datas)
         let estagio = "FATURADO";
         let dataFormatada = "";
         
@@ -94,6 +99,12 @@ export const notificationsRouter = router({
         }
       }
 
+      // 🚀 LOG: Mostra um exemplo do que tem no Mapa de Estoque
+      if (estoqueMap.size > 0) {
+          const primeiroSKU = Array.from(estoqueMap.keys())[0];
+          console.log(`- Exemplo de SKU no Mapa (Recebimento): "${primeiroSKU}"`);
+      }
+
       const processar = async (lista: any[], tipo: "ALERTA" | "VENDA", abaNome: string) => {
         let notificados = 0;
         
@@ -104,17 +115,20 @@ export const notificationsRouter = router({
           
           const itemEstoque = estoqueMap.get(skuDemandaLimpo);
           
+          // 🚀 LOG: Mostra a tentativa de match para cada linha da planilha de demandas
+          console.log(`🔎 [Busca] SKU: ${skuDemandaLimpo} | Status Atual: ${statusAtual} | Encontrou no Estoque? ${itemEstoque ? 'SIM (' + itemEstoque.estagio + ')' : 'NÃO'}`);
+
           if (itemEstoque) {
             const pesoAtual = pesoEstagio[statusAtual as keyof typeof pesoEstagio] || 0;
             const pesoNovo = pesoEstagio[itemEstoque.estagio as keyof typeof pesoEstagio] || 0;
 
-            // Se o que achamos no estoque é "maior" do que o que está na planilha, avisa!
             if (pesoNovo > pesoAtual) {
+              console.log(`✅ [Match!] SKU ${skuDemandaLimpo} vai disparar e-mail.`);
               await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
                 consultor: row.consultor || "Consultor",
                 cliente: row.cliente || "Cliente",
                 contato: row.contato || "",
-                referencia: row.referencia // Mantemos a original para o e-mail
+                referencia: row.referencia 
               }, itemEstoque);
               
               await atualizarStatusPlanilha(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
@@ -128,10 +142,13 @@ export const notificationsRouter = router({
       const nAlertas = await processar(alertas, "ALERTA", "DB-ALERTA_DE_DEMANDA");
       const nVendas = await processar(vendas, "VENDA", "DB-VENDA_FUTURA");
 
+      console.log(`🏁 [Fim Automação] Notificados: Alertas(${nAlertas}) Vendas(${nVendas})`);
+      console.log("--------------------------------------------------");
+
       return { alertasNotificados: nAlertas, vendasNotificadas: nVendas };
     }),
 
-  // --- MANTIDAS ---
+  // --- RESTANTE DAS ROTAS MANTIDAS ---
   getLiveData: publicProcedure.input(z.object({ url: z.string(), mode: z.enum(["recebimento", "avarias", "demandas"]).optional().default("recebimento") })).query(async ({ input }) => { return await fetchLiveGoogleSheet(input.url, input.mode); }),
   saveDemanda: publicProcedure.input(z.object({ url: z.string(), aba: z.string(), dados: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.dados, input.aba); return { success: true, result }; }),
   addAvaria: publicProcedure.input(z.object({ url: z.string(), row: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.row); const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8], tratativa: input.row[10] || 'PENDENTE', status: input.row[12] || 'PENDENTE' }; sendAvariaNotification('CRIADA', data); return result; }),
