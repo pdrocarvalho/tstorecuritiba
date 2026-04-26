@@ -33,10 +33,6 @@ function createTransport() {
 // ENVIO DE E-MAILS
 // =============================================================================
 
-/**
- * Envia um único e-mail.
- * Retorna true em caso de sucesso, false em caso de falha (sem lançar exceção).
- */
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   try {
     const transport = createTransport();
@@ -53,10 +49,6 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   }
 }
 
-/**
- * Envia múltiplos e-mails em paralelo.
- * Retorna a contagem de e-mails enviados com sucesso.
- */
 export async function sendBulkEmails(emails: EmailPayload[]): Promise<number> {
   if (emails.length === 0) return 0;
 
@@ -112,7 +104,8 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
       <h2 style="color: ${titleColor}; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-top: 0; text-transform: uppercase;">
         AVARIA ${action}
       </h2>
-      <p style="font-size: 13px;">Olá, a avaria <strong>${data.codAvaria || data.COD__AVARIA || '-'}</strong> foi ${action.toLowerCase()} por ${data.responsavel || data.RESPONSAVEL || '-'}. Veja os detalhes:</p>
+      
+      <p style="font-size: 13px;">Olá, a avaria <strong>${data.codAvaria || data.COD__AVARIA || '-'}</strong> sofreu a seguinte ação no sistema: <strong style="color: ${titleColor};">${action}</strong>. Veja os detalhes abaixo:</p>
       
       <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
         <h4 style="margin: 0 0 10px 0; color: #4b5563; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">📦 Informações do Produto</h4>
@@ -131,6 +124,13 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
           <p style="margin: 4px 0;">Motivo: <em>${formatChange(data.motivo || data.MOTIVO, previousData?.MOTIVO)}</em></p>
           <p style="margin: 4px 0; margin-top: 8px;">Tratativa Externa: ${formatChange(data.tratativa || data.TRATATIVA || 'PENDENTE', previousData?.TRATATIVA)}</p>
           <p style="margin: 4px 0;">Status Interno: ${formatChange(data.status || data.STATUS || 'PENDENTE', previousData?.STATUS)}</p>
+        </div>
+      </div>
+
+      <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h4 style="margin: 0 0 10px 0; color: #4b5563; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">👤 Origem da Demanda</h4>
+        <div style="font-size: 13px; line-height: 1.6;">
+          <p style="margin: 4px 0;">Identificada por: <strong>${data.responsavel || data.RESPONSAVEL || data.RESPONSÁVEL || '-'}</strong></p>
         </div>
       </div>
 
