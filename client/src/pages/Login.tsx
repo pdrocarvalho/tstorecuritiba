@@ -28,14 +28,16 @@ export default function Login() {
 
       const data = await res.json();
       
-      // 🚀 PADRONIZAÇÃO: Agora usamos 'auth_token' para bater com o App.tsx
+      // 🚀 SALVA-VIDAS: Salvamos com os dois nomes para nenhum sistema falhar ao procurar!
       localStorage.setItem("auth_token", data.token);
-      localStorage.setItem("userRole", data.role);
+      localStorage.setItem("token", data.token);
+      sessionStorage.setItem("auth_token", data.token);
+      
+      if (data.role) localStorage.setItem("userRole", data.role);
       
       toast.success(`Bem-vindo, ${data.name?.split(" ")[0] || "Usuário"}!`);
       
-      // 🚀 REDIRECIONAMENTO FORÇADO: 
-      // Limpa erros do Google e garante que o segunrança do App.tsx veja a chave nova.
+      // 🚀 REDIRECIONAMENTO FORÇADO
       setTimeout(() => {
         window.location.href = "/";
       }, 1000);

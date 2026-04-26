@@ -12,23 +12,19 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
 
   // 🚀 INTERCEPTADOR DE TOKEN (O SALVA-VIDAS)
-  // Pesca o token que o Google joga na URL e guarda no cofre do sistema
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    // Procura por ?token=... ou ?auth_token=... na URL
     const tokenNaUrl = params.get("token") || params.get("auth_token");
 
     if (tokenNaUrl) {
-      // Guarda no cofre!
       localStorage.setItem("auth_token", tokenNaUrl);
+      localStorage.setItem("token", tokenNaUrl); // Salva com ambos os nomes
       sessionStorage.setItem("auth_token", tokenNaUrl);
-      
-      // Limpa a URL e recarrega a página para o sistema te reconhecer logado
       window.location.replace("/"); 
     }
   }, []);
 
-  // 1. Estado de Carregamento
+  // 1. Estado de Carregamento Principal
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -37,15 +33,20 @@ export default function Home() {
     );
   }
 
-  // 2. Visitantes (Não Logados)
-  if (!isAuthenticated) {
+  // 2. Verificação Dupla de Segurança
+  // Verifica se o useAuth liberou OU se existe fisicamente o token salvo no navegador
+  const temTokenNoCofre = !!localStorage.getItem("auth_token") || !!localStorage.getItem("token");
+  const isLogged = isAuthenticated || temTokenNoCofre;
+
+  // 3. Visitantes (Não Logados)
+  if (!isLogged) {
     return <TelaVisitante />;
   }
 
-  // 3. Utilizadores Logados
+  // 4. Utilizadores Logados
   return (
     <MainLayout>
-      <PainelOperacoes userName={user?.name} />
+      <PainelOperacoes userName={user?.name || "Equipe"} />
     </MainLayout>
   );
 }
