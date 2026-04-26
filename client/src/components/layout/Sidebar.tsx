@@ -3,7 +3,7 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList } from "lucide-react";
+import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList, Settings } from "lucide-react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -13,12 +13,13 @@ export default function Sidebar() {
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
     { path: "/demandas", label: "Registro de Demandas", icon: ClipboardList },
     { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
+    { path: "/configuracoes", label: "Configurações", icon: Settings }, // 🚀 ADICIONADO
   ];
 
-  // 🚀 ATUALIZADO: Limpa todas as possíveis chaves do cofre
+  // Limpa todas as possíveis chaves do cofre
   const handleLogout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("auth_token"); // Adicionado!
+    localStorage.removeItem("auth_token"); 
     localStorage.removeItem("userRole");
     
     // Limpa todas as URLs de planilhas vinculadas nesta sessão
@@ -30,7 +31,7 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-20 flex-shrink-0">
       
-      {/* 🚀 Logotipo / Título - AGORA CLICÁVEL APONTANDO PARA A HOME */}
+      {/* 🚀 Logotipo / Título - CLICÁVEL APONTANDO PARA A HOME */}
       <Link href="/">
         <a className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950 hover:bg-slate-900 transition-colors cursor-pointer group">
           <Store className="text-blue-500 mr-3 group-hover:scale-110 transition-transform" size={24} />
