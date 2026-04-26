@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 
+// 🚀 Importando a nossa nova Home
+import Home from "./pages/home";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
@@ -33,12 +35,14 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Switch>
-            {/* Rota pública */}
+            {/* Rotas públicas */}
             <Route path="/login" component={Login} />
             
-            {/* Rotas protegidas */}
-            <ProtectedRoute path="/" component={RecebimentoProdutos} />
-            <ProtectedRoute path={ROUTES.home} component={RecebimentoProdutos} />
+            {/* 🚀 Rota Raiz (A própria Home já decide se mostra o Dashboard ou a Tela Visitante) */}
+            <Route path="/" component={Home} />
+            <Route path={ROUTES.home} component={Home} />
+            
+            {/* Rotas protegidas (Só acessa se tiver logado) */}
             <ProtectedRoute path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <ProtectedRoute path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
             <ProtectedRoute path={ROUTES.avarias} component={GestaoAvarias} />
