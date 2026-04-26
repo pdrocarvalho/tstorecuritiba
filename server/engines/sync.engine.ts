@@ -146,7 +146,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   return filtered;
 }
 
-// 🚀 ADICIONAR LINHA (Agora com suporte a nome de aba específico)
+// 🚀 ADICIONAR LINHA (CORRIGIDO: Removido o '!A:Z' para evitar erro de parse do Google)
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
     if (!spreadsheetId) throw new Error("URL inválida.");
@@ -162,8 +162,9 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
 
     await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `'${targetSheetName}'!A:Z`,
+        range: targetSheetName, // 🚀 Ajuste crítico feito aqui
         valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS", // 🚀 Garante a inserção correta
         requestBody: { values: [rowData] }
     });
 }
