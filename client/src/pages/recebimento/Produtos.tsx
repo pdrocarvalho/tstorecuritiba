@@ -4,11 +4,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { 
-  Link2, RefreshCw, X, Package, Truck, AlertTriangle, 
+  RefreshCw, Package, Truck, AlertTriangle, 
   ChevronDown, ChevronUp, Printer 
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { 
@@ -16,7 +15,7 @@ import {
   Tooltip, ResponsiveContainer, Legend 
 } from "recharts";
 import { toast } from "sonner"; 
-import type { Pedido } from "@/types";
+import { Link } from "wouter";
 
 // 🎨 PALETA DE CORES VIBRANTES (PADRONIZADA)
 const MUNDO_COLORS: Record<string, string> = {
@@ -41,24 +40,25 @@ const formatarData = (dataStr?: string | Date | null) => {
 };
 
 export default function RecebimentoFuturo() {
-  const [urlPlanilha, setUrlPlanilha] = useState(() => sessionStorage.getItem("url_recebimento") || "");
-  const [isVinculado, setIsVinculado] = useState(() => sessionStorage.getItem("vinculado_rece_futuro") === "true");
-  const [isSincronizando, setIsSincronizando] = useState(false);
+  // 🚀 ATUALIZADO: Lendo o link do Cofre Central
+  const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
+  const isVinculado = !!urlPlanilha;
+  
   const [mostrarLista, setMostrarLista] = useState(false);
 
-  const { data: todosPedidos = [], refetch } = trpc.notifications.getLiveData.useQuery(
+  const { data: todosPedidos = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
-    { enabled: isVinculado && !!urlPlanilha }
+    { enabled: isVinculado }
   );
 
   useEffect(() => {
-    if (isVinculado && urlPlanilha) refetch();
-  }, []);
+    if (isVinculado) refetch();
+  }, [isVinculado]);
 
   const kpis = useMemo(() => {
     const futuros = (todosPedidos as any[]).filter((p) => !p.dataEntrega);
     
-    // 🚀 ORDENAÇÃO: Por Remetente (A-Z) e depois por Nota Fiscal
+    // ORDENAÇÃO: Por Remetente (A-Z) e depois por Nota Fiscal
     const listaOrdenada = [...futuros].sort((a, b) => {
       const remA = (a.remetente || "").toUpperCase();
       const remB = (b.remetente || "").toUpperCase();
@@ -75,7 +75,6 @@ export default function RecebimentoFuturo() {
     const volumesPorRemetente: Record<string, number> = {};
 
     listaOrdenada.forEach((p) => {
-      // 🚀 CORREÇÃO: Usa 'volumesCaixas' para somar nos gráficos de volumes físicos
       const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
 
       totalVolumesFisicos += qtdeCaixas;
@@ -98,7 +97,7 @@ export default function RecebimentoFuturo() {
     };
   }, [todosPedidos]);
 
-  // 🚀 IMPRESSÃO OTIMIZADA PARA A4 COM A NOVA COLUNA DE PREVISÃO
+  // IMPRESSÃO OTIMIZADA PARA A4
   const gerarRelatorioImpressao = () => {
     if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados.");
     const janelaImpressao = window.open('', '_blank');
@@ -116,7 +115,6 @@ export default function RecebimentoFuturo() {
             th, td { border: 1px solid #000; padding: 6px 4px; text-align: left; word-wrap: break-word; }
             th { background-color: #eee !important; -webkit-print-color-adjust: exact; font-weight: bold; text-transform: uppercase; }
             
-            /* 🚀 COLUNAS LARGURA DINÂMICA AJUSTADAS */
             .col-rem { width: 16%; }
             .col-desc { width: 25%; }
             .col-ref { width: 10%; }
@@ -125,7 +123,6 @@ export default function RecebimentoFuturo() {
             .col-prev { width: 12%; }
             .col-qtd { width: 10%; text-align: right; }
 
-            /* 🚀 ESTILO DA CÉLULA PINTADA */
             .mundo-cell { 
                 font-weight: bold; 
                 text-transform: uppercase; 
@@ -178,22 +175,6 @@ export default function RecebimentoFuturo() {
     janelaImpressao.document.close();
   };
 
-  const handleVincular = async () => {
-    if (!urlPlanilha) return toast.warning("Insira o link.");
-    setIsSincronizando(true);
-    try {
-      const result = await refetch();
-      if (!result.isError) {
-        setIsVinculado(true);
-        sessionStorage.setItem("url_recebimento", urlPlanilha);
-        sessionStorage.setItem("vinculado_rece_futuro", "true");
-        toast.success("Vinculado com sucesso!");
-      }
-    } finally {
-      setIsSincronizando(false);
-    }
-  };
-
   return (
     <MainLayout>
       <div className="space-y-6 pb-12">
@@ -203,33 +184,31 @@ export default function RecebimentoFuturo() {
             <p className="text-gray-600">Gestão de mercadorias em trânsito</p>
           </div>
           {isVinculado && (
-            <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:bg-slate-800 transition-all">
-              <Printer size={20} /> Imprimir A4
-            </button>
+            <div className="flex gap-3">
+              <button onClick={() => refetch()} className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors">
+                <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
+              </button>
+              <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-slate-800 transition-all">
+                <Printer size={18} /> Imprimir A4
+              </button>
+            </div>
           )}
         </div>
 
-        {/* INPUT DE VÍNCULO */}
-        <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex-1 w-full">
-            <span className="text-xs font-bold text-blue-800 uppercase mb-1 block">Fonte de Dados</span>
-            <Input value={urlPlanilha} onChange={(e) => setUrlPlanilha(e.target.value)} disabled={isVinculado} className="bg-white border-blue-200" />
-          </div>
-          <div className="flex gap-2 pt-5">
-            {!isVinculado ? (
-              <button onClick={handleVincular} disabled={isSincronizando} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2">
-                {isSincronizando ? <RefreshCw className="animate-spin" size={18} /> : <Link2 size={18} />} Vincular
+        {/* 🚀 AVISO INTELIGENTE SE NÃO ESTIVER VINCULADO */}
+        {!isVinculado && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3 text-amber-800">
+              <AlertTriangle size={20} />
+              <p className="text-sm font-bold">A fonte de dados do Recebimento Futuro não foi configurada.</p>
+            </div>
+            <Link href="/configuracoes">
+              <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors">
+                Ir para Configurações
               </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => refetch()} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md">
-                  <RefreshCw size={18} /> Atualizar
-                </button>
-                <button onClick={() => {setIsVinculado(false); setUrlPlanilha(""); sessionStorage.clear();}} className="p-2.5 text-slate-400 hover:text-red-600 bg-white rounded-lg border border-slate-200"><X size={20} /></button>
-              </div>
-            )}
+            </Link>
           </div>
-        </Card>
+        )}
 
         {isVinculado && (
           <div className="space-y-6 animate-in fade-in duration-500">
