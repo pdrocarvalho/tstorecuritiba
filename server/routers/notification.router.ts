@@ -24,8 +24,12 @@ const validateAdminPin = (pinEnviado: string) => {
 };
 
 /**
- * 🛠️ Função atualizada para gravar Status (E) e Data (F) simultaneamente
+ * 🛠️ Obtém a data de hoje corrigida para o fuso de Brasília
  */
+function getDataHojeBR() {
+  return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
 async function atualizarStatusEData(url: string, aba: string, rowNumber: number, novoStatus: string) {
   const spreadsheetId = extractSpreadsheetId(url);
   if (!spreadsheetId) return;
@@ -39,9 +43,8 @@ async function atualizarStatusEData(url: string, aba: string, rowNumber: number,
   });
 
   const sheets = google.sheets({ version: "v4", auth });
-  const hoje = new Date().toLocaleDateString('pt-BR');
+  const hoje = getDataHojeBR();
 
-  // Atualiza o range E:F (Colunas 5 e 6) na linha correspondente
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${aba}'!E${rowNumber}:F${rowNumber}`, 
@@ -52,9 +55,6 @@ async function atualizarStatusEData(url: string, aba: string, rowNumber: number,
 
 export const notificationsRouter = router({
   
-  // --------------------------------------------------------
-  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (VERSÃO POR DATA)
-  // --------------------------------------------------------
   rodarAutomacaoDemandas: publicProcedure
     .input(z.object({ 
       urlRecebimento: z.string(), 
@@ -67,7 +67,7 @@ export const notificationsRouter = router({
 
       const estoqueMap = new Map<string, any>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
-      const hoje = new Date().toLocaleDateString('pt-BR');
+      const hojeBR = getDataHojeBR();
       const limparSKU = (sku: any) => String(sku || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
 
       for (const item of estoque) {
@@ -101,54 +101,55 @@ export const notificationsRouter = router({
         let consultoresSet = new Set<string>();
         
         for (const row of lista) {
-          if (!row.referencia) continue;
-          const skuDemandaLimpo = limparSKU(row.referencia);
-          const statusAtual = String(row.status || "AGUARDANDO").trim().toUpperCase();
-          const dataStatus = String(row.DATA_STATUS || "").trim(); // Lendo da nova Coluna F
-          const itemEstoque = estoqueMap.get(skuDemandaLimpo);
+          // Captura as chaves independente de como o motor as nomeou
+          const sku = row.referencia || row.REFERENCIA || row.REF || row.REF_;
+          if (!sku) continue;
 
-          /**
-           * LÓGICA 1: PERSISTÊNCIA DIÁRIA
-           * Se o status não for AGUARDANDO e a data gravada for HOJE, mantém no contador da Home.
-           */
-          if (statusAtual !== "AGUARDANDO" && dataStatus === hoje) {
+          const skuDemandaLimpo = limparSKU(sku);
+          const statusAtual = String(row.status || row.STATUS || "AGUARDANDO").trim().toUpperCase();
+          const dataStatus = String(row.DATA_STATUS || row.DATASTATUS || "").trim();
+          const consultorOriginal = row.consultor || row.CONSULTOR || "";
+
+          // 1. Persistência Diária (Filtro por data correta BR)
+          if (statusAtual !== "AGUARDANDO" && dataStatus === hojeBR) {
             countAtivosHoje++;
-            if (row.consultor) consultoresSet.add(row.consultor.split(' ')[0].toUpperCase());
+            if (consultorOriginal) {
+              consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
+            }
             continue; 
           }
 
-          /**
-           * LÓGICA 2: NOVO MATCH
-           * Se achou no estoque e ainda está aguardando (ou mudou de estágio)
-           */
+          // 2. Novo Match
+          const itemEstoque = estoqueMap.get(skuDemandaLimpo);
           if (itemEstoque && statusAtual === "AGUARDANDO") {
               await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
-                consultor: row.consultor || "Consultor",
-                cliente: row.cliente || "Cliente",
-                contato: row.contato || "",
-                referencia: row.referencia 
+                consultor: consultorOriginal || "CONSULTOR",
+                cliente: row.cliente || row.CLIENTE || "CLIENTE",
+                contato: row.contato || row.CONTATO || "",
+                referencia: sku
               }, itemEstoque);
               
-              // Grava Status em E e Data em F
               await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
               
               countAtivosHoje++;
-              if (row.consultor) consultoresSet.add(row.consultor.split(' ')[0].toUpperCase());
+              if (consultorOriginal) {
+                consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
+              }
           }
         }
 
-        // LÓGICA 3: FORMATAÇÃO DA MENSAGEM
+        // 3. Formatação da Mensagem
         let saudacao = "EQUIPE";
         const consultoresArr = Array.from(consultoresSet);
         if (consultoresArr.length === 1) {
           saudacao = consultoresArr[0];
-        } else if (consultoresArr.length > 1 && consultoresArr.length <= 2) {
-          saudacao = consultoresArr.join(" E ");
+        } else if (consultoresArr.length >= 2) {
+          saudacao = consultoresArr.slice(0, 2).join(" E ");
         }
 
-        const singularPluralNotif = countAtivosHoje === 1 ? "ficação" : "ficações";
-        const numeroFormatado = countAtivosHoje.toString().padStart(2, '0');
-        const mensagemFinal = `${saudacao}, você tem ${numeroFormatado} noti${singularPluralNotif}.`;
+        const nFormatado = countAtivosHoje.toString().padStart(2, '0');
+        const txtNotif = countAtivosHoje === 1 ? "notificação" : "notificações";
+        const mensagemFinal = `${saudacao}, você tem ${nFormatado} ${txtNotif}.`;
 
         return { count: countAtivosHoje, mensagem: mensagemFinal };
       };
