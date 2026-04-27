@@ -62,11 +62,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   const rows = response.data.values;
   if (!rows || rows.length === 0) return [];
 
-  /**
-   * 🛠️ AJUSTE DE CABEÇALHO (O PULO DO GATO):
-   * Recebimento: Linha 1 (index 0)
-   * Avarias e Demandas: Linha 2 (index 1) - Conforme sua estrutura enviada
-   */
+  // Ajuste: Avarias e Demandas estão na Linha 2 (index 1)
   let headerRowIndex = 0;
   if (mode === 'avarias' || mode === 'demandas') {
       headerRowIndex = 1; 
@@ -85,7 +81,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       const val = row[idx] || "";
       const hLimpo = headersLimpos[idx];
       
-      // Chave dinâmica para os gráficos (ID, QTDE, etc) - Mantém compatibilidade
       const key = header.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
 
@@ -119,6 +114,15 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("CONTATO")) obj.contato = val;
           if (isRef) obj.referencia = String(val).trim();
           if (hLimpo.includes("STATUS")) obj.status = val;
+          if (hLimpo.includes("DATASTATUS")) obj.DATA_STATUS = val;
+      }
+
+      if (mode === 'avarias') {
+          if (isRef) obj.REF = String(val).trim();
+          if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
+          if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
+          if (hLimpo.includes("QTDE")) obj.QTDE = val;
+          if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
       }
     });
 
@@ -129,8 +133,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
     return obj;
   });
 
-  // Filtro flexível para não perder dados por nome de propriedade
-  const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF_ || d.REF));
+  const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF || d.COD_AVARIA || d.REF_));
   
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
@@ -155,11 +158,8 @@ export async function updateSheetRow(url: string, row: number, col: string, val:
     const id = extractSpreadsheetId(url);
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
-    
-    // Busca o nome da aba automaticamente para não errar o range
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
     const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
-
     await sheets.spreadsheets.values.update({
         spreadsheetId: id as string,
         range: `'${targetSheetName}'!${col}${row}`,
@@ -168,7 +168,43 @@ export async function updateSheetRow(url: string, row: number, col: string, val:
     });
 }
 
-export async function updateFullRow(u:string,n:number,r:any[]){}
-export async function deleteSheetRow(u:string,n:number){}
+export async function updateFullRow(url: string, rowNumber: number, rowData: any[]) {
+    const id = extractSpreadsheetId(url);
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+    const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
+    await sheets.spreadsheets.values.update({
+        spreadsheetId: id as string,
+        range: `'${targetSheetName}'!A${rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [rowData] }
+    });
+}
+
+export async function deleteSheetRow(url: string, rowNumber: number) {
+    const id = extractSpreadsheetId(url);
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+    const sheetInfo = getSheetInfoFromUrl(url, spreadsheet);
+
+    await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id as string,
+        requestBody: {
+            requests: [{
+                deleteDimension: {
+                    range: {
+                        sheetId: sheetInfo.sheetId,
+                        dimension: "ROWS",
+                        startIndex: rowNumber - 1,
+                        endIndex: rowNumber
+                    }
+                }
+            }]
+        }
+    });
+}
+
 export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] }; }
 export async function testarLeituraRobo(url: string) { return { status: "success", linhasLidas: 0, exemplo: "" }; }
