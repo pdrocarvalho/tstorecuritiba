@@ -62,10 +62,18 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   const rows = response.data.values;
   if (!rows || rows.length === 0) return [];
 
-  const headerRowIndex = mode === 'avarias' ? 2 : 0;
+  /**
+   * 🛠️ AJUSTE DE CABEÇALHO (O PULO DO GATO):
+   * Recebimento: Linha 1 (index 0)
+   * Avarias e Demandas: Linha 2 (index 1) - Conforme sua estrutura enviada
+   */
+  let headerRowIndex = 0;
+  if (mode === 'avarias' || mode === 'demandas') {
+      headerRowIndex = 1; 
+  }
+
   if (!rows[headerRowIndex]) return [];
   
-  // Mapeia cabeçalhos originais para manter compatibilidade com gráficos
   const headersOriginais = rows[headerRowIndex].map((h: any) => String(h || "").trim());
   const headersLimpos = headersOriginais.map(h => h.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, ""));
   
@@ -77,7 +85,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       const val = row[idx] || "";
       const hLimpo = headersLimpos[idx];
       
-      // Chave dinâmica para os gráficos (ID, QTDE, etc)
+      // Chave dinâmica para os gráficos (ID, QTDE, etc) - Mantém compatibilidade
       const key = header.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
 
@@ -121,14 +129,13 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
     return obj;
   });
 
-  // 🚀 FILTRO FLEXÍVEL: Não deixa a lista vir zerada se houver qualquer dado
+  // Filtro flexível para não perder dados por nome de propriedade
   const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF_ || d.REF));
   
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
 
-// ... (addRowToSheet, updateSheetRow, updateFullRow, deleteSheetRow permanecem iguais aos seus)
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
     const auth = getGoogleAuth();
@@ -143,17 +150,24 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
         requestBody: { values: [rowData] }
     });
 }
+
 export async function updateSheetRow(url: string, row: number, col: string, val: string) {
     const id = extractSpreadsheetId(url);
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
+    
+    // Busca o nome da aba automaticamente para não errar o range
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+    const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
+
     await sheets.spreadsheets.values.update({
         spreadsheetId: id as string,
-        range: `A${row}`, // Simplificado para teste
+        range: `'${targetSheetName}'!${col}${row}`,
         valueInputOption: "USER_ENTERED",
         requestBody: { values: [[val]] }
     });
 }
+
 export async function updateFullRow(u:string,n:number,r:any[]){}
 export async function deleteSheetRow(u:string,n:number){}
 export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] }; }
