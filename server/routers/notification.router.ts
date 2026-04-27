@@ -23,7 +23,10 @@ const validateAdminPin = (pinEnviado: string) => {
   }
 };
 
-async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: number, novoStatus: string) {
+/**
+ * 🛠️ Função atualizada para gravar Status (E) e Data (F) simultaneamente
+ */
+async function atualizarStatusEData(url: string, aba: string, rowNumber: number, novoStatus: string) {
   const spreadsheetId = extractSpreadsheetId(url);
   if (!spreadsheetId) return;
 
@@ -36,19 +39,21 @@ async function atualizarStatusPlanilha(url: string, aba: string, rowNumber: numb
   });
 
   const sheets = google.sheets({ version: "v4", auth });
-  
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  // Atualiza o range E:F (Colunas 5 e 6) na linha correspondente
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${aba}'!E${rowNumber}`, 
+    range: `'${aba}'!E${rowNumber}:F${rowNumber}`, 
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[novoStatus]] }
+    requestBody: { values: [[novoStatus, hoje]] }
   });
 }
 
 export const notificationsRouter = router({
   
   // --------------------------------------------------------
-  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (COM LOGS DE DIAGNÓSTICO)
+  // 🤖 O CÉREBRO: AUTOMAÇÃO DE DEMANDAS (VERSÃO POR DATA)
   // --------------------------------------------------------
   rodarAutomacaoDemandas: publicProcedure
     .input(z.object({ 
@@ -60,22 +65,14 @@ export const notificationsRouter = router({
       const alertas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-ALERTA_DE_DEMANDA').catch(() => []);
       const vendas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-VENDA_FUTURA').catch(() => []);
 
-      // 🚀 LOG DE DIAGNÓSTICO INICIAL
-      console.log("--------------------------------------------------");
-      console.log("📊 [DIAGNÓSTICO ROBÔ] Iniciando Cruzamento...");
-      console.log(`- Linhas no Recebimento: ${estoque.length}`);
-      console.log(`- Linhas em Alerta de Demanda: ${alertas.length}`);
-      console.log(`- Linhas em Venda Futura: ${vendas.length}`);
-
       const estoqueMap = new Map<string, any>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
-
+      const hoje = new Date().toLocaleDateString('pt-BR');
       const limparSKU = (sku: any) => String(sku || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
 
       for (const item of estoque) {
         if (!item.produtoSku) continue;
         const skuLimpo = limparSKU(item.produtoSku);
-        
         let estagio = "FATURADO";
         let dataFormatada = "";
         
@@ -99,31 +96,32 @@ export const notificationsRouter = router({
         }
       }
 
-      // 🚀 LOG: Mostra um exemplo do que tem no Mapa de Estoque
-      if (estoqueMap.size > 0) {
-          const primeiroSKU = Array.from(estoqueMap.keys())[0];
-          console.log(`- Exemplo de SKU no Mapa (Recebimento): "${primeiroSKU}"`);
-      }
-
       const processar = async (lista: any[], tipo: "ALERTA" | "VENDA", abaNome: string) => {
-        let notificados = 0;
+        let countAtivosHoje = 0;
+        let consultoresSet = new Set<string>();
         
         for (const row of lista) {
           if (!row.referencia) continue;
           const skuDemandaLimpo = limparSKU(row.referencia);
           const statusAtual = String(row.status || "AGUARDANDO").trim().toUpperCase();
-          
+          const dataStatus = String(row.DATA_STATUS || "").trim(); // Lendo da nova Coluna F
           const itemEstoque = estoqueMap.get(skuDemandaLimpo);
-          
-          // 🚀 LOG: Mostra a tentativa de match para cada linha da planilha de demandas
-          console.log(`🔎 [Busca] SKU: ${skuDemandaLimpo} | Status Atual: ${statusAtual} | Encontrou no Estoque? ${itemEstoque ? 'SIM (' + itemEstoque.estagio + ')' : 'NÃO'}`);
 
-          if (itemEstoque) {
-            const pesoAtual = pesoEstagio[statusAtual as keyof typeof pesoEstagio] || 0;
-            const pesoNovo = pesoEstagio[itemEstoque.estagio as keyof typeof pesoEstagio] || 0;
+          /**
+           * LÓGICA 1: PERSISTÊNCIA DIÁRIA
+           * Se o status não for AGUARDANDO e a data gravada for HOJE, mantém no contador da Home.
+           */
+          if (statusAtual !== "AGUARDANDO" && dataStatus === hoje) {
+            countAtivosHoje++;
+            if (row.consultor) consultoresSet.add(row.consultor.split(' ')[0].toUpperCase());
+            continue; 
+          }
 
-            if (pesoNovo > pesoAtual) {
-              console.log(`✅ [Match!] SKU ${skuDemandaLimpo} vai disparar e-mail.`);
+          /**
+           * LÓGICA 2: NOVO MATCH
+           * Se achou no estoque e ainda está aguardando (ou mudou de estágio)
+           */
+          if (itemEstoque && statusAtual === "AGUARDANDO") {
               await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
                 consultor: row.consultor || "Consultor",
                 cliente: row.cliente || "Cliente",
@@ -131,21 +129,39 @@ export const notificationsRouter = router({
                 referencia: row.referencia 
               }, itemEstoque);
               
-              await atualizarStatusPlanilha(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
-              notificados++;
-            }
+              // Grava Status em E e Data em F
+              await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
+              
+              countAtivosHoje++;
+              if (row.consultor) consultoresSet.add(row.consultor.split(' ')[0].toUpperCase());
           }
         }
-        return notificados;
+
+        // LÓGICA 3: FORMATAÇÃO DA MENSAGEM
+        let saudacao = "EQUIPE";
+        const consultoresArr = Array.from(consultoresSet);
+        if (consultoresArr.length === 1) {
+          saudacao = consultoresArr[0];
+        } else if (consultoresArr.length > 1 && consultoresArr.length <= 2) {
+          saudacao = consultoresArr.join(" E ");
+        }
+
+        const singularPluralNotif = countAtivosHoje === 1 ? "ficação" : "ficações";
+        const numeroFormatado = countAtivosHoje.toString().padStart(2, '0');
+        const mensagemFinal = `${saudacao}, você tem ${numeroFormatado} noti${singularPluralNotif}.`;
+
+        return { count: countAtivosHoje, mensagem: mensagemFinal };
       };
 
-      const nAlertas = await processar(alertas, "ALERTA", "DB-ALERTA_DE_DEMANDA");
-      const nVendas = await processar(vendas, "VENDA", "DB-VENDA_FUTURA");
+      const resAlertas = await processar(alertas, "ALERTA", "DB-ALERTA_DE_DEMANDA");
+      const resVendas = await processar(vendas, "VENDA", "DB-VENDA_FUTURA");
 
-      console.log(`🏁 [Fim Automação] Notificados: Alertas(${nAlertas}) Vendas(${nVendas})`);
-      console.log("--------------------------------------------------");
-
-      return { alertasNotificados: nAlertas, vendasNotificadas: nVendas };
+      return { 
+        alertasNotificados: resAlertas.count,
+        alertasMensagem: resAlertas.mensagem,
+        vendasNotificadas: resVendas.count,
+        vendasMensagem: resVendas.mensagem
+      };
     }),
 
   // --- RESTANTE DAS ROTAS MANTIDAS ---
