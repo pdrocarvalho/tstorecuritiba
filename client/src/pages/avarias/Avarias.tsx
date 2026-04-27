@@ -38,7 +38,6 @@ const FORM_VAZIO = {
 };
 
 export default function GestaoAvarias() {
-  // 🚀 ATUALIZADO: Agora busca a URL diretamente do cofre central (localStorage)
   const [urlPlanilha] = useState(() => localStorage.getItem("url_avarias") || "");
   const isVinculado = !!urlPlanilha;
 
@@ -47,7 +46,6 @@ export default function GestaoAvarias() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
 
-  // ESTADOS DO CRUD E SEGURANÇA
   const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
   
@@ -62,10 +60,6 @@ export default function GestaoAvarias() {
   useEffect(() => {
     if (isVinculado) refetch();
   }, [isVinculado]);
-
-  // ==========================================
-  // MUTATIONS (As setas para o Backend)
-  // ==========================================
 
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
     onSuccess: () => {
@@ -94,10 +88,6 @@ export default function GestaoAvarias() {
     onError: (err) => toast.error("Erro ao excluir: " + err.message)
   });
 
-  // ==========================================
-  // FUNÇÕES DE CONTROLE
-  // ==========================================
-
   const fecharModais = () => {
     setShowModal(false);
     setPinModal({ isOpen: false, action: null });
@@ -114,20 +104,21 @@ export default function GestaoAvarias() {
 
   const abrirModalEdicao = (av: any) => {
     setEditingAvaria(av);
+    // 🛠️ MAPEAMENTO CORRIGIDO PARA O NOVO MOTOR
     setForm({
-      fabrica: av.FÁBRICA || av.FABRICA || "",
-      ref: av.REF_ || "",
-      descricao: av.DESCRIÇÃO || av.DESCRICAO || "",
-      qtde: av.QTDE_ || "1",
-      nfEntrada: av.NOTA_FISCAL_DE_ENTRADA || "",
+      fabrica: av.FABRICA || av.FABRICA_ || "",
+      ref: av.REF || av.REF_ || "",
+      descricao: av.DESCRICAO || av.DESCRICAO_ || av.DESCRIÇÃO || "",
+      qtde: av.QTDE || av.QTDE_ || "1",
+      nfEntrada: av.NOTA_FISCAL_DE_ENTRADA || av.NOTA_FISCAL_DE_ENTRADA_ || "",
       motivo: av.MOTIVO || "",
-      responsavel: av.RESPONSÁVEL || av.RESPONSAVEL || "",
+      responsavel: av.RESPONSAVEL || av.RESPONSAVEL_ || av.RESPONSÁVEL || "",
       tratativa: av.TRATATIVA || "PENDENTE",
       status: av.STATUS || "PENDENTE",
-      constaFisicamente: av.CONSTA_FISICAMENTE_ || "NÃO",
-      lancadoSistema: av.FOI_LANÇADO_NO_SISTEMA_ || av.FOI_LANCADO_NO_SISTEMA_ || "NÃO",
-      nfSaida: av.NOTA_FISCAL_DE_SAÍDA || av.NOTA_FISCAL_DE_SAIDA || "",
-      nfReposicao: av.NOTA_FISCAL_DE_REPOSIÇÃO || av.NOTA_FISCAL_DE_REPOSICAO || "",
+      constaFisicamente: av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ || "SIM",
+      lancadoSistema: av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ || "NÃO",
+      nfSaida: av.NOTA_FISCAL_DE_SAIDA || av.NOTA_FISCAL_DE_SAIDA_ || "",
+      nfReposicao: av.NOTA_FISCAL_DE_REPOSICAO || av.NOTA_FISCAL_DE_REPOSICAO_ || "",
       dataColeta: av.DATA_DA_COLETA || ""
     });
     setShowModal(true);
@@ -141,7 +132,7 @@ export default function GestaoAvarias() {
     } else {
       const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
       const prefixo = fabrica?.prefixo || "AVR";
-      const codigosExistentes = todasAvarias.map((a: any) => String(a.CÓD__AVARIA || a.COD__AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
+      const codigosExistentes = todasAvarias.map((a: any) => String(a.COD_AVARIA || a.COD__AVARIA || a.CÓD__AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
       const proximoNumero = codigosExistentes.length > 0 ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
       const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
       
@@ -157,37 +148,30 @@ export default function GestaoAvarias() {
     if (!pinValue) return toast.warning("Digite a senha de gerente.");
 
     if (pinModal.action === 'delete' && pinModal.avariaTarget) {
-      if (!pinModal.avariaTarget.rowNumber) return toast.error("Erro interno: Número da linha não encontrado.");
       mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.avariaTarget.rowNumber, pin: pinValue });
     } 
-    
     else if (pinModal.action === 'edit' && editingAvaria) {
-      if (!editingAvaria.rowNumber) return toast.error("Erro interno: Número da linha não encontrado.");
       const linhaAtualizada = [
-        editingAvaria.DATA_DE_ENTRADA, 
-        form.fabrica,                  
-        editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA, 
-        form.ref,                      
-        form.descricao,                
-        form.qtde,                     
-        form.nfEntrada,                
+        editingAvaria.DATA_DE_ENTRADA || editingAvaria.DATA_DE_ENTRADA_, 
+        form.fabrica,                   
+        editingAvaria.COD_AVARIA || editingAvaria.COD__AVARIA || editingAvaria.CÓD__AVARIA, 
+        form.ref,                       
+        form.descricao,                 
+        form.qtde,                      
+        form.nfEntrada,                 
         form.motivo,                   
-        form.responsavel,              
+        form.responsavel,               
         form.lancadoSistema,           
-        form.tratativa,                
-        form.constaFisicamente,        
+        form.tratativa,                 
+        form.constaFisicamente,         
         form.status,                   
-        form.nfSaida,                  
-        form.nfReposicao,              
-        form.dataColeta                
+        form.nfSaida,                   
+        form.nfReposicao,               
+        form.dataColeta                 
       ];
       mutationEdit.mutate({ url: urlPlanilha, rowNumber: editingAvaria.rowNumber, row: linhaAtualizada, pin: pinValue });
     }
   };
-
-  // ==========================================
-  // FILTROS E ESTILOS
-  // ==========================================
 
   const getTratativaStyle = (texto: string) => {
     if (!texto) return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
@@ -208,7 +192,9 @@ export default function GestaoAvarias() {
   const avariasFiltradas = useMemo(() => {
     return todasAvarias.filter((a: any) => {
       const search = filtroSku.toLowerCase();
-      const matchesSearch = !filtroSku || String(a.REF_ || "").toLowerCase().includes(search) || String(a.CÓD__AVARIA || a.COD__AVARIA || "").toLowerCase().includes(search);
+      const refValue = String(a.REF || a.REF_ || "").toLowerCase();
+      const codValue = String(a.COD_AVARIA || a.COD__AVARIA || a.CÓD__AVARIA || "").toLowerCase();
+      const matchesSearch = !filtroSku || refValue.includes(search) || codValue.includes(search);
       const tratativaRow = String(a.TRATATIVA || "PENDENTE").toUpperCase().trim();
       const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(tratativaRow);
       return matchesSearch && matchesStatus;
@@ -238,10 +224,10 @@ export default function GestaoAvarias() {
             <tbody>
               ${avariasFiltradas.map((av: any) => `
                 <tr>
-                  <td>${av.CÓD__AVARIA || av.COD__AVARIA || ""}</td>
-                  <td>${av.REF_ || ""}</td>
-                  <td>${av.DESCRIÇÃO || av.DESCRICAO || ""}</td>
-                  <td><strong style="color: red;">${av.QTDE_ || ""}</strong></td>
+                  <td>${av.COD_AVARIA || av.COD__AVARIA || av.CÓD__AVARIA || ""}</td>
+                  <td>${av.REF || av.REF_ || ""}</td>
+                  <td>${av.DESCRICAO || av.DESCRIÇÃO || ""}</td>
+                  <td><strong style="color: red;">${av.QTDE || av.QTDE_ || ""}</strong></td>
                   <td>${av.NOTA_FISCAL_DE_ENTRADA || ""}</td>
                   <td>${av.TRATATIVA || "PENDENTE"}</td>
                 </tr>
@@ -280,7 +266,6 @@ export default function GestaoAvarias() {
           )}
         </div>
 
-        {/* 🚀 AVISO SE NÃO ESTIVER VINCULADO */}
         {!isVinculado && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3 text-amber-800">
@@ -302,7 +287,6 @@ export default function GestaoAvarias() {
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <Input placeholder="Buscar por REF ou Código..." className="pl-10 bg-white" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value)} />
               </div>
-              
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map(s => (
                   <button 
@@ -329,10 +313,10 @@ export default function GestaoAvarias() {
                       <React.Fragment key={idx}>
                         <tr onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}>
                           <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
-                          <td className="px-4 font-bold text-slate-900">{av.CÓD__AVARIA || av.COD__AVARIA || '-'}</td>
-                          <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF_ || '-'}</span></td>
-                          <td className="px-4 text-slate-700 font-medium">{av.DESCRIÇÃO || av.DESCRICAO || '-'}</td>
-                          <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE_ || '-'}</td>
+                          <td className="px-4 font-bold text-slate-900">{av.COD_AVARIA || av.COD__AVARIA || av.CÓD__AVARIA || '-'}</td>
+                          <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF || av.REF_ || '-'}</span></td>
+                          <td className="px-4 text-slate-700 font-medium">{av.DESCRICAO || av.DESCRIÇÃO || '-'}</td>
+                          <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE || av.QTDE_ || '-'}</td>
                           <td className="px-4 text-slate-500">{av.NOTA_FISCAL_DE_ENTRADA || '-'}</td>
                           <td className="px-6 text-right">
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border shadow-sm ${style.class}`}>
@@ -356,17 +340,17 @@ export default function GestaoAvarias() {
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
                                   <div className="grid grid-cols-2 gap-4">
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || '-'}</p></div>
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FÁBRICA || av.FABRICA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || av.DATA_DE_ENTRADA_ || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FABRICA || av.FÁBRICA || '-'}</p></div>
                                   </div>
-                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSÁVEL || av.RESPONSAVEL || '-'}</p></div>
+                                  <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSAVEL || av.RESPONSÁVEL || '-'}</p></div>
                                 </div>
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Diagnóstico</h4>
                                   <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1">{av.MOTIVO || 'Não informado.'}</p></div>
                                   <div className="flex gap-3">
-                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE_ || '-'}</div>
-                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANÇADO_NO_SISTEMA_ === 'SIM' || av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANÇADO_NO_SISTEMA_ || av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
                                   </div>
                                 </div>
                                 <div className="space-y-4">
@@ -390,14 +374,13 @@ export default function GestaoAvarias() {
         )}
       </div>
 
-      {/* MODAL PRINCIPAL (NOVA OU EDITA AVARIA) */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <div className="flex items-center gap-2 text-slate-800">
                 {editingAvaria ? <Edit size={20} className="text-blue-600" /> : <AlertOctagon size={20} className="text-red-500" />}
-                <h2 className="font-bold text-lg tracking-tight">{editingAvaria ? `Editar Avaria (${editingAvaria.CÓD__AVARIA || editingAvaria.COD__AVARIA})` : "Registrar Nova Avaria"}</h2>
+                <h2 className="font-bold text-lg tracking-tight">{editingAvaria ? `Editar Avaria` : "Registrar Nova Avaria"}</h2>
               </div>
               <button onClick={fecharModais} className="text-slate-400 hover:text-slate-700 transition-colors"><X size={20} /></button>
             </div>
@@ -442,7 +425,6 @@ export default function GestaoAvarias() {
                 <>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mt-8 mb-4 border-t pt-6">Logística e Tratativa</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-5 rounded-xl border border-slate-200">
-                    
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Tratativa Externa</label>
                       <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.tratativa} onChange={(e) => setForm({...form, tratativa: e.target.value})}>
@@ -452,17 +434,14 @@ export default function GestaoAvarias() {
                         <option value="CONCLUÍDA">Concluída</option>
                       </select>
                     </div>
-
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Status Interno</label>
                       <Input className="h-9 text-xs" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} />
                     </div>
-
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Data da Coleta</label>
                       <Input className="h-9 text-xs" value={form.dataColeta} onChange={(e) => setForm({...form, dataColeta: e.target.value})} placeholder="DD/MM/AAAA" />
                     </div>
-
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Consta Fisicamente?</label>
                       <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.constaFisicamente} onChange={(e) => setForm({...form, constaFisicamente: e.target.value})}>
@@ -470,7 +449,6 @@ export default function GestaoAvarias() {
                         <option value="NÃO">NÃO</option>
                       </select>
                     </div>
-
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Lançado no Sistema?</label>
                       <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.lancadoSistema} onChange={(e) => setForm({...form, lancadoSistema: e.target.value})}>
@@ -478,7 +456,6 @@ export default function GestaoAvarias() {
                         <option value="NÃO">NÃO</option>
                       </select>
                     </div>
-
                     <div className="col-span-full grid grid-cols-2 gap-5 mt-2">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase">NF de Saída</label>
@@ -505,7 +482,6 @@ export default function GestaoAvarias() {
         </div>
       )}
 
-      {/* 🔒 MODAL DA SENHA DE GERENTE */}
       {pinModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 duration-200">
@@ -518,7 +494,6 @@ export default function GestaoAvarias() {
                 ? "Digite a Senha de Gerente para confirmar a exclusão permanente." 
                 : "Digite a Senha de Gerente para autorizar a modificação."}
             </p>
-            
             <Input 
               type="password" 
               placeholder="Digite o PIN numérico..." 
@@ -528,7 +503,6 @@ export default function GestaoAvarias() {
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && executarAcaoComPin()}
             />
-
             <div className="flex gap-3">
               <button onClick={() => setPinModal({ isOpen: false, action: null })} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
               <button 
@@ -543,7 +517,6 @@ export default function GestaoAvarias() {
           </div>
         </div>
       )}
-
     </MainLayout>
   );
 }
