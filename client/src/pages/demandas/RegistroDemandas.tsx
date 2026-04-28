@@ -9,13 +9,12 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ClipboardList, AlertTriangle, TrendingUp, Save, User, Phone, PackageSearch, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { Link } from "wouter"; // <-- Importamos o Link para criar o atalho
+import { Link } from "wouter";
 
 export default function RegistroDemandas() {
   const [loading, setLoading] = useState(false);
   const [tipo, setTipo] = useState<"ALERTA" | "VENDA">("ALERTA");
   
-  // 🚀 ATUALIZADO: Agora apenas lê do cofre central! Não precisa mais do `setUrlPlanilha`
   const [urlPlanilha] = useState(() => localStorage.getItem("url_demandas") || "");
 
   const [form, setForm] = useState({
@@ -52,15 +51,19 @@ export default function RegistroDemandas() {
     
     const abaDestino = tipo === "ALERTA" ? "DB-ALERTA_DE_DEMANDA" : "DB-VENDA_FUTURA";
     
+    // 📅 Pega a data de hoje formatada em DD/MM/AAAA para gravar na Coluna A
+    const dataDeHoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
     salvarDemanda.mutate({
       url: urlPlanilha,
       aba: abaDestino,
       dados: [
-        form.consultor.toUpperCase(),
-        form.cliente.toUpperCase(),
-        form.contato,
-        form.referencia.trim(),
-        "AGUARDANDO" 
+        dataDeHoje,                    // Coluna A (Nova Data Automática)
+        form.consultor.toUpperCase(),  // Coluna B
+        form.cliente.toUpperCase(),    // Coluna C
+        form.contato,                  // Coluna D
+        form.referencia.trim(),        // Coluna E
+        "AGUARDANDO"                   // Coluna F (Status Inicial)
       ]
     });
   };
@@ -78,7 +81,6 @@ export default function RegistroDemandas() {
           </p>
         </div>
 
-        {/* 🚀 AVISO INTELIGENTE SE NÃO ESTIVER VINCULADO */}
         {!urlPlanilha && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3 text-amber-800">
