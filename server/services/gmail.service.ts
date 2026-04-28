@@ -7,8 +7,22 @@ const nodemailer = require("nodemailer");
 import type { EmailPayload } from "../engines/notification.engine";
 
 // =============================================================================
-// CONFIGURAÇÃO DO TRANSPORTE
+// CONFIGURAÇÃO DO TRANSPORTE E DESTINATÁRIOS
 // =============================================================================
+
+// 🚀 Lista de e-mails para onde todas as notificações devem ir
+const EXTRA_EMAILS = [
+  "francisco.honorio@tramontinastore.com"
+];
+
+function getRecipients(): string {
+  const defaultRecipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER || "";
+  if (!defaultRecipient) return EXTRA_EMAILS.join(", ");
+  
+  // Combina o padrão com os extras e remove duplicatas (se houver)
+  const allEmails = [defaultRecipient, ...EXTRA_EMAILS].filter(Boolean);
+  return Array.from(new Set(allEmails)).join(", ");
+}
 
 function createTransport() {
   const user = process.env.GMAIL_USER;
@@ -57,14 +71,14 @@ export async function sendBulkEmails(emails: EmailPayload[]): Promise<number> {
 }
 
 // =============================================================================
-// 🚀 NOTIFICAÇÕES DE AVARIAS (REINSTALADO)
+// 🚀 NOTIFICAÇÕES DE AVARIAS
 // =============================================================================
 
 export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXCLUÍDA', data: any, previousData?: any) {
-  const recipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER; 
+  const recipients = getRecipients(); 
 
-  if (!recipient) {
-    console.error("[GmailService] Destinatário não configurado para avarias.");
+  if (!recipients) {
+    console.error("[GmailService] Nenhum destinatário configurado para avarias.");
     return false;
   }
 
@@ -87,7 +101,7 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
     </div>
   `;
 
-  return await sendEmail({ to: recipient, subject, html: htmlContent });
+  return await sendEmail({ to: recipients, subject, html: htmlContent });
 }
 
 // =============================================================================
@@ -100,10 +114,10 @@ export async function sendDemandaNotification(
   demanda: { consultor: string; cliente: string; contato: string; referencia: string },
   estoque: { notaFiscal?: string; previsao?: string; dataChegada?: string; quantidade?: number }
 ) {
-  const recipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER; 
+  const recipients = getRecipients(); 
 
-  if (!recipient) {
-    console.warn("[GmailService] Sem GMAIL_RECEIVER. Seguindo apenas com atualização da planilha.");
+  if (!recipients) {
+    console.warn("[GmailService] Nenhum destinatário de e-mail encontrado. Atualizando apenas a planilha.");
     return true; 
   }
 
@@ -141,7 +155,7 @@ export async function sendDemandaNotification(
   `;
 
   try {
-    await sendEmail({ to: recipient, subject: tituloEmail, html: htmlBody });
+    await sendEmail({ to: recipients, subject: tituloEmail, html: htmlBody });
   } catch (e) {
     console.error("[GmailService] Erro ao disparar e-mail, seguindo com a planilha.");
   }
