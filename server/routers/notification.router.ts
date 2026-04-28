@@ -30,6 +30,21 @@ function getDataHojeBR() {
   return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
+/**
+ * 🛠️ Converte uma string "DD/MM/YYYY" para um objeto Date comparável
+ * Retorna uma data muito antiga se a string for vazia/inválida,
+ * para garantir que o filtro bloqueie entradas sem data no estoque.
+ */
+function parseDataBR(dataStr: string) {
+  if (!dataStr || typeof dataStr !== 'string') return new Date(0); 
+  const p = dataStr.split('/');
+  if (p.length !== 3) return new Date(0);
+  return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12, 0, 0);
+}
+
+/**
+ * ⚠️ ATENÇÃO: As colunas andaram! Agora STATUS = F e DATA STATUS = G
+ */
 async function atualizarStatusEData(url: string, aba: string, rowNumber: number, novoStatus: string) {
   const spreadsheetId = extractSpreadsheetId(url);
   if (!spreadsheetId) return;
@@ -47,7 +62,7 @@ async function atualizarStatusEData(url: string, aba: string, rowNumber: number,
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${aba}'!E${rowNumber}:F${rowNumber}`, 
+    range: `'${aba}'!F${rowNumber}:G${rowNumber}`, // 🚀 Ajustado de E:F para F:G
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[novoStatus, hoje]] }
   });
@@ -91,7 +106,11 @@ export const notificationsRouter = router({
             notaFiscal: item.notaFiscal || "Verificar no Sistema",
             previsao: estagio === "PREVISAO" ? dataFormatada : "",
             dataChegada: estagio === "CHEGOU" ? dataFormatada : "",
-            quantidade: item.quantidade || 0
+            quantidade: item.quantidade || 0,
+            /**
+             * 🛠️ NOVO: Salvamos a data comparável para uso no filtro temporal
+             */
+            dataRelevanteEstoqueStr: dataFormatada 
           });
         }
       }
@@ -119,21 +138,38 @@ export const notificationsRouter = router({
             continue; 
           }
 
-          // 2. Novo Match
+          // 2. Novo Match com ⏳ FILTRO TEMPORAL
           const itemEstoque = estoqueMap.get(skuDemandaLimpo);
           if (itemEstoque && statusAtual === "AGUARDANDO") {
-              await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
-                consultor: consultorOriginal || "CONSULTOR",
-                cliente: row.cliente || row.CLIENTE || "CLIENTE",
-                contato: row.contato || row.CONTATO || "",
-                referencia: sku
-              }, itemEstoque);
               
-              await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
+              /**
+               * Captura a Data em que a Demanda foi registrada (Agora na coluna A)
+               */
+              const dataDemandaStr = String(row.data || row.DATA || "").trim();
+              const dataDemanda = parseDataBR(dataDemandaStr);
               
-              countAtivosHoje++;
-              if (consultorOriginal) {
-                consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
+              // Data do recebimento do estoque
+              const dataEstoque = parseDataBR(itemEstoque.dataRelevanteEstoqueStr);
+
+              /**
+               * 🚀 O Filtro: Só processa se o caminhão (estoque) chegou NO DIA ou DEPOIS do pedido (demanda).
+               * Se dataEstoque for menor que dataDemanda, é um caminhão antigo. Ignora.
+               * Se a data da demanda estiver vazia/inválida (dataDemanda = 1970), ele aprova por segurança.
+               */
+              if (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0) {
+                  await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
+                    consultor: consultorOriginal || "CONSULTOR",
+                    cliente: row.cliente || row.CLIENTE || "CLIENTE",
+                    contato: row.contato || row.CONTATO || "",
+                    referencia: sku
+                  }, itemEstoque);
+                  
+                  await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
+                  
+                  countAtivosHoje++;
+                  if (consultorOriginal) {
+                    consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
+                  }
               }
           }
         }
