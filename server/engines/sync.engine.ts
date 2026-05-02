@@ -109,6 +109,8 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       }
 
       if (mode === 'demandas') {
+          // 🚀 NOVA LINHA: Captura a data da demanda (Coluna A)
+          if (hLimpo === "DATA") obj.data = val;
           if (hLimpo.includes("CONSULTOR")) obj.consultor = val;
           if (hLimpo.includes("CLIENTE")) obj.cliente = val;
           if (hLimpo.includes("CONTATO")) obj.contato = val;

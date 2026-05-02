@@ -138,27 +138,35 @@ export const notificationsRouter = router({
           const itemEstoque = estoqueMap.get(skuDemandaLimpo);
           if (itemEstoque && statusAtual === "AGUARDANDO") {
               
-              const dataDemandaStr = String(row.data || row.DATA || "").trim();
+              // 🚀 LÊ A DATA CORRETAMENTE DO MOTOR (Seja 'data' ou 'dataRegistro' dependendo do seu sync engine)
+              const dataDemandaStr = String(row.data || row.dataRegistro || row.DATA || "").trim();
               const dataDemanda = parseDataBR(dataDemandaStr);
               const dataEstoque = parseDataBR(itemEstoque.dataRelevanteEstoqueStr);
 
               /**
-               * 🚀 O FILTRO DE OURO:
-               * Se for FATURADO ou PREVISÃO, a mercadoria não chegou ainda, então é válida para demandas atuais. Aprova (true).
-               * Se for CHEGOU, fazemos a checagem temporal rígida (dataEstoque >= dataDemanda).
+               * 🚀 REGRA RÍGIDA:
+               * Se for CHEGOU (Estágio 3), a data de entrega DEVE ser maior ou igual à data do registro da demanda.
+               * Se a data da demanda for 1970 (vazia/inválida), ele aprova por segurança.
+               * Para FATURADO/PREVISÃO (Estágios 1 e 2), mantemos a aprovação pois o caminhão ainda não encostou, então serve para a demanda de hoje.
                */
-              const isValido = (itemEstoque.estagio === "FATURADO" || itemEstoque.estagio === "PREVISAO") 
-                              ? true 
-                              : (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
+              let isValido = false;
+              if (itemEstoque.estagio === "FATURADO" || itemEstoque.estagio === "PREVISAO") {
+                  isValido = true;
+              } else if (itemEstoque.estagio === "CHEGOU") {
+                  isValido = (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
+              }
 
               if (isValido) {
-                  // O e-mail tenta ir, mas não trava o processo de faturamento no Sheet se der erro
-                  await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
-                    consultor: consultorOriginal || "CONSULTOR",
-                    cliente: row.cliente || row.CLIENTE || "CLIENTE",
-                    contato: row.contato || row.CONTATO || "",
-                    referencia: sku
-                  }, itemEstoque);
+                  try {
+                    await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
+                      consultor: consultorOriginal || "CONSULTOR",
+                      cliente: row.cliente || row.CLIENTE || "CLIENTE",
+                      contato: row.contato || row.CONTATO || "",
+                      referencia: sku
+                    }, itemEstoque);
+                  } catch (e) {
+                    console.error("[Robô] Falha ao disparar e-mail, mas a planilha será atualizada.");
+                  }
                   
                   await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
                   
