@@ -19,9 +19,9 @@ function getRecipients(): string {
   
   const allEmails = [defaultRecipient, ...EXTRA_EMAILS]
     .filter(Boolean)
-    .map(email => email.trim()); // Remove espaços antes e depois de cada e-mail
+    .map(email => email.trim().toLowerCase()); // Garante tudo em minúsculo e sem espaços
     
-  // Retorna separados por vírgula SEM espaços, que é o padrão mais seguro pro SMTP
+  // Retorna separados por vírgula SEM espaços (padrão mais rígido do Gmail SMTP)
   return Array.from(new Set(allEmails)).join(",");
 }
 
@@ -30,7 +30,7 @@ function createTransport() {
   const pass = process.env.GMAIL_APP_PASSWORD;
 
   if (!user || !pass) {
-    console.error("[GmailService] ❌ Falha Crítica: Variáveis GMAIL_USER ou GMAIL_APP_PASSWORD estão vazias no ambiente.");
+    console.error("[GmailService] ❌ ERRO: GMAIL_USER ou GMAIL_APP_PASSWORD não configurados no Render.");
     return null;
   }
 
@@ -49,19 +49,22 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     const transport = createTransport();
     if (!transport) return false;
 
-    await transport.sendMail({
+    // 🚀 LOG DE PRÉ-ENVIO: Para sabermos o que o robô está tentando fazer
+    console.log(`[GmailService] 📧 Tentando enviar e-mail: "${payload.subject}" para: [${payload.to}]`);
+
+    const info = await transport.sendMail({
       from: `"T Store Admin" <${process.env.GMAIL_USER}>`,
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
     });
     
-    console.log(`[GmailService] ✅ E-mail disparado com sucesso para: ${payload.to}`);
+    console.log(`[GmailService] ✅ Sucesso! ID da mensagem: ${info.messageId}`);
     return true;
   } catch (error: any) {
-    // 🚀 LOG DETALHADO: Agora saberemos o motivo exato se falhar
-    console.error(`[GmailService] ❌ Falha ao enviar e-mail para ${payload.to}.`);
-    console.error(`[GmailService] Motivo da Recusa SMTP: ${error.message || error}`);
+    // 🚀 LOG DE ERRO SMTP: O Google vai nos dizer aqui por que recusou
+    console.error(`[GmailService] ❌ FALHA no envio para ${payload.to}`);
+    console.error(`[GmailService] Erro Retornado: ${error.message || error}`);
     return false;
   }
 }
@@ -83,7 +86,7 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
   const recipients = getRecipients(); 
 
   if (!recipients) {
-    console.error("[GmailService] ⚠️ Nenhum destinatário configurado para avarias. Envio abortado.");
+    console.error("[GmailService] ⚠️ Abortado: Sem destinatários para Avarias.");
     return false;
   }
 
@@ -122,7 +125,7 @@ export async function sendDemandaNotification(
   const recipients = getRecipients(); 
 
   if (!recipients) {
-    console.warn("[GmailService] ⚠️ Nenhum destinatário encontrado. Atualizando apenas a planilha sem disparar e-mail.");
+    console.warn("[GmailService] ⚠️ Abortado: Sem destinatários para Demandas.");
     return true; 
   }
 
@@ -159,6 +162,5 @@ export async function sendDemandaNotification(
     </div>
   `;
 
-  // Retornamos o resultado do sendEmail para que o router saiba se falhou ou não
   return await sendEmail({ to: recipients, subject: tituloEmail, html: htmlBody });
 }
