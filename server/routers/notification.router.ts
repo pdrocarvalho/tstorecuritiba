@@ -32,8 +32,7 @@ function getDataHojeBR() {
 
 /**
  * 🛠️ Converte uma string "DD/MM/YYYY" para um objeto Date comparável
- * Retorna uma data muito antiga se a string for vazia/inválida,
- * para garantir que o filtro bloqueie entradas sem data no estoque.
+ * Retorna uma data muito antiga se a string for vazia/inválida.
  */
 function parseDataBR(dataStr: string) {
   if (!dataStr || typeof dataStr !== 'string') return new Date(0); 
@@ -107,9 +106,6 @@ export const notificationsRouter = router({
             previsao: estagio === "PREVISAO" ? dataFormatada : "",
             dataChegada: estagio === "CHEGOU" ? dataFormatada : "",
             quantidade: item.quantidade || 0,
-            /**
-             * 🛠️ NOVO: Salvamos a data comparável para uso no filtro temporal
-             */
             dataRelevanteEstoqueStr: dataFormatada 
           });
         }
@@ -138,31 +134,34 @@ export const notificationsRouter = router({
             continue; 
           }
 
-          // 2. Novo Match com ⏳ FILTRO TEMPORAL
+          // 2. Novo Match com ⏳ FILTRO INTELIGENTE (REGRA DE LOGÍSTICA)
           const itemEstoque = estoqueMap.get(skuDemandaLimpo);
           if (itemEstoque && statusAtual === "AGUARDANDO") {
               
-              /**
-               * Captura a Data em que a Demanda foi registrada (Agora na coluna A)
-               */
               const dataDemandaStr = String(row.data || row.DATA || "").trim();
               const dataDemanda = parseDataBR(dataDemandaStr);
-              
-              // Data do recebimento do estoque
               const dataEstoque = parseDataBR(itemEstoque.dataRelevanteEstoqueStr);
 
               /**
-               * 🚀 O Filtro: Só processa se o caminhão (estoque) chegou NO DIA ou DEPOIS do pedido (demanda).
-               * Se dataEstoque for menor que dataDemanda, é um caminhão antigo. Ignora.
-               * Se a data da demanda estiver vazia/inválida (dataDemanda = 1970), ele aprova por segurança.
+               * 🚀 O FILTRO DE OURO:
+               * Se for FATURADO ou PREVISÃO, a mercadoria não chegou ainda, então é válida para demandas atuais. Aprova (true).
+               * Se for CHEGOU, fazemos a checagem temporal rígida (dataEstoque >= dataDemanda).
                */
-              if (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0) {
-                  await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
-                    consultor: consultorOriginal || "CONSULTOR",
-                    cliente: row.cliente || row.CLIENTE || "CLIENTE",
-                    contato: row.contato || row.CONTATO || "",
-                    referencia: sku
-                  }, itemEstoque);
+              const isValido = (itemEstoque.estagio === "FATURADO" || itemEstoque.estagio === "PREVISAO") 
+                              ? true 
+                              : (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
+
+              if (isValido) {
+                  try {
+                    await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
+                      consultor: consultorOriginal || "CONSULTOR",
+                      cliente: row.cliente || row.CLIENTE || "CLIENTE",
+                      contato: row.contato || row.CONTATO || "",
+                      referencia: sku
+                    }, itemEstoque);
+                  } catch (e) {
+                    console.error("[Robô] Falha ao disparar e-mail, mas a planilha será atualizada.");
+                  }
                   
                   await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
                   
