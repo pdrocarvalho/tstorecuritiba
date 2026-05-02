@@ -1,5 +1,5 @@
 /**
- * server/routers/notification.router.ts
+ * server/engines/notification.engine.ts
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -14,6 +14,8 @@ import {
   extractSpreadsheetId
 } from "../engines/sync.engine";
 
+// ℹ️ Importamos apenas para manter a assinatura das funções se necessário, 
+// mas não faremos chamadas pesadas de envio aqui.
 import { sendAvariaNotification, sendDemandaNotification } from "../services/gmail.service"; 
 
 const validateAdminPin = (pinEnviado: string) => {
@@ -49,6 +51,7 @@ async function atualizarStatusEData(url: string, aba: string, rowNumber: number,
   const sheets = google.sheets({ version: "v4", auth });
   const hoje = getDataHojeBR();
 
+  // 🚀 ESTA AÇÃO DISPARA O APPS SCRIPT (Gatilho: Ao Alterar)
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${aba}'!F${rowNumber}:G${rowNumber}`,
@@ -69,7 +72,6 @@ export const notificationsRouter = router({
       const alertas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-ALERTA_DE_DEMANDA').catch(() => []);
       const vendas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-VENDA_FUTURA').catch(() => []);
 
-      // 🚀 HISTÓRICO DE REFERÊNCIAS
       const estoqueMap = new Map<string, any[]>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
       const hojeBR = getDataHojeBR();
@@ -93,7 +95,6 @@ export const notificationsRouter = router({
             estoqueMap.set(skuLimpo, []);
         }
 
-        // SALVA TODAS AS MOVIMENTAÇÕES DESSA REFERÊNCIA
         estoqueMap.get(skuLimpo)!.push({
             estagio,
             notaFiscal: item.notaFiscal || "Verificar no Sistema",
@@ -117,7 +118,6 @@ export const notificationsRouter = router({
           const dataStatus = String(row.DATA_STATUS || row.DATASTATUS || "").trim();
           const consultorOriginal = row.consultor || row.CONSULTOR || "";
 
-          // Persistência Diária
           if (statusAtual !== "AGUARDANDO" && dataStatus === hojeBR) {
             countAtivosHoje++;
             if (consultorOriginal) consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
@@ -126,15 +126,12 @@ export const notificationsRouter = router({
 
           const movimentosEstoque = estoqueMap.get(skuDemandaLimpo);
           if (movimentosEstoque && statusAtual === "AGUARDANDO") {
-              
               const dataDemandaStr = String(row.data || row.dataRegistro || row.DATA || "").trim();
               const dataDemanda = parseDataBR(dataDemandaStr);
 
-              // 🚀 CORREÇÃO DO TYPESCRIPT AQUI
               let melhorMovimento: any = null;
               let maiorPesoEncontrado = -1;
 
-              // 🚀 AVALIA TODO O HISTÓRICO DA PEÇA PARA ACHAR O MELHOR MATCH
               for (const mov of movimentosEstoque) {
                   const dataEstoque = parseDataBR(mov.dataRelevanteEstoqueStr);
                   let isValido = false;
@@ -154,18 +151,10 @@ export const notificationsRouter = router({
                   }
               }
 
-              // SE ACHOU UM MOVIMENTO VÁLIDO
               if (melhorMovimento) {
-                  try {
-                    await sendDemandaNotification(tipo, melhorMovimento.estagio as any, {
-                      consultor: consultorOriginal || "CONSULTOR",
-                      cliente: row.cliente || row.CLIENTE || "CLIENTE",
-                      contato: row.contato || row.CONTATO || "",
-                      referencia: sku
-                    }, melhorMovimento);
-                  } catch (e) {
-                    console.error("[Robô] Falha ao disparar e-mail, mas a planilha será atualizada.");
-                  }
+                  // ℹ️ REMOVIDO: O disparo de e-mail agora ocorre na planilha
+                  // O código apenas registra o log e atualiza a célula
+                  console.log(`[Robô] Referência ${sku} encontrada. Atualizando para ${melhorMovimento.estagio}`);
                   
                   await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, melhorMovimento.estagio);
                   
@@ -175,7 +164,6 @@ export const notificationsRouter = router({
           }
         }
 
-        // Formatação da Mensagem
         let saudacao = "EQUIPE";
         const consultoresArr = Array.from(consultoresSet);
         if (consultoresArr.length === 1) saudacao = consultoresArr[0];
@@ -201,8 +189,24 @@ export const notificationsRouter = router({
 
   getLiveData: publicProcedure.input(z.object({ url: z.string(), mode: z.enum(["recebimento", "avarias", "demandas"]).optional().default("recebimento") })).query(async ({ input }) => { return await fetchLiveGoogleSheet(input.url, input.mode); }),
   saveDemanda: publicProcedure.input(z.object({ url: z.string(), aba: z.string(), dados: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.dados, input.aba); return { success: true, result }; }),
-  addAvaria: publicProcedure.input(z.object({ url: z.string(), row: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.row); const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8], tratativa: input.row[10] || 'PENDENTE', status: input.row[12] || 'PENDENTE' }; sendAvariaNotification('CRIADA', data); return result; }),
+  
+  addAvaria: publicProcedure.input(z.object({ url: z.string(), row: z.array(z.any()) })).mutation(async ({ input }) => { 
+    const result = await addRowToSheet(input.url, input.row); 
+    // ℹ️ O Apps Script da planilha de avarias pode ser configurado igual às demandas
+    return result; 
+  }),
+  
   updateAvaria: publicProcedure.input(z.object({ url: z.string(), rowNumber: z.number(), columnLetter: z.string(), newValue: z.string() })).mutation(async ({ input }) => { return await updateSheetRow(input.url, input.rowNumber, input.columnLetter, input.newValue); }),
-  editAvariaFull: publicProcedure.input(z.object({ url: z.string(), rowNumber: z.number(), row: z.array(z.any()), pin: z.string() })).mutation(async ({ input }) => { validateAdminPin(input.pin); const rows = await fetchLiveGoogleSheet(input.url, 'avarias'); const previousData = rows.find((r: any) => r.rowNumber === input.rowNumber); const result = await updateFullRow(input.url, input.rowNumber, input.row); const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8], tratativa: input.row[10], status: input.row[12] }; sendAvariaNotification('EDITADA', data, previousData); return result; }),
-  deleteAvariaRow: publicProcedure.input(z.object({ url: z.string(), rowNumber: z.number(), pin: z.string() })).mutation(async ({ input }) => { validateAdminPin(input.pin); const rows = await fetchLiveGoogleSheet(input.url, 'avarias'); const target = rows.find((r: any) => r.rowNumber === input.rowNumber); const result = await deleteSheetRow(input.url, input.rowNumber); if (target) sendAvariaNotification('EXCLUÍDA', target); return result; }),
+  
+  editAvariaFull: publicProcedure.input(z.object({ url: z.string(), rowNumber: z.number(), row: z.array(z.any()), pin: z.string() })).mutation(async ({ input }) => { 
+    validateAdminPin(input.pin); 
+    const result = await updateFullRow(input.url, input.rowNumber, input.row); 
+    return result; 
+  }),
+  
+  deleteAvariaRow: publicProcedure.input(z.object({ url: z.string(), rowNumber: z.number(), pin: z.string() })).mutation(async ({ input }) => { 
+    validateAdminPin(input.pin); 
+    const result = await deleteSheetRow(input.url, input.rowNumber); 
+    return result; 
+  }),
 });
