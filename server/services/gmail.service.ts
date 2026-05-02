@@ -1,72 +1,61 @@
 /**
  * server/services/gmail.service.ts
  */
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const nodemailer = require("nodemailer");
+import { Resend } from 'resend';
 import type { EmailPayload } from "../engines/notification.engine";
 
+// 🚀 Inicializa o Resend com a chave configurada no Render
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 // =============================================================================
-// CONFIGURAÇÃO DO TRANSPORTE E DESTINATÁRIOS
+// CONFIGURAÇÃO DE DESTINATÁRIOS
 // =============================================================================
 
 const EXTRA_EMAILS = [
   "francisco.honorio@tramontinastore.com"
 ];
 
-function getRecipients(): string {
+function getRecipients(): string[] {
   const defaultRecipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER || "";
   
   const allEmails = [defaultRecipient, ...EXTRA_EMAILS]
     .filter(Boolean)
-    .map(email => email.trim().toLowerCase()); // Garante tudo em minúsculo e sem espaços
+    .map(email => email.trim().toLowerCase());
     
-  // Retorna separados por vírgula SEM espaços (padrão mais rígido do Gmail SMTP)
-  return Array.from(new Set(allEmails)).join(",");
-}
-
-function createTransport() {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-
-  if (!user || !pass) {
-    console.error("[GmailService] ❌ ERRO: GMAIL_USER ou GMAIL_APP_PASSWORD não configurados no Render.");
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: { user, pass },
-  });
+  return Array.from(new Set(allEmails));
 }
 
 // =============================================================================
-// ENVIO DE E-MAILS BASE
+// ENVIO DE E-MAILS BASE (VIA RESEND API)
 // =============================================================================
 
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   try {
-    const transport = createTransport();
-    if (!transport) return false;
+    if (!process.env.RESEND_API_KEY) {
+      console.error("[ResendService] ❌ ERRO: RESEND_API_KEY não configurada no Render.");
+      return false;
+    }
 
-    // 🚀 LOG DE PRÉ-ENVIO: Para sabermos o que o robô está tentando fazer
-    console.log(`[GmailService] 📧 Tentando enviar e-mail: "${payload.subject}" para: [${payload.to}]`);
+    const recipients = getRecipients();
+    console.log(`[ResendService] 📧 Enviando: "${payload.subject}" para: [${recipients.join(", ")}]`);
 
-    const info = await transport.sendMail({
-      from: `"T Store Admin" <${process.env.GMAIL_USER}>`,
-      to: payload.to,
+    // O Resend envia via HTTPS (Porta 443), ignorando o bloqueio SMTP do Render
+    const { data, error } = await resend.emails.send({
+      from: 'T Store Admin <onboarding@resend.dev>', // Remetente padrão do plano grátis
+      to: recipients,
       subject: payload.subject,
       html: payload.html,
     });
-    
-    console.log(`[GmailService] ✅ Sucesso! ID da mensagem: ${info.messageId}`);
+
+    if (error) {
+      console.error(`[ResendService] ❌ Erro da API: ${error.message}`);
+      return false;
+    }
+
+    console.log(`[ResendService] ✅ Sucesso! ID: ${data?.id}`);
     return true;
-  } catch (error: any) {
-    // 🚀 LOG DE ERRO SMTP: O Google vai nos dizer aqui por que recusou
-    console.error(`[GmailService] ❌ FALHA no envio para ${payload.to}`);
-    console.error(`[GmailService] Erro Retornado: ${error.message || error}`);
+  } catch (err: any) {
+    console.error(`[ResendService] ❌ Erro inesperado: ${err.message}`);
     return false;
   }
 }
@@ -86,9 +75,8 @@ export async function sendBulkEmails(emails: EmailPayload[]): Promise<number> {
 
 export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXCLUÍDA', data: any, previousData?: any) {
   const recipients = getRecipients(); 
-
-  if (!recipients) {
-    console.error("[GmailService] ⚠️ Abortado: Sem destinatários para Avarias.");
+  if (recipients.length === 0) {
+    console.error("[ResendService] ⚠️ Abortado: Sem destinatários para Avarias.");
     return false;
   }
 
@@ -111,7 +99,7 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
     </div>
   `;
 
-  return await sendEmail({ to: recipients, subject, html: htmlContent });
+  return await sendEmail({ to: "", subject, html: htmlContent });
 }
 
 // =============================================================================
@@ -125,9 +113,8 @@ export async function sendDemandaNotification(
   estoque: { notaFiscal?: string; previsao?: string; dataChegada?: string; quantidade?: number }
 ) {
   const recipients = getRecipients(); 
-
-  if (!recipients) {
-    console.warn("[GmailService] ⚠️ Abortado: Sem destinatários para Demandas.");
+  if (recipients.length === 0) {
+    console.warn("[ResendService] ⚠️ Abortado: Sem destinatários para Demandas.");
     return true; 
   }
 
@@ -164,5 +151,5 @@ export async function sendDemandaNotification(
     </div>
   `;
 
-  return await sendEmail({ to: recipients, subject: tituloEmail, html: htmlBody });
+  return await sendEmail({ to: "", subject: tituloEmail, html: htmlBody });
 }
