@@ -10,18 +10,19 @@ import type { EmailPayload } from "../engines/notification.engine";
 // CONFIGURAÇÃO DO TRANSPORTE E DESTINATÁRIOS
 // =============================================================================
 
-// 🚀 Lista de e-mails para onde todas as notificações devem ir
 const EXTRA_EMAILS = [
   "francisco.honorio@tramontinastore.com"
 ];
 
 function getRecipients(): string {
   const defaultRecipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER || "";
-  if (!defaultRecipient) return EXTRA_EMAILS.join(", ");
   
-  // Combina o padrão com os extras e remove duplicatas (se houver)
-  const allEmails = [defaultRecipient, ...EXTRA_EMAILS].filter(Boolean);
-  return Array.from(new Set(allEmails)).join(", ");
+  const allEmails = [defaultRecipient, ...EXTRA_EMAILS]
+    .filter(Boolean)
+    .map(email => email.trim()); // Remove espaços antes e depois de cada e-mail
+    
+  // Retorna separados por vírgula SEM espaços, que é o padrão mais seguro pro SMTP
+  return Array.from(new Set(allEmails)).join(",");
 }
 
 function createTransport() {
@@ -29,7 +30,7 @@ function createTransport() {
   const pass = process.env.GMAIL_APP_PASSWORD;
 
   if (!user || !pass) {
-    console.error("[GmailService] Variáveis GMAIL_USER e GMAIL_APP_PASSWORD ausentes.");
+    console.error("[GmailService] ❌ Falha Crítica: Variáveis GMAIL_USER ou GMAIL_APP_PASSWORD estão vazias no ambiente.");
     return null;
   }
 
@@ -54,9 +55,13 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
       subject: payload.subject,
       html: payload.html,
     });
+    
+    console.log(`[GmailService] ✅ E-mail disparado com sucesso para: ${payload.to}`);
     return true;
-  } catch (error) {
-    console.error(`[GmailService] Falha ao enviar e-mail para ${payload.to}:`, error);
+  } catch (error: any) {
+    // 🚀 LOG DETALHADO: Agora saberemos o motivo exato se falhar
+    console.error(`[GmailService] ❌ Falha ao enviar e-mail para ${payload.to}.`);
+    console.error(`[GmailService] Motivo da Recusa SMTP: ${error.message || error}`);
     return false;
   }
 }
@@ -78,7 +83,7 @@ export async function sendAvariaNotification(action: 'CRIADA' | 'EDITADA' | 'EXC
   const recipients = getRecipients(); 
 
   if (!recipients) {
-    console.error("[GmailService] Nenhum destinatário configurado para avarias.");
+    console.error("[GmailService] ⚠️ Nenhum destinatário configurado para avarias. Envio abortado.");
     return false;
   }
 
@@ -117,7 +122,7 @@ export async function sendDemandaNotification(
   const recipients = getRecipients(); 
 
   if (!recipients) {
-    console.warn("[GmailService] Nenhum destinatário de e-mail encontrado. Atualizando apenas a planilha.");
+    console.warn("[GmailService] ⚠️ Nenhum destinatário encontrado. Atualizando apenas a planilha sem disparar e-mail.");
     return true; 
   }
 
@@ -154,11 +159,6 @@ export async function sendDemandaNotification(
     </div>
   `;
 
-  try {
-    await sendEmail({ to: recipients, subject: tituloEmail, html: htmlBody });
-  } catch (e) {
-    console.error("[GmailService] Erro ao disparar e-mail, seguindo com a planilha.");
-  }
-
-  return true; 
+  // Retornamos o resultado do sendEmail para que o router saiba se falhou ou não
+  return await sendEmail({ to: recipients, subject: tituloEmail, html: htmlBody });
 }

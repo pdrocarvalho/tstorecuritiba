@@ -152,16 +152,13 @@ export const notificationsRouter = router({
                               : (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
 
               if (isValido) {
-                  try {
-                    await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
-                      consultor: consultorOriginal || "CONSULTOR",
-                      cliente: row.cliente || row.CLIENTE || "CLIENTE",
-                      contato: row.contato || row.CONTATO || "",
-                      referencia: sku
-                    }, itemEstoque);
-                  } catch (e) {
-                    console.error("[Robô] Falha ao disparar e-mail, mas a planilha será atualizada.");
-                  }
+                  // O e-mail tenta ir, mas não trava o processo de faturamento no Sheet se der erro
+                  await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
+                    consultor: consultorOriginal || "CONSULTOR",
+                    cliente: row.cliente || row.CLIENTE || "CLIENTE",
+                    contato: row.contato || row.CONTATO || "",
+                    referencia: sku
+                  }, itemEstoque);
                   
                   await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
                   
