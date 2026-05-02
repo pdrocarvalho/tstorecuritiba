@@ -23,17 +23,10 @@ const validateAdminPin = (pinEnviado: string) => {
   }
 };
 
-/**
- * 🛠️ Obtém a data de hoje corrigida para o fuso de Brasília
- */
 function getDataHojeBR() {
   return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
-/**
- * 🛠️ Converte uma string "DD/MM/YYYY" para um objeto Date comparável
- * Retorna uma data muito antiga se a string for vazia/inválida.
- */
 function parseDataBR(dataStr: string) {
   if (!dataStr || typeof dataStr !== 'string') return new Date(0); 
   const p = dataStr.split('/');
@@ -41,9 +34,6 @@ function parseDataBR(dataStr: string) {
   return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12, 0, 0);
 }
 
-/**
- * ⚠️ ATENÇÃO: As colunas andaram! Agora STATUS = F e DATA STATUS = G
- */
 async function atualizarStatusEData(url: string, aba: string, rowNumber: number, novoStatus: string) {
   const spreadsheetId = extractSpreadsheetId(url);
   if (!spreadsheetId) return;
@@ -61,7 +51,7 @@ async function atualizarStatusEData(url: string, aba: string, rowNumber: number,
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${aba}'!F${rowNumber}:G${rowNumber}`, // 🚀 Ajustado de E:F para F:G
+    range: `'${aba}'!F${rowNumber}:G${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[novoStatus, hoje]] }
   });
@@ -79,7 +69,8 @@ export const notificationsRouter = router({
       const alertas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-ALERTA_DE_DEMANDA').catch(() => []);
       const vendas = await fetchLiveGoogleSheet(input.urlDemandas, 'demandas', 'DB-VENDA_FUTURA').catch(() => []);
 
-      const estoqueMap = new Map<string, any>();
+      // 🚀 HISTÓRICO DE REFERÊNCIAS
+      const estoqueMap = new Map<string, any[]>();
       const pesoEstagio = { "AGUARDANDO": 0, "FATURADO": 1, "PREVISAO": 2, "CHEGOU": 3 };
       const hojeBR = getDataHojeBR();
       const limparSKU = (sku: any) => String(sku || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
@@ -98,17 +89,19 @@ export const notificationsRouter = router({
           dataFormatada = item.previsaoEntrega instanceof Date ? item.previsaoEntrega.toLocaleDateString('pt-BR') : item.previsaoEntrega;
         }
 
-        const atual = estoqueMap.get(skuLimpo);
-        if (!atual || pesoEstagio[estagio as keyof typeof pesoEstagio] > pesoEstagio[atual.estagio as keyof typeof pesoEstagio]) {
-          estoqueMap.set(skuLimpo, {
+        if (!estoqueMap.has(skuLimpo)) {
+            estoqueMap.set(skuLimpo, []);
+        }
+
+        // SALVA TODAS AS MOVIMENTAÇÕES DESSA REFERÊNCIA
+        estoqueMap.get(skuLimpo)!.push({
             estagio,
             notaFiscal: item.notaFiscal || "Verificar no Sistema",
             previsao: estagio === "PREVISAO" ? dataFormatada : "",
             dataChegada: estagio === "CHEGOU" ? dataFormatada : "",
             quantidade: item.quantidade || 0,
             dataRelevanteEstoqueStr: dataFormatada 
-          });
-        }
+        });
       }
 
       const processar = async (lista: any[], tipo: "ALERTA" | "VENDA", abaNome: string) => {
@@ -116,7 +109,6 @@ export const notificationsRouter = router({
         let consultoresSet = new Set<string>();
         
         for (const row of lista) {
-          // Captura as chaves independente de como o motor as nomeou
           const sku = row.referencia || row.REFERENCIA || row.REF || row.REF_;
           if (!sku) continue;
 
@@ -125,67 +117,69 @@ export const notificationsRouter = router({
           const dataStatus = String(row.DATA_STATUS || row.DATASTATUS || "").trim();
           const consultorOriginal = row.consultor || row.CONSULTOR || "";
 
-          // 1. Persistência Diária (Filtro por data correta BR)
+          // Persistência Diária
           if (statusAtual !== "AGUARDANDO" && dataStatus === hojeBR) {
             countAtivosHoje++;
-            if (consultorOriginal) {
-              consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
-            }
+            if (consultorOriginal) consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
             continue; 
           }
 
-          // 2. Novo Match com ⏳ FILTRO INTELIGENTE (REGRA DE LOGÍSTICA)
-          const itemEstoque = estoqueMap.get(skuDemandaLimpo);
-          if (itemEstoque && statusAtual === "AGUARDANDO") {
+          const movimentosEstoque = estoqueMap.get(skuDemandaLimpo);
+          if (movimentosEstoque && statusAtual === "AGUARDANDO") {
               
-              // 🚀 LÊ A DATA CORRETAMENTE DO MOTOR (Seja 'data' ou 'dataRegistro' dependendo do seu sync engine)
               const dataDemandaStr = String(row.data || row.dataRegistro || row.DATA || "").trim();
               const dataDemanda = parseDataBR(dataDemandaStr);
-              const dataEstoque = parseDataBR(itemEstoque.dataRelevanteEstoqueStr);
 
-              /**
-               * 🚀 REGRA RÍGIDA:
-               * Se for CHEGOU (Estágio 3), a data de entrega DEVE ser maior ou igual à data do registro da demanda.
-               * Se a data da demanda for 1970 (vazia/inválida), ele aprova por segurança.
-               * Para FATURADO/PREVISÃO (Estágios 1 e 2), mantemos a aprovação pois o caminhão ainda não encostou, então serve para a demanda de hoje.
-               */
-              let isValido = false;
-              if (itemEstoque.estagio === "FATURADO" || itemEstoque.estagio === "PREVISAO") {
-                  isValido = true;
-              } else if (itemEstoque.estagio === "CHEGOU") {
-                  isValido = (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
+              // 🚀 CORREÇÃO DO TYPESCRIPT AQUI
+              let melhorMovimento: any = null;
+              let maiorPesoEncontrado = -1;
+
+              // 🚀 AVALIA TODO O HISTÓRICO DA PEÇA PARA ACHAR O MELHOR MATCH
+              for (const mov of movimentosEstoque) {
+                  const dataEstoque = parseDataBR(mov.dataRelevanteEstoqueStr);
+                  let isValido = false;
+
+                  if (mov.estagio === "FATURADO" || mov.estagio === "PREVISAO") {
+                      isValido = true;
+                  } else if (mov.estagio === "CHEGOU") {
+                      isValido = (dataEstoque >= dataDemanda || dataDemanda.getTime() === 0);
+                  }
+
+                  if (isValido) {
+                      const pesoAtual = pesoEstagio[mov.estagio as keyof typeof pesoEstagio];
+                      if (pesoAtual > maiorPesoEncontrado) {
+                          maiorPesoEncontrado = pesoAtual;
+                          melhorMovimento = mov;
+                      }
+                  }
               }
 
-              if (isValido) {
+              // SE ACHOU UM MOVIMENTO VÁLIDO
+              if (melhorMovimento) {
                   try {
-                    await sendDemandaNotification(tipo, itemEstoque.estagio as any, {
+                    await sendDemandaNotification(tipo, melhorMovimento.estagio as any, {
                       consultor: consultorOriginal || "CONSULTOR",
                       cliente: row.cliente || row.CLIENTE || "CLIENTE",
                       contato: row.contato || row.CONTATO || "",
                       referencia: sku
-                    }, itemEstoque);
+                    }, melhorMovimento);
                   } catch (e) {
                     console.error("[Robô] Falha ao disparar e-mail, mas a planilha será atualizada.");
                   }
                   
-                  await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, itemEstoque.estagio);
+                  await atualizarStatusEData(input.urlDemandas, abaNome, row.rowNumber, melhorMovimento.estagio);
                   
                   countAtivosHoje++;
-                  if (consultorOriginal) {
-                    consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
-                  }
+                  if (consultorOriginal) consultoresSet.add(String(consultorOriginal).split(' ')[0].toUpperCase());
               }
           }
         }
 
-        // 3. Formatação da Mensagem
+        // Formatação da Mensagem
         let saudacao = "EQUIPE";
         const consultoresArr = Array.from(consultoresSet);
-        if (consultoresArr.length === 1) {
-          saudacao = consultoresArr[0];
-        } else if (consultoresArr.length >= 2) {
-          saudacao = consultoresArr.slice(0, 2).join(" E ");
-        }
+        if (consultoresArr.length === 1) saudacao = consultoresArr[0];
+        else if (consultoresArr.length >= 2) saudacao = consultoresArr.slice(0, 2).join(" E ");
 
         const nFormatado = countAtivosHoje.toString().padStart(2, '0');
         const txtNotif = countAtivosHoje === 1 ? "notificação" : "notificações";
@@ -205,7 +199,6 @@ export const notificationsRouter = router({
       };
     }),
 
-  // --- RESTANTE DAS ROTAS MANTIDAS ---
   getLiveData: publicProcedure.input(z.object({ url: z.string(), mode: z.enum(["recebimento", "avarias", "demandas"]).optional().default("recebimento") })).query(async ({ input }) => { return await fetchLiveGoogleSheet(input.url, input.mode); }),
   saveDemanda: publicProcedure.input(z.object({ url: z.string(), aba: z.string(), dados: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.dados, input.aba); return { success: true, result }; }),
   addAvaria: publicProcedure.input(z.object({ url: z.string(), row: z.array(z.any()) })).mutation(async ({ input }) => { const result = await addRowToSheet(input.url, input.row); const data = { codAvaria: input.row[2], fabrica: input.row[1], ref: input.row[3], qtde: input.row[5], descricao: input.row[4], motivo: input.row[7], responsavel: input.row[8], tratativa: input.row[10] || 'PENDENTE', status: input.row[12] || 'PENDENTE' }; sendAvariaNotification('CRIADA', data); return result; }),
