@@ -34,7 +34,7 @@ const STATUS_OPTIONS = [
 const FORM_VAZIO = {
   fabrica: "", ref: "", descricao: "", qtde: "1", nfEntrada: "", motivo: "", responsavel: "", 
   tratativa: "PENDENTE", status: "PENDENTE", constaFisicamente: "SIM", lancadoSistema: "NÃO",
-  nfSaida: "", nfReposicao: "", dataColeta: ""
+  nfSaida: "", nfReposicao: "", dataColeta: "", cupomFiscal: ""
 };
 
 export default function GestaoAvarias() {
@@ -104,21 +104,22 @@ export default function GestaoAvarias() {
 
   const abrirModalEdicao = (av: any) => {
     setEditingAvaria(av);
-    // 🛠️ MAPEAMENTO CORRIGIDO PARA O NOVO MOTOR
+    // 🛠️ MAPEAMENTO SINCRONIZADO COM A NOVA PLANILHA (A-Q)
     setForm({
-      fabrica: av.FABRICA || av.FABRICA_ || "",
-      ref: av.REF || av.REF_ || "",
-      descricao: av.DESCRICAO || av.DESCRICAO_ || av.DESCRIÇÃO || "",
-      qtde: av.QTDE || av.QTDE_ || "1",
-      nfEntrada: av.NOTA_FISCAL_DE_ENTRADA || av.NOTA_FISCAL_DE_ENTRADA_ || "",
+      fabrica: av.FABRICA || "",
+      ref: av.REF || "",
+      descricao: av.DESCRICAO || av.DESCRIÇÃO || "",
+      qtde: av.QTDE || "1",
+      nfEntrada: av.NOTA_FISCAL_DE_ENTRADA || "",
+      cupomFiscal: av.CUPOM_FISCAL || "",
       motivo: av.MOTIVO || "",
-      responsavel: av.RESPONSAVEL || av.RESPONSAVEL_ || av.RESPONSÁVEL || "",
+      responsavel: av.RESPONSAVEL || av.RESPONSÁVEL || "",
       tratativa: av.TRATATIVA || "PENDENTE",
       status: av.STATUS || "PENDENTE",
-      constaFisicamente: av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ || "SIM",
-      lancadoSistema: av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ || "NÃO",
-      nfSaida: av.NOTA_FISCAL_DE_SAIDA || av.NOTA_FISCAL_DE_SAIDA_ || "",
-      nfReposicao: av.NOTA_FISCAL_DE_REPOSICAO || av.NOTA_FISCAL_DE_REPOSICAO_ || "",
+      constaFisicamente: av.CONSTA_FISICAMENTE || "SIM",
+      lancadoSistema: av.FOI_LANCADO_NO_SISTEMA || "NÃO",
+      nfSaida: av.NOTA_FISCAL_DE_SAIDA || "",
+      nfReposicao: av.NOTA_FISCAL_DE_REPOSICAO || "",
       dataColeta: av.DATA_DA_COLETA || ""
     });
     setShowModal(true);
@@ -130,15 +131,31 @@ export default function GestaoAvarias() {
     if (editingAvaria) {
       setPinModal({ isOpen: true, action: 'edit' });
     } else {
-      const fabrica = FABRICAS.find(f => f.nome === form.fabrica);
-      const prefixo = fabrica?.prefixo || "AVR";
-      const codigosExistentes = todasAvarias.map((a: any) => String(a.COD_AVARIA || a.COD__AVARIA || a.CÓD__AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
+      const fabricaObj = FABRICAS.find(f => f.nome === form.fabrica);
+      const prefixo = fabricaObj?.prefixo || "AVR";
+      const codigosExistentes = todasAvarias.map((a: any) => String(a.COD_AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
       const proximoNumero = codigosExistentes.length > 0 ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
       const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
       
+      // 🚀 NOVA ORDEM DE CRIAÇÃO (A-Q)
       const novaLinha = [
-        new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, form.qtde, 
-        form.nfEntrada, form.motivo, form.responsavel, "NÃO", "PENDENTE", "SIM", "PENDENTE", "", "", ""
+        new Date().toLocaleDateString('pt-BR'), // A: DATA ENTRADA
+        form.fabrica,                          // B: FÁBRICA
+        codAvaria,                             // C: CÓD. AVARIA
+        form.ref,                              // D: REF.
+        form.descricao,                        // E: DESCRIÇÃO
+        form.qtde,                             // F: QTDE.
+        form.nfEntrada,                        // G: NF ENTRADA
+        form.cupomFiscal,                      // H: CUPOM FISCAL
+        form.motivo,                           // I: MOTIVO
+        form.responsavel,                      // J: RESPONSÁVEL
+        form.lancadoSistema,                   // K: SISTEMA
+        form.tratativa,                        // L: TRATATIVA
+        form.constaFisicamente,                // M: FÍSICO
+        form.dataColeta,                       // N: DATA COLETA
+        form.nfSaida,                          // O: NF SAÍDA
+        form.nfReposicao,                      // P: NF REPOSIÇÃO
+        form.status                            // Q: STATUS
       ];
       mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
     }
@@ -151,28 +168,31 @@ export default function GestaoAvarias() {
       mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.avariaTarget.rowNumber, pin: pinValue });
     } 
     else if (pinModal.action === 'edit' && editingAvaria) {
+      // 🚀 NOVA ORDEM DE EDIÇÃO (A-Q) - IMPECÁVEL
       const linhaAtualizada = [
-        editingAvaria.DATA_DE_ENTRADA || editingAvaria.DATA_DE_ENTRADA_, 
-        form.fabrica,                   
-        editingAvaria.COD_AVARIA || editingAvaria.COD__AVARIA || editingAvaria.CÓD__AVARIA, 
-        form.ref,                       
-        form.descricao,                 
-        form.qtde,                      
-        form.nfEntrada,                 
-        form.motivo,                   
-        form.responsavel,               
-        form.lancadoSistema,           
-        form.tratativa,                 
-        form.constaFisicamente,         
-        form.status,                   
-        form.nfSaida,                   
-        form.nfReposicao,               
-        form.dataColeta                 
+        editingAvaria.DATA_DE_ENTRADA || "",  // A
+        form.fabrica,                         // B
+        editingAvaria.COD_AVARIA || "",       // C
+        form.ref,                             // D
+        form.descricao,                       // E
+        form.qtde,                            // F
+        form.nfEntrada,                       // G
+        form.cupomFiscal,                     // H
+        form.motivo,                          // I
+        form.responsavel,                      // J
+        form.lancadoSistema,                  // K
+        form.tratativa,                       // L
+        form.constaFisicamente,               // M
+        form.dataColeta,                      // N
+        form.nfSaida,                         // O
+        form.nfReposicao,                     // P
+        form.status                           // Q
       ];
       mutationEdit.mutate({ url: urlPlanilha, rowNumber: editingAvaria.rowNumber, row: linhaAtualizada, pin: pinValue });
     }
   };
 
+  // ... (getTratativaStyle, toggleFiltro, avariasFiltradas, handlePrint permanecem iguais)
   const getTratativaStyle = (texto: string) => {
     if (!texto) return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
     const t = texto.toUpperCase().trim();
@@ -192,8 +212,8 @@ export default function GestaoAvarias() {
   const avariasFiltradas = useMemo(() => {
     return todasAvarias.filter((a: any) => {
       const search = filtroSku.toLowerCase();
-      const refValue = String(a.REF || a.REF_ || "").toLowerCase();
-      const codValue = String(a.COD_AVARIA || a.COD__AVARIA || a.CÓD__AVARIA || "").toLowerCase();
+      const refValue = String(a.REF || "").toLowerCase();
+      const codValue = String(a.COD_AVARIA || "").toLowerCase();
       const matchesSearch = !filtroSku || refValue.includes(search) || codValue.includes(search);
       const tratativaRow = String(a.TRATATIVA || "PENDENTE").toUpperCase().trim();
       const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(tratativaRow);
@@ -224,10 +244,10 @@ export default function GestaoAvarias() {
             <tbody>
               ${avariasFiltradas.map((av: any) => `
                 <tr>
-                  <td>${av.COD_AVARIA || av.COD__AVARIA || av.CÓD__AVARIA || ""}</td>
-                  <td>${av.REF || av.REF_ || ""}</td>
+                  <td>${av.COD_AVARIA || ""}</td>
+                  <td>${av.REF || ""}</td>
                   <td>${av.DESCRICAO || av.DESCRIÇÃO || ""}</td>
-                  <td><strong style="color: red;">${av.QTDE || av.QTDE_ || ""}</strong></td>
+                  <td><strong style="color: red;">${av.QTDE || ""}</strong></td>
                   <td>${av.NOTA_FISCAL_DE_ENTRADA || ""}</td>
                   <td>${av.TRATATIVA || "PENDENTE"}</td>
                 </tr>
@@ -313,10 +333,10 @@ export default function GestaoAvarias() {
                       <React.Fragment key={idx}>
                         <tr onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer transition-all ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}>
                           <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
-                          <td className="px-4 font-bold text-slate-900">{av.COD_AVARIA || av.COD__AVARIA || av.CÓD__AVARIA || '-'}</td>
-                          <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF || av.REF_ || '-'}</span></td>
+                          <td className="px-4 font-bold text-slate-900">{av.COD_AVARIA || '-'}</td>
+                          <td className="px-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs">{av.REF || '-'}</span></td>
                           <td className="px-4 text-slate-700 font-medium">{av.DESCRICAO || av.DESCRIÇÃO || '-'}</td>
-                          <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE || av.QTDE_ || '-'}</td>
+                          <td className="px-4 text-center font-black text-red-600 text-base">{av.QTDE || '-'}</td>
                           <td className="px-4 text-slate-500">{av.NOTA_FISCAL_DE_ENTRADA || '-'}</td>
                           <td className="px-6 text-right">
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border shadow-sm ${style.class}`}>
@@ -340,8 +360,8 @@ export default function GestaoAvarias() {
                                 <div className="space-y-4">
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Identificação</h4>
                                   <div className="grid grid-cols-2 gap-4">
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || av.DATA_DE_ENTRADA_ || '-'}</p></div>
-                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FABRICA || av.FÁBRICA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Entrada</p><p className="font-semibold text-slate-700">{av.DATA_DE_ENTRADA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">Unidade</p><p className="font-semibold text-slate-700">{av.FABRICA || '-'}</p></div>
                                   </div>
                                   <div><p className="text-[10px] text-slate-400 font-bold uppercase">Responsável</p><p className="font-semibold text-slate-700">{av.RESPONSAVEL || av.RESPONSÁVEL || '-'}</p></div>
                                 </div>
@@ -349,8 +369,8 @@ export default function GestaoAvarias() {
                                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-1">Diagnóstico</h4>
                                   <div><p className="text-[10px] text-slate-400 font-bold uppercase">Motivo</p><p className="text-xs text-slate-700 italic bg-white p-3 rounded-lg border border-slate-200 mt-1">{av.MOTIVO || 'Não informado.'}</p></div>
                                   <div className="flex gap-3">
-                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE || av.CONSTA_FISICAMENTE_ || '-'}</div>
-                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA || av.FOI_LANCADO_NO_SISTEMA_ || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.CONSTA_FISICAMENTE === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>FÍSICO: {av.CONSTA_FISICAMENTE || '-'}</div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-black border ${av.FOI_LANCADO_NO_SISTEMA === 'SIM' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>SISTEMA: {av.FOI_LANCADO_NO_SISTEMA || '-'}</div>
                                   </div>
                                 </div>
                                 <div className="space-y-4">
@@ -358,6 +378,7 @@ export default function GestaoAvarias() {
                                   <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
                                     <div><p className="text-[10px] text-slate-400 font-bold uppercase">Status Interno</p><p className="text-xs font-black">{av.STATUS || 'PENDENTE'}</p></div>
                                     <div><p className="text-[10px] text-slate-400 font-bold uppercase">Data Coleta</p><p className="text-xs">{av.DATA_DA_COLETA || '-'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase">NFs Logística</p><p className="text-[9px] text-slate-500">Saída: {av.NOTA_FISCAL_DE_SAIDA || '-'}</p><p className="text-[9px] text-slate-500">Reposição: {av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p></div>
                                   </div>
                                 </div>
                               </div>
@@ -411,9 +432,15 @@ export default function GestaoAvarias() {
                   <label className="text-xs font-bold text-slate-500 uppercase">Descrição do Produto</label>
                   <Input placeholder="Nome do produto..." value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">NF de Entrada</label>
-                  <Input placeholder="Opcional" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} />
+                <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">NF de Entrada</label>
+                    <Input placeholder="NF Entrada" value={form.nfEntrada} onChange={(e) => setForm({...form, nfEntrada: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Cupom Fiscal</label>
+                    <Input placeholder="Cupom/NF Consumidor" value={form.cupomFiscal} onChange={(e) => setForm({...form, cupomFiscal: e.target.value})} />
+                  </div>
                 </div>
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">Motivo da Avaria</label>
@@ -426,7 +453,7 @@ export default function GestaoAvarias() {
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mt-8 mb-4 border-t pt-6">Logística e Tratativa</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-5 rounded-xl border border-slate-200">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Tratativa Externa</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Tratativa Externa (Planilha)</label>
                       <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.tratativa} onChange={(e) => setForm({...form, tratativa: e.target.value})}>
                         <option value="PENDENTE">Pendente</option>
                         <option value="AGUARDANDO COLETA">Aguardando Coleta</option>
@@ -435,8 +462,8 @@ export default function GestaoAvarias() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Status Interno</label>
-                      <Input className="h-9 text-xs" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} />
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Status Operacional</label>
+                      <Input className="h-9 text-xs" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} placeholder="Status para e-mail" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Data da Coleta</label>
