@@ -26,7 +26,6 @@ const FABRICAS = [
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "Pendente", color: "red" },
-  { id: "AGUARDANDO COLETA", label: "Aguardando Coleta", color: "blue" },
   { id: "EM PROCESSO", label: "Em Processo", color: "amber" },
   { id: "CONCLUÍDA", label: "Concluída", color: "emerald" },
 ];
@@ -104,7 +103,6 @@ export default function GestaoAvarias() {
 
   const abrirModalEdicao = (av: any) => {
     setEditingAvaria(av);
-    // 🛠️ MAPEAMENTO SINCRONIZADO COM A NOVA PLANILHA (A-Q)
     setForm({
       fabrica: av.FABRICA || "",
       ref: av.REF || "",
@@ -137,25 +135,24 @@ export default function GestaoAvarias() {
       const proximoNumero = codigosExistentes.length > 0 ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
       const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
       
-      // 🚀 NOVA ORDEM DE CRIAÇÃO (A-Q)
       const novaLinha = [
-        new Date().toLocaleDateString('pt-BR'), // A: DATA ENTRADA
-        form.fabrica,                          // B: FÁBRICA
-        codAvaria,                             // C: CÓD. AVARIA
-        form.ref,                              // D: REF.
-        form.descricao,                        // E: DESCRIÇÃO
-        form.qtde,                             // F: QTDE.
-        form.nfEntrada,                        // G: NF ENTRADA
-        form.cupomFiscal,                      // H: CUPOM FISCAL
-        form.motivo,                           // I: MOTIVO
-        form.responsavel,                      // J: RESPONSÁVEL
-        form.lancadoSistema,                   // K: SISTEMA
-        form.tratativa,                        // L: TRATATIVA
-        form.constaFisicamente,                // M: FÍSICO
-        form.dataColeta,                       // N: DATA COLETA
-        form.nfSaida,                          // O: NF SAÍDA
-        form.nfReposicao,                      // P: NF REPOSIÇÃO
-        form.status                            // Q: STATUS
+        new Date().toLocaleDateString('pt-BR'), // A
+        form.fabrica,                          // B
+        codAvaria,                             // C
+        form.ref,                              // D
+        form.descricao,                        // E
+        form.qtde,                             // F
+        form.nfEntrada,                        // G
+        form.cupomFiscal,                      // H
+        form.motivo,                           // I
+        form.responsavel,                      // J
+        form.lancadoSistema,                   // K
+        form.tratativa,                        // L
+        form.constaFisicamente,                // M
+        form.dataColeta,                       // N
+        form.nfSaida,                          // O
+        form.nfReposicao,                      // P
+        form.status                            // Q
       ];
       mutationAdd.mutate({ url: urlPlanilha, row: novaLinha });
     }
@@ -168,36 +165,33 @@ export default function GestaoAvarias() {
       mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.avariaTarget.rowNumber, pin: pinValue });
     } 
     else if (pinModal.action === 'edit' && editingAvaria) {
-      // 🚀 NOVA ORDEM DE EDIÇÃO (A-Q) - IMPECÁVEL
       const linhaAtualizada = [
-        editingAvaria.DATA_DE_ENTRADA || "",  // A
-        form.fabrica,                         // B
-        editingAvaria.COD_AVARIA || "",       // C
-        form.ref,                             // D
-        form.descricao,                       // E
-        form.qtde,                            // F
-        form.nfEntrada,                       // G
-        form.cupomFiscal,                     // H
-        form.motivo,                          // I
-        form.responsavel,                      // J
-        form.lancadoSistema,                  // K
-        form.tratativa,                       // L
-        form.constaFisicamente,               // M
-        form.dataColeta,                      // N
-        form.nfSaida,                         // O
-        form.nfReposicao,                     // P
-        form.status                           // Q
+        editingAvaria.DATA_DE_ENTRADA || "", 
+        form.fabrica,                        
+        editingAvaria.COD_AVARIA || "",      
+        form.ref,                            
+        form.descricao,                      
+        form.qtde,                            
+        form.nfEntrada,                      
+        form.cupomFiscal,                    
+        form.motivo,                         
+        form.responsavel,                     
+        form.lancadoSistema,                 
+        form.tratativa,                      
+        form.constaFisicamente,              
+        form.dataColeta,                     
+        form.nfSaida,                        
+        form.nfReposicao,                    
+        form.status                          
       ];
       mutationEdit.mutate({ url: urlPlanilha, rowNumber: editingAvaria.rowNumber, row: linhaAtualizada, pin: pinValue });
     }
   };
 
-  // ... (getTratativaStyle, toggleFiltro, avariasFiltradas, handlePrint permanecem iguais)
   const getTratativaStyle = (texto: string) => {
     if (!texto) return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
     const t = texto.toUpperCase().trim();
     if (t === "PENDENTE") return { class: "bg-red-100 text-red-700 border-red-300", icon: <AlertOctagon size={10}/> };
-    if (t === "AGUARDANDO COLETA") return { class: "bg-blue-100 text-blue-700 border-blue-300", icon: <Timer size={10}/> };
     if (t === "EM PROCESSO") return { class: "bg-amber-100 text-amber-700 border-amber-300", icon: <Truck size={10}/> };
     if (t === "CONCLUÍDA" || t === "CONCLUIDA") return { class: "bg-emerald-100 text-emerald-700 border-emerald-300", icon: <PackageCheck size={10}/> };
     return { class: "bg-slate-100 text-slate-600 border-slate-200", icon: <Tag size={10}/> };
@@ -456,7 +450,6 @@ export default function GestaoAvarias() {
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Tratativa Externa (Planilha)</label>
                       <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs" value={form.tratativa} onChange={(e) => setForm({...form, tratativa: e.target.value})}>
                         <option value="PENDENTE">Pendente</option>
-                        <option value="AGUARDANDO COLETA">Aguardando Coleta</option>
                         <option value="EM PROCESSO">Em Processo</option>
                         <option value="CONCLUÍDA">Concluída</option>
                       </select>

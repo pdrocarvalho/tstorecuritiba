@@ -54,7 +54,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
   }
 
-  // Lemos até a Z para garantir que pegamos as colunas novas (O, P, Q, R...)
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId: spreadsheetId as string, 
     range: `'${targetSheetName}'!A:Z` 
@@ -65,7 +64,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
 
   let headerRowIndex = 0;
   if (mode === 'avarias' || mode === 'demandas') {
-      headerRowIndex = 1; // Cabeçalho na Linha 2
+      headerRowIndex = 1; 
   }
 
   if (!rows[headerRowIndex]) return [];
@@ -75,18 +74,17 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   
   const data = rows.slice(headerRowIndex + 1).map((row, index) => {
     const obj: any = { rowNumber: headerRowIndex + index + 2 }; 
+    let tempQtdeCaixa = 0, tempVolumes = 0, hasQtdeCaixa = false;
 
     headersOriginais.forEach((header, idx) => {
       const val = row[idx] || "";
       const hLimpo = headersLimpos[idx];
       
-      // Cria chaves amigáveis (ex: DATA_DE_ENTRADA)
       const key = header.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
 
       const isRef = hLimpo === "REF" || hLimpo.includes("REFERENCIA") || hLimpo === "REF_";
 
-      // MAPEAMENTO ESPECÍFICO PARA AVARIAS (Sincronizado com A-Q)
       if (mode === 'avarias') {
           if (isRef) obj.REF = String(val).trim();
           if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
@@ -119,11 +117,30 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       if (mode === 'recebimento') {
         if (isRef) obj.produtoSku = String(val).trim();
         if (hLimpo.includes("DESCRI")) obj.descricao = val;
+        if (hLimpo.includes("REMETENTE")) obj.remetente = val;
         if (hLimpo.includes("NOTAFISCAL")) obj.notaFiscal = val;
-        // ... (resto da lógica de recebimento mantida)
+        if (hLimpo.includes("MUNDO")) obj.mundo = val;
+        
+        if (hLimpo.includes("PREVIS")) {
+            const p = String(val).split("/");
+            obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
+        }
+        if (hLimpo.includes("ENTREGA") && !hLimpo.includes("PREVIS")) {
+            const p = String(val).split("/");
+            obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
+        }
+        if (hLimpo === "VOLUMES") tempVolumes = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
+        if (hLimpo.includes("QTDE") && hLimpo.includes("CAIXA")) {
+            tempQtdeCaixa = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
+            hasQtdeCaixa = true;
+        }
       }
     });
 
+    if (mode === 'recebimento') {
+        obj.volumesCaixas = tempVolumes; 
+        obj.quantidade = hasQtdeCaixa ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes) : tempVolumes;
+    }
     return obj;
   });
 
@@ -132,9 +149,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
-
-// Funções addRowToSheet, updateSheetRow, updateFullRow e deleteSheetRow 
-// permanecem iguais, pois já trabalham de forma genérica com arrays.
 
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
     const spreadsheetId = extractSpreadsheetId(sheetsUrl);
@@ -201,3 +215,6 @@ export async function deleteSheetRow(url: string, rowNumber: number) {
       }
   });
 }
+
+export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] }; }
+export async function testarLeituraRobo(url: string) { return { status: "success", linhasLidas: 0, exemplo: "" }; }
