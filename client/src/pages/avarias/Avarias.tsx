@@ -405,7 +405,7 @@ export default function GestaoAvarias() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">Fábrica <span className="text-red-500">*</span></label>
-                  <select className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-red-500" value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})} disabled={!!editingAvaria}>
+                  <select className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-red-500" value={form.fabrica} onChange={(e) => setForm({...form, fabrica: e.target.value})}>
                     <option value="">Selecione...</option>
                     {FABRICAS.map(f => <option key={f.nome} value={f.nome}>{f.nome}</option>)}
                   </select>
@@ -454,10 +454,7 @@ export default function GestaoAvarias() {
                         <option value="CONCLUÍDA">Concluída</option>
                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Status Operacional</label>
-                      <Input className="h-9 text-xs" value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} placeholder="Status para e-mail" />
-                    </div>
+                    {/* 💡 Status Operacional Removido da edição direta para não afetar o controle do robô */}
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Data da Coleta</label>
                       <Input className="h-9 text-xs" value={form.dataColeta} onChange={(e) => setForm({...form, dataColeta: e.target.value})} placeholder="DD/MM/AAAA" />
