@@ -16,13 +16,17 @@ const EXTRA_EMAILS = [
 ];
 
 function getRecipients(): string[] {
+  // 💡 COMENTAMOS A LÓGICA ANTIGA PARA NÃO PERDÊ-LA
+  /*
   const defaultRecipient = process.env.GMAIL_RECEIVER || process.env.GMAIL_USER || "";
-  
   const allEmails = [defaultRecipient, ...EXTRA_EMAILS]
     .filter(Boolean)
     .map(email => email.trim().toLowerCase());
-    
   return Array.from(new Set(allEmails));
+  */
+
+  // 🚀 FORÇAMOS APENAS O SEU E-MAIL QUE JÁ ESTÁ VERIFICADO NO RESEND
+  return ["pdrolcarvalho@gmail.com"]; 
 }
 
 // =============================================================================
