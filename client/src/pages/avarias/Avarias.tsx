@@ -25,7 +25,7 @@ const FABRICAS = [
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
-  { id: "EM PROCESSO", label: "EM PROCESSO", color: "amber" },
+  { id: "EM PROCESSO", label: "EM PROCESSO", color: "blue" }, // 🚀 ALTERADO PARA BLUE (#2563eb)
   { id: "CONCLUÍDA", label: "CONCLUÍDA", color: "emerald" },
 ];
 
@@ -149,25 +149,12 @@ export default function GestaoAvarias() {
       const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
       
       const novaLinha = [
-        new Date().toLocaleDateString('pt-BR'), // A
-        form.fabrica,                          // B
-        codAvaria,                             // C
-        form.ref,                              // D
-        form.descricao,                        // E
-        form.qtde,                             // F
-        form.nfEntrada,                        // G
-        form.cupomFiscal,                      // H
-        form.motivo,                           // I
-        form.responsavel,                      // J
-        form.lancadoSistema,                   // K
-        form.tratativa,                        // L
-        form.constaFisicamente,                // M
-        form.dataColeta,                       // N
-        form.nfSaida,                          // O
-        form.nfReposicao,                      // P
-        form.status,                           // Q
-        "",                                    // R (Controle do Robô - vazio na criação)
-        form.observacoes                       // S (Coluna 19)
+        new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao, 
+        form.qtde, form.nfEntrada, form.cupomFiscal, form.motivo, form.responsavel, 
+        form.lancadoSistema, form.tratativa, form.constaFisicamente, form.dataColeta, 
+        form.nfSaida, form.nfReposicao, form.status, 
+        "", // R (Controle)
+        form.observacoes // S
       ];
       mutationAdd.mutate({ url: urlPlanilha, row: novaLinha.map(v => typeof v === 'string' ? v.toUpperCase() : v) });
     }
@@ -181,25 +168,12 @@ export default function GestaoAvarias() {
     } 
     else if (pinModal.action === 'edit' && editingAvaria) {
       const linhaAtualizada = [
-        editingAvaria.DATA_DE_ENTRADA || "", 
-        form.fabrica,                        
-        editingAvaria.COD_AVARIA || "",      
-        form.ref,                            
-        form.descricao,                      
-        form.qtde,                            
-        form.nfEntrada,                      
-        form.cupomFiscal,                    
-        form.motivo,                         
-        form.responsavel,                     
-        form.lancadoSistema,                 
-        form.tratativa,                      
-        form.constaFisicamente,              
-        form.dataColeta,                     
-        form.nfSaida,                        
-        form.nfReposicao,                    
-        form.status,
-        editingAvaria.OK_STATUS || "",         // R (Preserva o carimbo do robô se houver)
-        form.observacoes                       // S (Coluna 19)
+        editingAvaria.DATA_DE_ENTRADA || "", form.fabrica, editingAvaria.COD_AVARIA || "", 
+        form.ref, form.descricao, form.qtde, form.nfEntrada, form.cupomFiscal, 
+        form.motivo, form.responsavel, form.lancadoSistema, form.tratativa, 
+        form.constaFisicamente, form.dataColeta, form.nfSaida, form.nfReposicao, form.status,
+        editingAvaria.OK_STATUS || "", // R
+        form.observacoes // S
       ];
       mutationEdit.mutate({ 
         url: urlPlanilha, 
@@ -213,7 +187,7 @@ export default function GestaoAvarias() {
   const getTratativaStyle = (texto: string) => {
     const t = formatUpper(texto);
     if (t === "PENDENTE") return { class: "bg-red-100 text-red-700 border-red-300", icon: <AlertOctagon size={10}/> };
-    if (t === "EM PROCESSO") return { class: "bg-amber-100 text-amber-700 border-amber-300", icon: <Truck size={10}/> };
+    if (t === "EM PROCESSO") return { class: "bg-blue-100 text-[#2563eb] border-blue-300", icon: <Truck size={10}/> }; // 🚀 COR AZUL
     if (t === "CONCLUÍDA") return { class: "bg-emerald-100 text-emerald-700 border-emerald-300", icon: <PackageCheck size={10}/> };
     return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
   };
@@ -278,7 +252,7 @@ export default function GestaoAvarias() {
                 {STATUS_OPTIONS.map(s => (
                   <button 
                     key={s.id} onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? `bg-${s.color}-600 text-white border-transparent` : 'bg-white text-slate-500 border-slate-200'}`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-white text-slate-500 border-slate-200'}`}
                   >
                     {s.label}
                   </button>
@@ -350,7 +324,7 @@ export default function GestaoAvarias() {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               {/* 🚀 TÍTULO DINÂMICO COM CÓDIGO DA AVARIA */}
               <h2 className="font-bold text-lg uppercase">
@@ -407,10 +381,10 @@ export default function GestaoAvarias() {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">OBSERVAÇÕES DETALHADAS</label>
                 <textarea 
-                   className="w-full min-h-[80px] rounded-md border border-slate-200 p-3 text-sm uppercase focus:ring-2 focus:ring-red-500 outline-none" 
+                   className="w-full min-h-[80px] rounded-md border border-slate-200 p-3 text-sm uppercase focus:ring-2 focus:ring-[#2563eb] outline-none" 
                    value={form.observacoes} 
                    onChange={(e) => setForm({...form, observacoes: e.target.value.toUpperCase()})} 
-                   placeholder="DETALHE O OCORRIDO AQUI... (ESTA INFORMAÇÃO IRÁ PARA A COLUNA S DA PLANILHA)"
+                   placeholder="DETALHE O OCORRIDO AQUI..."
                 />
               </div>
 
@@ -425,12 +399,11 @@ export default function GestaoAvarias() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase">STATUS OPERACIONAL (COLUNA Q)</label>
-                    <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs font-bold text-blue-700 uppercase" value={form.status} onChange={(e) => setForm({...form, status: e.target.value.toUpperCase()})}>
+                    <select className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs font-bold text-[#2563eb] uppercase" value={form.status} onChange={(e) => setForm({...form, status: e.target.value.toUpperCase()})}>
                       {OPERACIONAL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
                 </div>
-                {/* 🚀 ORDEM CORRIGIDA: DATA COLETA -> NF SAÍDA -> NF REPOSIÇÃO */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase">DATA COLETA</label>
@@ -450,7 +423,7 @@ export default function GestaoAvarias() {
 
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50 sticky bottom-0">
               <button onClick={fecharModais} className="px-4 py-2 text-sm font-bold text-slate-600 uppercase">CANCELAR</button>
-              <button onClick={handleSalvarClicked} className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md uppercase ${editingAvaria ? 'bg-blue-600' : 'bg-red-600'}`}>
+              <button onClick={handleSalvarClicked} className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md uppercase ${editingAvaria ? 'bg-[#2563eb]' : 'bg-red-600'}`}>
                 <Save size={16} /> {editingAvaria ? "SALVAR ALTERAÇÕES" : "REGISTRAR AVARIA"}
               </button>
             </div>
@@ -466,7 +439,7 @@ export default function GestaoAvarias() {
             <Input type="password" value={pinValue} onChange={(e) => setPinValue(e.target.value)} className="text-center text-lg font-bold mb-6 uppercase" autoFocus />
             <div className="flex gap-3">
               <button onClick={() => setPinModal({ isOpen: false, action: null })} className="flex-1 py-2 bg-slate-100 rounded-lg uppercase text-xs font-bold">CANCELAR</button>
-              <button onClick={executarAcaoComPin} className="flex-1 py-2 bg-blue-600 text-white rounded-lg uppercase text-xs font-bold">CONFIRMAR</button>
+              <button onClick={executarAcaoComPin} className="flex-1 py-2 bg-[#2563eb] text-white rounded-lg uppercase text-xs font-bold">CONFIRMAR</button>
             </div>
           </div>
         </div>
