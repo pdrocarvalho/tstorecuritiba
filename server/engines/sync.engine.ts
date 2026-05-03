@@ -54,6 +54,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
   }
 
+  // Lemos até a Z para garantir que pegamos as colunas novas (incluindo R e S)
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId: spreadsheetId as string, 
     range: `'${targetSheetName}'!A:Z` 
@@ -92,7 +93,11 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
           if (hLimpo.includes("QTDE")) obj.QTDE = val;
           if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
-          if (hLimpo.includes("STATUS")) obj.STATUS = val;
+          
+          // 🚀 MAPEAMENTO DE STATUS OPERACIONAL (Q) E CONTROLE (R)
+          if (hLimpo === "STATUS") obj.STATUS = val; 
+          if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val; 
+
           if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
           if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
           if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
@@ -102,6 +107,9 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
           if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
           if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
+
+          // 🚀 NOVA COLUNA S (Índice 18)
+          if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
       }
 
       if (mode === 'demandas') {
