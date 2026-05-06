@@ -25,7 +25,7 @@ const FABRICAS = [
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
-  { id: "EM PROCESSO", label: "EM PROCESSO", color: "blue" }, // 🚀 ALTERADO PARA BLUE (#2563eb)
+  { id: "EM PROCESSO", label: "EM PROCESSO", color: "blue" },
   { id: "CONCLUÍDA", label: "CONCLUÍDA", color: "emerald" },
 ];
 
@@ -153,7 +153,7 @@ export default function GestaoAvarias() {
         form.qtde, form.nfEntrada, form.cupomFiscal, form.motivo, form.responsavel, 
         form.lancadoSistema, form.tratativa, form.constaFisicamente, form.dataColeta, 
         form.nfSaida, form.nfReposicao, form.status, 
-        "", // R (Controle)
+        "", // R: (Controle) Em branco para disparar e-mail de nova avaria
         form.observacoes // S
       ];
       mutationAdd.mutate({ url: urlPlanilha, row: novaLinha.map(v => typeof v === 'string' ? v.toUpperCase() : v) });
@@ -172,7 +172,7 @@ export default function GestaoAvarias() {
         form.ref, form.descricao, form.qtde, form.nfEntrada, form.cupomFiscal, 
         form.motivo, form.responsavel, form.lancadoSistema, form.tratativa, 
         form.constaFisicamente, form.dataColeta, form.nfSaida, form.nfReposicao, form.status,
-        editingAvaria.OK_STATUS || "", // R
+        "", // 🚀 R: LIMPA O CARIMBO DO ROBÔ PARA FORÇAR NOVO ENVIO DE E-MAIL
         form.observacoes // S
       ];
       mutationEdit.mutate({ 
@@ -187,7 +187,7 @@ export default function GestaoAvarias() {
   const getTratativaStyle = (texto: string) => {
     const t = formatUpper(texto);
     if (t === "PENDENTE") return { class: "bg-red-100 text-red-700 border-red-300", icon: <AlertOctagon size={10}/> };
-    if (t === "EM PROCESSO") return { class: "bg-blue-100 text-[#2563eb] border-blue-300", icon: <Truck size={10}/> }; // 🚀 COR AZUL
+    if (t === "EM PROCESSO") return { class: "bg-blue-100 text-[#2563eb] border-blue-300", icon: <Truck size={10}/> };
     if (t === "CONCLUÍDA") return { class: "bg-emerald-100 text-emerald-700 border-emerald-300", icon: <PackageCheck size={10}/> };
     return { class: "bg-slate-100 text-slate-500 border-slate-200", icon: <HelpCircle size={10}/> };
   };
@@ -326,7 +326,6 @@ export default function GestaoAvarias() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-              {/* 🚀 TÍTULO DINÂMICO COM CÓDIGO DA AVARIA */}
               <h2 className="font-bold text-lg uppercase">
                 {editingAvaria ? `EDITAR AVARIA - ${editingAvaria.COD_AVARIA || editingAvaria.COD__AVARIA}` : "REGISTRAR NOVA AVARIA"}
               </h2>
