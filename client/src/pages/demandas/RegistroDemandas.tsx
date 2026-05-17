@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ClipboardList, AlertTriangle, TrendingUp, Save, User, Phone, PackageSearch, RefreshCw } from "lucide-react";
+import { ClipboardList, AlertTriangle, TrendingUp, Save, User, Phone, PackageSearch, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 
@@ -21,51 +21,78 @@ export default function RegistroDemandas() {
     consultor: "",
     cliente: "",
     contato: "",
-    referencia: ""
   });
 
-  const salvarDemanda = trpc.notifications.saveDemanda.useMutation({
-    onSuccess: () => {
-      toast.success(`${tipo === "ALERTA" ? "Alerta de Demanda" : "Venda Futura"} registrado com sucesso!`);
-      setForm({ consultor: "", cliente: "", contato: "", referencia: "" });
-      setLoading(false);
-    },
-    onError: (err) => {
-      toast.error(err.message);
-      setLoading(false);
-    }
-  });
+  // Array de Referências para o consultor adicionar quantas quiser
+  const [referencias, setReferencias] = useState<string[]>([""]);
+
+  // TRPC - Retiramos o onSuccess daqui, pois faremos loop no handleSubmit
+  const salvarDemanda = trpc.notifications.saveDemanda.useMutation();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  // 🚀 Máscara Inteligente para o WhatsApp: (XX) XXXXX-XXXX
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.replace(/\D/g, ""); // Remove tudo que não for número
+    if (v.length > 11) v = v.slice(0, 11);
+    if (v.length > 2) v = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+    if (v.length > 9) v = `${v.slice(0, 10)}-${v.slice(10)}`;
+    setForm({ ...form, contato: v });
+  };
+
+  // Funções para lidar com Múltiplas Referências
+  const handleAddRef = () => setReferencias([...referencias, ""]);
+  const handleRemoveRef = (index: number) => {
+    if (referencias.length > 1) {
+      setReferencias(referencias.filter((_, i) => i !== index));
+    }
+  };
+  const handleRefChange = (index: number, value: string) => {
+    const newRefs = [...referencias];
+    newRefs[index] = value.toUpperCase();
+    setReferencias(newRefs);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlPlanilha) return toast.error("Vá em Configurações e vincule a planilha de Demandas primeiro.");
-    if (!form.consultor || !form.cliente || !form.referencia) {
-      return toast.warning("Preencha os campos obrigatórios!");
+    
+    const refsValidas = referencias.filter(r => r.trim() !== "");
+    if (!form.consultor || !form.cliente || refsValidas.length === 0) {
+      return toast.warning("Preencha os campos obrigatórios e adicione pelo menos uma referência!");
     }
 
     setLoading(true);
-    
     const abaDestino = tipo === "ALERTA" ? "DB-ALERTA_DE_DEMANDA" : "DB-VENDA_FUTURA";
-    
-    // 📅 Pega a data de hoje formatada em DD/MM/AAAA para gravar na Coluna A
     const dataDeHoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
-    salvarDemanda.mutate({
-      url: urlPlanilha,
-      aba: abaDestino,
-      dados: [
-        dataDeHoje,                    // Coluna A (Nova Data Automática)
-        form.consultor.toUpperCase(),  // Coluna B
-        form.cliente.toUpperCase(),    // Coluna C
-        form.contato,                  // Coluna D
-        form.referencia.trim(),        // Coluna E
-        "AGUARDANDO"                   // Coluna F (Status Inicial)
-      ]
-    });
+    try {
+      // Faz um Loop e insere cada SKU em uma linha diferente do Sheets mantendo os dados do cliente
+      for (const ref of refsValidas) {
+        await salvarDemanda.mutateAsync({
+          url: urlPlanilha,
+          aba: abaDestino,
+          dados: [
+            dataDeHoje,                    // Coluna A 
+            form.consultor.toUpperCase(),  // Coluna B
+            form.cliente.toUpperCase(),    // Coluna C
+            form.contato,                  // Coluna D (Com a Máscara)
+            ref.trim(),                    // Coluna E (Referência Dinâmica)
+            "AGUARDANDO",                  // Coluna F 
+            ""                             // Coluna G (Carimbo)
+          ]
+        });
+      }
+      toast.success(`${tipo === "ALERTA" ? "Alerta(s)" : "Venda(s)"} registrado(s) com sucesso!`);
+      setForm({ consultor: "", cliente: "", contato: "" });
+      setReferencias([""]);
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,22 +153,52 @@ export default function RegistroDemandas() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><User size={14} /> Consultor *</label>
-                <Input name="consultor" value={form.consultor} onChange={handleChange} placeholder="Seu nome" className="bg-slate-50" disabled={!urlPlanilha} />
+                <Input name="consultor" value={form.consultor} onChange={handleChange} placeholder="Seu nome" className="bg-slate-50 uppercase" disabled={!urlPlanilha} />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><User size={14} /> Cliente *</label>
-                <Input name="cliente" value={form.cliente} onChange={handleChange} placeholder="Nome do cliente" className="bg-slate-50" disabled={!urlPlanilha} />
+                <Input name="cliente" value={form.cliente} onChange={handleChange} placeholder="Nome do cliente" className="bg-slate-50 uppercase" disabled={!urlPlanilha} />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><Phone size={14} /> Contato</label>
-                <Input name="contato" value={form.contato} onChange={handleChange} placeholder="(00) 00000-0000" className="bg-slate-50" disabled={!urlPlanilha} />
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><Phone size={14} /> Contato (WhatsApp)</label>
+                <Input name="contato" value={form.contato} onChange={handlePhoneChange} placeholder="(00) 00000-0000" className="bg-slate-50" disabled={!urlPlanilha} />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><PackageSearch size={14} /> Referência (SKU) *</label>
-                <Input name="referencia" value={form.referencia} onChange={handleChange} placeholder="Ex: 123456" className="font-mono bg-slate-50" disabled={!urlPlanilha} />
+            </div>
+
+            {/* SESSÃO MULTI-REFERÊNCIAS */}
+            <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <PackageSearch size={14} /> Referências (SKU) *
+                </label>
+                <button type="button" onClick={handleAddRef} className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 uppercase">
+                  <Plus size={14} /> Adicionar Produto
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {referencias.map((ref, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <Input 
+                      value={ref} 
+                      onChange={(e) => handleRefChange(index, e.target.value)} 
+                      placeholder="EX: 123456" 
+                      className="font-mono bg-white uppercase" 
+                      disabled={!urlPlanilha} 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveRef(index)}
+                      disabled={referencias.length === 1}
+                      className={`p-2 rounded-lg transition-colors ${referencias.length === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-50 hover:text-red-700'}`}
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -36,6 +36,26 @@ function getSheetNameFromUrl(url: string, spreadsheet: any) {
   return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
+// Utilitário para garantir que a data seja lida corretamente (independente de ser DD/MM/AAAA ou MM/DD/AAAA)
+function parseDataLimpa(dataRaw: any) {
+  if (!dataRaw) return null;
+  const str = String(dataRaw).trim();
+  if (str.includes('/')) {
+    const parts = str.split(/[/\s:-]/);
+    if (parts.length >= 3) {
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      const p2 = parseInt(parts[2], 10);
+      if (p0 > 12) return new Date(p2, p1 - 1, p0); // DD/MM/YYYY
+      if (p1 > 12) return new Date(p2, p0 - 1, p1); // MM/DD/YYYY
+      return new Date(p2, p1 - 1, p0); // Assume DD/MM/YYYY como padrão BR
+    }
+  }
+  const d = new Date(dataRaw);
+  if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return null;
+}
+
 export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' | 'demandas' = 'recebimento', targetTab?: string) {
   const cacheKey = `${mode}-${targetTab || sheetsUrl}`;
   const now = Date.now();
@@ -49,12 +69,8 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
   
-  let targetSheetName = targetTab;
-  if (!targetSheetName) {
-      targetSheetName = getSheetNameFromUrl(sheetsUrl, spreadsheet);
-  }
+  let targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
-  // Lemos até a Z para garantir que pegamos as colunas novas (incluindo R e S)
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId: spreadsheetId as string, 
     range: `'${targetSheetName}'!A:Z` 
@@ -63,11 +79,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   const rows = response.data.values;
   if (!rows || rows.length === 0) return [];
 
-  let headerRowIndex = 0;
-  if (mode === 'avarias' || mode === 'demandas') {
-      headerRowIndex = 1; 
-  }
-
+  let headerRowIndex = mode === 'avarias' || mode === 'demandas' ? 1 : 0;
   if (!rows[headerRowIndex]) return [];
   
   const headersOriginais = rows[headerRowIndex].map((h: any) => String(h || "").trim());
@@ -80,7 +92,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
     headersOriginais.forEach((header, idx) => {
       const val = row[idx] || "";
       const hLimpo = headersLimpos[idx];
-      
       const key = header.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
       obj[key] = val;
 
@@ -93,11 +104,8 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
           if (hLimpo.includes("QTDE")) obj.QTDE = val;
           if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
-          
-          // 🚀 MAPEAMENTO DE STATUS OPERACIONAL (Q) E CONTROLE (R)
           if (hLimpo === "STATUS") obj.STATUS = val; 
           if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val; 
-
           if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
           if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
           if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
@@ -107,8 +115,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
           if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
           if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
-
-          // 🚀 NOVA COLUNA S (Índice 18)
           if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
       }
 
@@ -119,7 +125,6 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
           if (hLimpo.includes("CONTATO")) obj.contato = val;
           if (isRef) obj.referencia = String(val).trim();
           if (hLimpo.includes("STATUS")) obj.status = val;
-          if (hLimpo.includes("DATASTATUS")) obj.DATA_STATUS = val;
       }
 
       if (mode === 'recebimento') {
@@ -153,7 +158,55 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
   });
 
   const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF || d.COD_AVARIA));
-  
+
+  // 🚀 CROSS-REFERENCE LOGIC FOR DEMANDAS (Linha do Tempo Inteligente)
+  if (mode === 'demandas') {
+    try {
+      const dbSpreadsheetId = "1uu6N6f21Ct3hXMCbYwUVqK6whSavDVc6ICBsXoeRzyo";
+      const dbResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: dbSpreadsheetId,
+        range: 'A:O' 
+      });
+      const dbRows = dbResponse.data.values || [];
+      
+      const dbRecords = dbRows.map(r => ({
+        ref: String(r[0] || "").toUpperCase().trim(),
+        dataEmbarque: parseDataLimpa(r[12]), // Col M
+        previsao: r[13] ? String(r[13]).trim() : "", // Col N
+        dataEntrega: r[14] ? String(r[14]).trim() : "" // Col O
+      })).filter(r => r.ref);
+
+      filtered.forEach(demanda => {
+        if (!demanda.referencia || !demanda.data) return;
+        const dataRegistro = parseDataLimpa(demanda.data);
+        
+        let bestStatus = "AGUARDANDO";
+
+        // Busca de baixo pra cima (mais recente) e aplica a regra de Linha do Tempo
+        for (let i = dbRecords.length - 1; i >= 1; i--) {
+          const rec = dbRecords[i];
+          if (rec.ref === demanda.referencia.toUpperCase()) {
+            if (rec.dataEmbarque && dataRegistro && rec.dataEmbarque.getTime() >= dataRegistro.getTime()) {
+              if (rec.dataEntrega) {
+                bestStatus = "CHEGOU";
+                break;
+              } else if (rec.previsao) {
+                bestStatus = "PREVISÃO";
+                break;
+              } else {
+                bestStatus = "FATURADA";
+                break;
+              }
+            }
+          }
+        }
+        demanda.status = bestStatus; // Substitui o status na tela em tempo real!
+      });
+    } catch (e) {
+      console.error("Erro ao cruzar demandas com o BD na nuvem:", e);
+    }
+  }
+
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
