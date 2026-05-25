@@ -1,9 +1,9 @@
 /**
  * client/src/components/layout/Sidebar.tsx
  */
-
 import { Link, useLocation } from "wouter";
 import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList, Settings } from "lucide-react";
+import { clearAuthToken } from "@/lib/auth";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -13,25 +13,18 @@ export default function Sidebar() {
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
     { path: "/demandas", label: "Registro de Demandas", icon: ClipboardList },
     { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
-    { path: "/configuracoes", label: "Configurações", icon: Settings }, // 🚀 ADICIONADO
+    { path: "/configuracoes", label: "Configurações", icon: Settings },
   ];
 
-  // Limpa todas as possíveis chaves do cofre
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("auth_token"); 
-    localStorage.removeItem("userRole");
-    
-    // Limpa todas as URLs de planilhas vinculadas nesta sessão
-    sessionStorage.clear(); 
-    
+    clearAuthToken();
     setLocation("/login");
   };
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-20 flex-shrink-0">
-      
-      {/* 🚀 Logotipo / Título - CLICÁVEL APONTANDO PARA A HOME */}
+
+      {/* Logotipo / Título */}
       <Link href="/">
         <a className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950 hover:bg-slate-900 transition-colors cursor-pointer group">
           <Store className="text-blue-500 mr-3 group-hover:scale-110 transition-transform" size={24} />
@@ -46,7 +39,7 @@ export default function Sidebar() {
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-3">
           Menu Principal
         </div>
-        
+
         {menuItems.map((item) => {
           const isActive = location === item.path;
           const Icon = item.icon;
@@ -75,14 +68,14 @@ export default function Sidebar() {
 
       {/* Área Inferior (Sair + Rodapé) */}
       <div className="p-4 border-t border-slate-800 space-y-4">
-        <button 
+        <button
           onClick={handleLogout}
           className="w-full flex items-center px-3 py-2.5 rounded-lg transition-colors group cursor-pointer text-slate-400 hover:bg-red-500/10 hover:text-red-400"
         >
           <LogOut size={20} className="mr-3 text-slate-500 group-hover:text-red-400" />
           <span className="font-medium">Sair do Sistema</span>
         </button>
-        
+
         <div className="text-xs text-slate-500 text-center">
           &copy; {new Date().getFullYear()} T Store
         </div>

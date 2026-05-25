@@ -5,26 +5,25 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isTokenPresent, setAuthToken } from "@/lib/auth";
 import TelaVisitante from "./TelaVisitante";
 import PainelOperacoes from "./PainelOperacoes";
 
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
 
-  // 🚀 INTERCEPTADOR DE TOKEN (O SALVA-VIDAS)
+  // Interceptador de token via URL (ex: redirecionamentos externos)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenNaUrl = params.get("token") || params.get("auth_token");
 
     if (tokenNaUrl) {
-      localStorage.setItem("auth_token", tokenNaUrl);
-      localStorage.setItem("token", tokenNaUrl); // Salva com ambos os nomes
-      sessionStorage.setItem("auth_token", tokenNaUrl);
-      window.location.replace("/"); 
+      setAuthToken(tokenNaUrl);
+      window.location.replace("/");
     }
   }, []);
 
-  // 1. Estado de Carregamento Principal
+  // 1. Estado de carregamento
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -33,17 +32,15 @@ export default function Home() {
     );
   }
 
-  // 2. Verificação Dupla de Segurança
-  // Verifica se o useAuth liberou OU se existe fisicamente o token salvo no navegador
-  const temTokenNoCofre = !!localStorage.getItem("auth_token") || !!localStorage.getItem("token");
-  const isLogged = isAuthenticated || temTokenNoCofre;
+  // 2. Verifica se está logado
+  const isLogged = isAuthenticated || isTokenPresent();
 
-  // 3. Visitantes (Não Logados)
+  // 3. Visitantes (não logados)
   if (!isLogged) {
     return <TelaVisitante />;
   }
 
-  // 4. Utilizadores Logados
+  // 4. Usuários logados
   return (
     <MainLayout>
       <PainelOperacoes userName={user?.name || "Equipe"} />

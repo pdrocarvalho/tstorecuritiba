@@ -7,25 +7,22 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
+import { isTokenPresent } from "@/lib/auth";
 
-// 🚀 Importando a nossa nova Home e a nova tela de Demandas
 import Home from "./pages/home/index";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
 import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
 import RegistroDemandas from "./pages/demandas/RegistroDemandas";
-import VincularArquivos from "./pages/configuracoes/VincularArquivos"; // <-- NOVA TELA DE CONFIGURAÇÕES ADICIONADA
+import VincularArquivos from "./pages/configuracoes/VincularArquivos";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 // 🛡️ PROTECTED ROUTE: Bloqueia acesso anônimo
 const ProtectedRoute = ({ component: Component, path }: { component: any, path: string }) => {
-  // Padronizado para 'auth_token'
-  const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
-
   return (
     <Route path={path}>
-      {() => (token ? <Component /> : <Redirect to="/login" />)}
+      {() => (isTokenPresent() ? <Component /> : <Redirect to="/login" />)}
     </Route>
   );
 };
@@ -39,18 +36,18 @@ export default function App() {
           <Switch>
             {/* Rotas públicas */}
             <Route path="/login" component={Login} />
-            
-            {/* 🚀 Rota Raiz */}
+
+            {/* Rota raiz */}
             <Route path="/" component={Home} />
             <Route path={ROUTES.home} component={Home} />
-            
-            {/* Rotas protegidas (Só acessa se tiver logado) */}
+
+            {/* Rotas protegidas */}
             <ProtectedRoute path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
             <ProtectedRoute path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
             <ProtectedRoute path={ROUTES.avarias} component={GestaoAvarias} />
             <ProtectedRoute path="/demandas" component={RegistroDemandas} />
-            <ProtectedRoute path="/configuracoes" component={VincularArquivos} /> {/* <-- ROTA ADICIONADA */}
-            
+            <ProtectedRoute path="/configuracoes" component={VincularArquivos} />
+
             <Route component={NotFound} />
           </Switch>
         </TooltipProvider>

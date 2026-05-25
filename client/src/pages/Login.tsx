@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
+import { setAuthToken } from "@/lib/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -27,17 +28,12 @@ export default function Login() {
       }
 
       const data = await res.json();
-      
-      // 🚀 SALVA-VIDAS: Salvamos com os dois nomes para nenhum sistema falhar ao procurar!
-      localStorage.setItem("auth_token", data.token);
-      localStorage.setItem("token", data.token);
-      sessionStorage.setItem("auth_token", data.token);
-      
+
+      setAuthToken(data.token);
       if (data.role) localStorage.setItem("userRole", data.role);
-      
+
       toast.success(`Bem-vindo, ${data.name?.split(" ")[0] || "Usuário"}!`);
-      
-      // 🚀 REDIRECIONAMENTO FORÇADO
+
       setTimeout(() => {
         window.location.href = "/";
       }, 1000);
@@ -67,7 +63,7 @@ export default function Login() {
             <p className="text-gray-500 text-sm mb-6 text-center">
               Faça login com a sua conta autorizada para aceder ao sistema.
             </p>
-            
+
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => {
