@@ -3,44 +3,40 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../_core/trpc";
-// 🚀 Garanta que o nome importado aqui seja o mesmo que exportamos no arquivo da rota
-import { notificationsRouter } from "./notification.router"; 
-import { 
-  syncPedidosFromGoogleSheets, 
-  testarLeituraRobo 
-} from "../engines/sync.engine"; // Agora as funções existem aqui!
+import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { notificationsRouter } from "./notification.router";
+import {
+  syncPedidosFromGoogleSheets,
+  testarLeituraRobo
+} from "../engines/sync.engine";
 import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../db";
 
 export const appRouter = router({
   notifications: notificationsRouter,
 
   admin: router({
-    getConfig: publicProcedure.query(async () => {
+    getConfig: protectedProcedure.query(async () => {
       return await getGoogleSheetsConfig();
     }),
-    
-    configSheets: publicProcedure
+
+    configSheets: protectedProcedure
       .input(z.object({ sheetsUrl: z.string() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
-          // Salva no banco de dados a URL da planilha mestra
           await saveGoogleSheetsConfig(input.sheetsUrl, 1);
           return { success: true, url: input.sheetsUrl };
         } catch (error: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro no BD: ${error.message}` });
         }
       }),
-      
-    syncNow: publicProcedure.mutation(async () => {
+
+    syncNow: protectedProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
         if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada.");
-        
-        // 🚀 O erro do argumento sumiu porque atualizamos o sync.engine
+
         const resultado = await syncPedidosFromGoogleSheets(config.sheetsUrl);
-        
-        // 🚀 As propriedades agora existem no retorno
+
         return {
           novosPedidos: resultado.novosPedidos,
           novasPrevisoes: resultado.novasPrevisoes,
@@ -52,7 +48,7 @@ export const appRouter = router({
       }
     }),
 
-    testarRobo: publicProcedure.mutation(async () => {
+    testarRobo: protectedProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
         if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada.");
@@ -63,6 +59,7 @@ export const appRouter = router({
     }),
   }),
 
+  // logout permanece público — não exige token para deslogar
   auth: router({
     logout: publicProcedure.mutation(async () => {
       return { success: true };

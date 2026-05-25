@@ -1,15 +1,19 @@
+/**
+ * server/index.ts
+ */
 import express from "express";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers";
+import { createContext } from "./_core/trpc";
 import { OAuth2Client } from "google-auth-library";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🚀 MIDDLEWARE DE SEGURANÇA (COOP/COEP) - DEVE SER O PRIMEIRO
-// Isso resolve o erro de bloqueio de popup do Google e fotos de perfil.
+// MIDDLEWARE DE SEGURANÇA (COOP/COEP) - DEVE SER O PRIMEIRO
+// Resolve o erro de bloqueio de popup do Google e fotos de perfil.
 app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
@@ -23,7 +27,6 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 
-// Inicializa a ferramenta do Google
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Check de saúde do servidor
@@ -42,24 +45,19 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    // 1. O Google verifica se o token enviado pelo frontend é autêntico
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: GOOGLE_CLIENT_ID,
     });
-    
-    // 2. Extraímos os dados do usuário do ticket do Google
+
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
       return res.status(401).json({ message: "E-mail não encontrado na conta Google." });
     }
 
     const { email, name, picture } = payload;
+    const role = "admin";
 
-    // 3. Define o nível de acesso (Role)
-    const role = "admin"; 
-
-    // 4. Gera o token JWT interno da aplicação (válido por 7 dias)
     const authToken = jwt.sign(
       { id: email, email, role, name, picture },
       JWT_SECRET,
@@ -79,7 +77,7 @@ app.post("/api/auth/login", async (req, res) => {
 app.get("/api/auth/me", (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: "Não autenticado." });
-  
+
   try {
     const token = authHeader.replace("Bearer ", "");
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -89,13 +87,14 @@ app.get("/api/auth/me", (req, res) => {
   }
 });
 
-// Integração com tRPC
+// Integração com tRPC — agora com contexto de autenticação
 export type AppRouter = typeof appRouter;
 
 app.use(
   "/trpc",
   createExpressMiddleware({
     router: appRouter,
+    createContext,         // ← única linha adicionada
   })
 );
 
