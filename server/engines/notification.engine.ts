@@ -52,7 +52,9 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     const sheets = google.sheets({ version: "v4", auth });
 
     // 1. LÊ O BANCO DE DADOS BRUTO PARA PEGAR A DATA DE EMBARQUE (A âncora cronológica)
-    const dbId = "1uu6N6f21Ct3hXMCbYwUVqK6whSavDVc6ICBsXoeRzyo";
+    const dbId = process.env.DB_SPREADSHEET_ID; // ← antes era hardcoded
+    if (!dbId) throw new Error("DB_SPREADSHEET_ID não definido no .env");
+
     const dbRes = await sheets.spreadsheets.values.get({ spreadsheetId: dbId, range: 'A:O' });
     const dbRows = dbRes.data.values || [];
 
@@ -72,25 +74,22 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${abaNome}'!A:G` });
       const demRows = demRes.data.values || [];
 
-      for (let i = 1; i < demRows.length; i++) { // Começa do 1 para pular o cabeçalho
+      for (let i = 1; i < demRows.length; i++) {
         const row = demRows[i];
-        const dataRegistroRaw = row[0]; // Coluna A (Data do Pedido)
-        const ref = String(row[4] || "").toUpperCase().trim(); // Coluna E (Referência)
-        const statusFisico = String(row[5] || "AGUARDANDO").toUpperCase().trim(); // Coluna F
+        const dataRegistroRaw = row[0];
+        const ref = String(row[4] || "").toUpperCase().trim();
+        const statusFisico = String(row[5] || "AGUARDANDO").toUpperCase().trim();
 
-        // Se a linha não tem referência ou já chegou ao final da jornada, ignoramos.
-        if (!ref || statusFisico === "CHEGOU") continue; 
+        if (!ref || statusFisico === "CHEGOU") continue;
 
         const dataRegistro = parseDataLimpa(dataRegistroRaw);
         if (!dataRegistro) continue;
 
         let bestStatus = "AGUARDANDO";
 
-        // BUSCA CRONOLÓGICA (De baixo pra cima para pegar a carga mais recente)
         for (let j = dbRecords.length - 1; j >= 1; j--) {
           const rec = dbRecords[j];
-          
-          // A MÁGICA: A carga pertence a essa referência E foi embarcada DEPOIS ou NO MESMO DIA do pedido?
+
           if (rec.ref === ref && rec.dataEmbarque && rec.dataEmbarque.getTime() >= dataRegistro.getTime()) {
             if (rec.dataEntrega) {
               bestStatus = "CHEGOU";
@@ -99,24 +98,20 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
             } else {
               bestStatus = "FATURADA";
             }
-            break; // Achou a carga exata, para a busca
+            break;
           }
         }
 
-        // HIERARQUIA DE EVOLUÇÃO (Garante que um produto não "ande para trás")
         const hierarchy = { "AGUARDANDO": 0, "FATURADA": 1, "PREVISÃO": 2, "CHEGOU": 3 };
         const currentRank = hierarchy[statusFisico as keyof typeof hierarchy] || 0;
         const newRank = hierarchy[bestStatus as keyof typeof hierarchy] || 0;
 
-        // Se o status evoluiu na jornada logística
         if (newRank > currentRank) {
-          const rowNumber = i + 1; // Ajusta o índice do array para a linha real da planilha
+          const rowNumber = i + 1;
           console.log(`[Engine] Evolução detectada na ref ${ref} (Linha ${rowNumber}): ${statusFisico} -> ${bestStatus}`);
-          
+
           const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          
-          // Atualiza a Coluna F (Novo Status) e a Coluna G (Substitui o carimbo antigo pela data de hoje)
-          // Isso destrava o envio do próximo e-mail pelo Apps Script!
+
           await sheets.spreadsheets.values.update({
             spreadsheetId: demId,
             range: `'${abaNome}'!F${rowNumber}:G${rowNumber}`,

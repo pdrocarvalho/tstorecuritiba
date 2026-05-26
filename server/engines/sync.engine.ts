@@ -36,7 +36,6 @@ function getSheetNameFromUrl(url: string, spreadsheet: any) {
   return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
-// Utilitário para garantir que a data seja lida corretamente (independente de ser DD/MM/AAAA ou MM/DD/AAAA)
 function parseDataLimpa(dataRaw: any) {
   if (!dataRaw) return null;
   const str = String(dataRaw).trim();
@@ -66,27 +65,27 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
 
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  
+
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  
+
   let targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
-  const response = await sheets.spreadsheets.values.get({ 
-    spreadsheetId: spreadsheetId as string, 
-    range: `'${targetSheetName}'!A:Z` 
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId as string,
+    range: `'${targetSheetName}'!A:Z`
   });
-  
+
   const rows = response.data.values;
   if (!rows || rows.length === 0) return [];
 
   let headerRowIndex = mode === 'avarias' || mode === 'demandas' ? 1 : 0;
   if (!rows[headerRowIndex]) return [];
-  
+
   const headersOriginais = rows[headerRowIndex].map((h: any) => String(h || "").trim());
   const headersLimpos = headersOriginais.map(h => h.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, ""));
-  
+
   const data = rows.slice(headerRowIndex + 1).map((row, index) => {
-    const obj: any = { rowNumber: headerRowIndex + index + 2 }; 
+    const obj: any = { rowNumber: headerRowIndex + index + 2 };
     let tempQtdeCaixa = 0, tempVolumes = 0, hasQtdeCaixa = false;
 
     headersOriginais.forEach((header, idx) => {
@@ -98,33 +97,33 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       const isRef = hLimpo === "REF" || hLimpo.includes("REFERENCIA") || hLimpo === "REF_";
 
       if (mode === 'avarias') {
-          if (isRef) obj.REF = String(val).trim();
-          if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
-          if (hLimpo.includes("FABRICA")) obj.FABRICA = val;
-          if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
-          if (hLimpo.includes("QTDE")) obj.QTDE = val;
-          if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
-          if (hLimpo === "STATUS") obj.STATUS = val; 
-          if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val; 
-          if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
-          if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
-          if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
-          if (hLimpo.includes("SISTEMA")) obj.FOI_LANCADO_NO_SISTEMA = val;
-          if (hLimpo.includes("FISICAMENTE")) obj.CONSTA_FISICAMENTE = val;
-          if (hLimpo.includes("MOTIVO")) obj.MOTIVO = val;
-          if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
-          if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
-          if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
-          if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
+        if (isRef) obj.REF = String(val).trim();
+        if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
+        if (hLimpo.includes("FABRICA")) obj.FABRICA = val;
+        if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
+        if (hLimpo.includes("QTDE")) obj.QTDE = val;
+        if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
+        if (hLimpo === "STATUS") obj.STATUS = val;
+        if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val;
+        if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
+        if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
+        if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
+        if (hLimpo.includes("SISTEMA")) obj.FOI_LANCADO_NO_SISTEMA = val;
+        if (hLimpo.includes("FISICAMENTE")) obj.CONSTA_FISICAMENTE = val;
+        if (hLimpo.includes("MOTIVO")) obj.MOTIVO = val;
+        if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
+        if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
+        if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
+        if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
       }
 
       if (mode === 'demandas') {
-          if (hLimpo === "DATA") obj.data = val;
-          if (hLimpo.includes("CONSULTOR")) obj.consultor = val;
-          if (hLimpo.includes("CLIENTE")) obj.cliente = val;
-          if (hLimpo.includes("CONTATO")) obj.contato = val;
-          if (isRef) obj.referencia = String(val).trim();
-          if (hLimpo.includes("STATUS")) obj.status = val;
+        if (hLimpo === "DATA") obj.data = val;
+        if (hLimpo.includes("CONSULTOR")) obj.consultor = val;
+        if (hLimpo.includes("CLIENTE")) obj.cliente = val;
+        if (hLimpo.includes("CONTATO")) obj.contato = val;
+        if (isRef) obj.referencia = String(val).trim();
+        if (hLimpo.includes("STATUS")) obj.status = val;
       }
 
       if (mode === 'recebimento') {
@@ -133,42 +132,44 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
         if (hLimpo.includes("REMETENTE")) obj.remetente = val;
         if (hLimpo.includes("NOTAFISCAL")) obj.notaFiscal = val;
         if (hLimpo.includes("MUNDO")) obj.mundo = val;
-        
+
         if (hLimpo.includes("PREVIS")) {
-            const p = String(val).split("/");
-            obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
+          const p = String(val).split("/");
+          obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
         }
         if (hLimpo.includes("ENTREGA") && !hLimpo.includes("PREVIS")) {
-            const p = String(val).split("/");
-            obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12) : null;
+          const p = String(val).split("/");
+          obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
         }
         if (hLimpo === "VOLUMES") tempVolumes = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
         if (hLimpo.includes("QTDE") && hLimpo.includes("CAIXA")) {
-            tempQtdeCaixa = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
-            hasQtdeCaixa = true;
+          tempQtdeCaixa = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
+          hasQtdeCaixa = true;
         }
       }
     });
 
     if (mode === 'recebimento') {
-        obj.volumesCaixas = tempVolumes; 
-        obj.quantidade = hasQtdeCaixa ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes) : tempVolumes;
+      obj.volumesCaixas = tempVolumes;
+      obj.quantidade = hasQtdeCaixa ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes) : tempVolumes;
     }
     return obj;
   });
 
   const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF || d.COD_AVARIA));
 
-  // 🚀 CROSS-REFERENCE LOGIC FOR DEMANDAS (Linha do Tempo Inteligente)
+  // CROSS-REFERENCE LOGIC FOR DEMANDAS (Linha do Tempo Inteligente)
   if (mode === 'demandas') {
     try {
-      const dbSpreadsheetId = "1uu6N6f21Ct3hXMCbYwUVqK6whSavDVc6ICBsXoeRzyo";
+      const dbSpreadsheetId = process.env.DB_SPREADSHEET_ID; // ← antes era hardcoded
+      if (!dbSpreadsheetId) throw new Error("DB_SPREADSHEET_ID não definido no .env");
+
       const dbResponse = await sheets.spreadsheets.values.get({
         spreadsheetId: dbSpreadsheetId,
-        range: 'A:O' 
+        range: 'A:O'
       });
       const dbRows = dbResponse.data.values || [];
-      
+
       const dbRecords = dbRows.map(r => ({
         ref: String(r[0] || "").toUpperCase().trim(),
         dataEmbarque: parseDataLimpa(r[12]), // Col M
@@ -179,10 +180,9 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
       filtered.forEach(demanda => {
         if (!demanda.referencia || !demanda.data) return;
         const dataRegistro = parseDataLimpa(demanda.data);
-        
+
         let bestStatus = "AGUARDANDO";
 
-        // Busca de baixo pra cima (mais recente) e aplica a regra de Linha do Tempo
         for (let i = dbRecords.length - 1; i >= 1; i--) {
           const rec = dbRecords[i];
           if (rec.ref === demanda.referencia.toUpperCase()) {
@@ -200,7 +200,7 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
             }
           }
         }
-        demanda.status = bestStatus; // Substitui o status na tela em tempo real!
+        demanda.status = bestStatus;
       });
     } catch (e) {
       console.error("Erro ao cruzar demandas com o BD na nuvem:", e);
@@ -212,32 +212,32 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
 }
 
 export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
-    const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-    const targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
-    await sheets.spreadsheets.values.append({
-        spreadsheetId: spreadsheetId as string,
-        range: `'${targetSheetName}'!A:Z`,
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: { values: [rowData] }
-    });
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
+  const targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: spreadsheetId as string,
+    range: `'${targetSheetName}'!A:Z`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [rowData] }
+  });
 }
 
 export async function updateFullRow(url: string, rowNumber: number, rowData: any[]) {
-    const id = extractSpreadsheetId(url);
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
-    const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
-    await sheets.spreadsheets.values.update({
-        spreadsheetId: id as string,
-        range: `'${targetSheetName}'!A${rowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [rowData] }
-    });
+  const id = extractSpreadsheetId(url);
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: id as string,
+    range: `'${targetSheetName}'!A${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [rowData] }
+  });
 }
 
 export async function updateSheetRow(url: string, row: number, col: string, val: string) {
@@ -247,10 +247,10 @@ export async function updateSheetRow(url: string, row: number, col: string, val:
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
   const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
   await sheets.spreadsheets.values.update({
-      spreadsheetId: id as string,
-      range: `'${targetSheetName}'!${col}${row}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [[val]] }
+    spreadsheetId: id as string,
+    range: `'${targetSheetName}'!${col}${row}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[val]] }
   });
 }
 
@@ -261,19 +261,19 @@ export async function deleteSheetRow(url: string, rowNumber: number) {
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
   const sheetInfo = getSheetInfoFromUrl(url, spreadsheet);
   await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: id as string,
-      requestBody: {
-          requests: [{
-              deleteDimension: {
-                  range: {
-                      sheetId: sheetInfo.sheetId,
-                      dimension: "ROWS",
-                      startIndex: rowNumber - 1,
-                      endIndex: rowNumber
-                  }
-              }
-          }]
-      }
+    spreadsheetId: id as string,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheetInfo.sheetId,
+            dimension: "ROWS",
+            startIndex: rowNumber - 1,
+            endIndex: rowNumber
+          }
+        }
+      }]
+    }
   });
 }
 
