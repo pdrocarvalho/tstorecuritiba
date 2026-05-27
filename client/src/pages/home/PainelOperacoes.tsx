@@ -18,12 +18,14 @@ const MUNDO_COLORS: Record<string, string> = {
 const FABRICAS_FIXAS = ["CUTELARIA", "FARROUPILHA", "CD SUL", "TEEC", "BELÉM", "DELTA"];
 const MUNDOS_FIXOS = ["CORTAR", "EQUIPAR", "FESTEJAR", "PREPARAR", "SERVIR"];
 
+const AUTOMACAO_INTERVALO_MS = 60 * 60 * 1000; // 1 hora
+const AUTOMACAO_STORAGE_KEY = "automacao_ultima_execucao";
+
 interface PainelOperacoesProps {
   userName?: string;
 }
 
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
-  // 🚀 LÊ TUDO DO COFRE CENTRAL
   const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
   
@@ -44,21 +46,34 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   } | null>(null);
   
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
+      if (!data.success) return;
       setResultadoAutomacao({ 
-        alertas: data.alertasNotificados, 
-        alertasMsg: data.alertasMensagem || "",
-        vendas: data.vendasNotificadas,
-        vendasMsg: data.vendasMensagem || ""
+        alertas: data.alertasNotificados ?? 0,
+        alertasMsg: data.mensagem || "",
+        vendas: data.vendasNotificadas ?? 0,
+        vendasMsg: data.mensagem || ""
       });
     }
   });
 
-  // Assim que a tela carrega, manda o robô cruzar os dados!
+  // Roda a automação no máximo uma vez por hora — não a cada visita
   useEffect(() => {
-    if (urlPlanilha && urlDemandas) {
-      automacao.mutate({ urlRecebimento: urlPlanilha, urlDemandas: urlDemandas });
-    }
+    if (!urlPlanilha || !urlDemandas) return;
+
+    const ultimaExecucao = localStorage.getItem(AUTOMACAO_STORAGE_KEY);
+    const agora = Date.now();
+
+    if (ultimaExecucao && agora - parseInt(ultimaExecucao) < AUTOMACAO_INTERVALO_MS) return;
+
+    automacao.mutate(
+      { urlRecebimento: urlPlanilha, urlDemandas },
+      {
+        onSuccess: () => {
+          localStorage.setItem(AUTOMACAO_STORAGE_KEY, String(agora));
+        }
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlPlanilha, urlDemandas]);
 
@@ -105,7 +120,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         <p className="text-slate-500 font-medium">Aqui está a visão geral do trânsito de mercadorias no momento.</p>
       </div>
 
-      {/* 🚀 AVISO INTELIGENTE: Pede para ir para as Configurações */}
+      {/* AVISO INTELIGENTE: Pede para ir para as Configurações */}
       {(!urlPlanilha || !urlDemandas) && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3 text-amber-800">
