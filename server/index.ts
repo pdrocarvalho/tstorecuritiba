@@ -8,6 +8,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/trpc";
 import { OAuth2Client } from "google-auth-library";
+import { upsertUser, getUserByOpenId } from "./db";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,8 +57,21 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const { email, name, picture } = payload;
-    const role = "admin";
 
+    // 1. Garante que o usuário existe no banco (cria se for o primeiro login)
+    //    O role padrão definido no schema é "user"
+    await upsertUser({
+      openId: email,
+      email,
+      name: name ?? null,
+      loginMethod: "google",
+    });
+
+    // 2. Busca o usuário para pegar o role real (pode ter sido promovido a admin)
+    const dbUser = await getUserByOpenId(email);
+    const role = dbUser?.role ?? "user"; // ← nunca mais "admin" hardcoded
+
+    // 3. Assina o JWT com o role real do banco
     const authToken = jwt.sign(
       { id: email, email, role, name, picture },
       JWT_SECRET,
@@ -87,14 +101,14 @@ app.get("/api/auth/me", (req, res) => {
   }
 });
 
-// Integração com tRPC — agora com contexto de autenticação
+// Integração com tRPC — com contexto de autenticação
 export type AppRouter = typeof appRouter;
 
 app.use(
   "/trpc",
   createExpressMiddleware({
     router: appRouter,
-    createContext,         // ← única linha adicionada
+    createContext,
   })
 );
 
