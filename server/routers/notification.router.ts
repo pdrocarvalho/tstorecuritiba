@@ -13,10 +13,13 @@ import {
 } from "../engines/sync.engine";
 import { rodarAutomacaoLogistica } from "../engines/notification.engine";
 
-const validateAdminPin = (pinEnviado: string) => {
-  const pinServidor = process.env.MANAGER_PIN || "0000";
-  if (pinEnviado !== pinServidor) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha de gerente incorreta." });
+// Verifica se o usuário autenticado tem role de admin
+const requireAdmin = (role: string) => {
+  if (role !== "admin") {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Apenas gerentes podem realizar esta ação.",
+    });
   }
 };
 
@@ -62,17 +65,19 @@ export const notificationsRouter = router({
       return await updateSheetRow(input.url, input.rowNumber, input.columnLetter, input.newValue);
     }),
 
+  // ← pin removido do input; role verificado via JWT no contexto
   editAvariaFull: protectedProcedure
-    .input(z.object({ url: z.string(), rowNumber: z.number(), row: z.array(z.any()), pin: z.string() }))
-    .mutation(async ({ input }) => {
-      validateAdminPin(input.pin);
+    .input(z.object({ url: z.string(), rowNumber: z.number(), row: z.array(z.any()) }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.user.role);
       return await updateFullRow(input.url, input.rowNumber, input.row);
     }),
 
+  // ← pin removido do input; role verificado via JWT no contexto
   deleteAvariaRow: protectedProcedure
-    .input(z.object({ url: z.string(), rowNumber: z.number(), pin: z.string() }))
-    .mutation(async ({ input }) => {
-      validateAdminPin(input.pin);
+    .input(z.object({ url: z.string(), rowNumber: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.user.role);
       return await deleteSheetRow(input.url, input.rowNumber);
     }),
 });
