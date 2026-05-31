@@ -6,17 +6,7 @@ import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2 } from "
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-
-const MUNDO_COLORS: Record<string, string> = {
-  "CORTAR": "#fca5a5",   
-  "EQUIPAR": "#93c5fd",  
-  "FESTEJAR": "#c4b5fd", 
-  "PREPARAR": "#86efac", 
-  "SERVIR": "#fde047"    
-};
-
-const FABRICAS_FIXAS = ["CUTELARIA", "FARROUPILHA", "CD SUL", "TEEC", "BELÉM", "DELTA"];
-const MUNDOS_FIXOS = ["CORTAR", "EQUIPAR", "FESTEJAR", "PREPARAR", "SERVIR"];
+import { MUNDO_COLORS, FABRICAS_FIXAS, MUNDOS_FIXOS } from "@/constants";
 
 const AUTOMACAO_INTERVALO_MS = 60 * 60 * 1000; // 1 hora
 const AUTOMACAO_STORAGE_KEY = "automacao_ultima_execucao";
@@ -31,13 +21,11 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   
   const isVinculado = !!urlPlanilha;
 
-  // 1. Busca os dados de recebimento (Gráficos principais)
   const { data: todosPedidos = [] } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'recebimento' }, 
     { enabled: isVinculado, refetchInterval: 60000 } 
   );
 
-  // 2. O GATILHO DO ROBÔ AUTOMÁTICO
   const [resultadoAutomacao, setResultadoAutomacao] = useState<{ 
     alertas: number, 
     alertasMsg: string,
@@ -57,7 +45,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     }
   });
 
-  // Roda a automação no máximo uma vez por hora — não a cada visita
   useEffect(() => {
     if (!urlPlanilha || !urlDemandas) return;
 
@@ -77,8 +64,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlPlanilha, urlDemandas]);
 
-
-  // 3. Cálculos dos KPIs Superiores
   const kpis = useMemo(() => {
     if (!isVinculado) return { caixasPorFabrica: {}, skusPorMundo: {} };
 
@@ -102,14 +87,13 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       }
 
       const mundo = String(p.mundo || "").toUpperCase().trim();
-      if (MUNDOS_FIXOS.includes(mundo)) {
+      if (MUNDOS_FIXOS.includes(mundo as any)) {
         if (p.produtoSku) skusPorMundo[mundo].add(p.produtoSku);
       }
     });
 
     return { caixasPorFabrica, skusPorMundo };
   }, [todosPedidos, isVinculado]);
-
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
@@ -120,7 +104,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         <p className="text-slate-500 font-medium">Aqui está a visão geral do trânsito de mercadorias no momento.</p>
       </div>
 
-      {/* AVISO INTELIGENTE: Pede para ir para as Configurações */}
       {(!urlPlanilha || !urlDemandas) && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3 text-amber-800">
@@ -191,7 +174,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       {/* BLOCO 3: ALERTAS E DEMANDAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
         
-        {/* Card Alertas */}
         <Card className="p-0 overflow-hidden border-2 border-red-200 shadow-sm flex flex-col">
           <div className="bg-red-100 text-red-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-red-200 flex items-center justify-center gap-2">
             <AlertTriangle size={16} /> Alerta de Demanda
@@ -215,7 +197,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
           </div>
         </Card>
 
-        {/* Card Vendas Futuras */}
         <Card className="p-0 overflow-hidden border-2 border-blue-200 shadow-sm flex flex-col">
           <div className="bg-blue-100 text-blue-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-blue-200 flex items-center justify-center gap-2">
             <TrendingUp size={16} /> Venda Futura

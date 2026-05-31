@@ -17,14 +17,7 @@ import {
 import { toast } from "sonner"; 
 import { Link } from "wouter";
 
-// 🎨 PALETA DE CORES VIBRANTES (PADRONIZADA)
-const MUNDO_COLORS: Record<string, string> = {
-  "CORTAR": "#e57373",
-  "FESTEJAR": "#9575cd",
-  "PREPARAR": "#81c784",
-  "SERVIR": "#fbc02d",
-  "EQUIPAR": "#42a5f5"
-};
+import { MUNDO_COLORS } from "@/constants";
 const COR_PADRAO = "#94a3b8";
 
 // Formatador de Data seguro

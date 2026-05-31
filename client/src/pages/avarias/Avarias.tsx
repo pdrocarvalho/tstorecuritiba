@@ -13,14 +13,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link } from "wouter";
-
-const FABRICAS = [
-  { nome: "CUTELARIA", prefixo: "CTL" },
-  { nome: "FARROUPILHA", prefixo: "FRP" },
-  { nome: "CD SUL", prefixo: "CDS" },
-  { nome: "TEEC", prefixo: "TEC" },
-  { nome: "BELÉM", prefixo: "BLM" }
-];
+import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
