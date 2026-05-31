@@ -7,7 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Settings, Link as LinkIcon, Database, Save, Trash2 } from "lucide-react";
+import { Settings, Link as LinkIcon, Database, Save, Trash2, CheckCircle2, XCircle } from "lucide-react";
+
+const SHEETS_REGEX = /https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+/;
+
+const validarUrl = (url: string): boolean => {
+  if (!url) return true; // vazio é permitido
+  return SHEETS_REGEX.test(url);
+};
 
 export default function VincularArquivos() {
   const [links, setLinks] = useState({
@@ -16,7 +23,12 @@ export default function VincularArquivos() {
     avarias: ""
   });
 
-  // Carrega os links salvos ao abrir a tela
+  const [erros, setErros] = useState({
+    recebimento: false,
+    demandas: false,
+    avarias: false
+  });
+
   useEffect(() => {
     setLinks({
       recebimento: localStorage.getItem("url_recebimento") || "",
@@ -26,10 +38,25 @@ export default function VincularArquivos() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLinks({ ...links, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setLinks({ ...links, [name]: value });
+    setErros({ ...erros, [name]: value ? !validarUrl(value) : false });
   };
 
   const handleSave = () => {
+    const novosErros = {
+      recebimento: links.recebimento ? !validarUrl(links.recebimento) : false,
+      demandas: links.demandas ? !validarUrl(links.demandas) : false,
+      avarias: links.avarias ? !validarUrl(links.avarias) : false,
+    };
+
+    setErros(novosErros);
+
+    if (Object.values(novosErros).some(Boolean)) {
+      toast.error("Corrija as URLs inválidas antes de salvar.");
+      return;
+    }
+
     localStorage.setItem("url_recebimento", links.recebimento);
     localStorage.setItem("url_demandas", links.demandas);
     localStorage.setItem("url_avarias", links.avarias);
@@ -39,8 +66,15 @@ export default function VincularArquivos() {
   const handleClear = (tipo: keyof typeof links) => {
     const novosLinks = { ...links, [tipo]: "" };
     setLinks(novosLinks);
+    setErros({ ...erros, [tipo]: false });
     localStorage.setItem(`url_${tipo}`, "");
     toast.info(`Vínculo de ${tipo} removido.`);
+  };
+
+  const getInputIcon = (campo: keyof typeof links) => {
+    if (!links[campo]) return <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />;
+    if (erros[campo]) return <XCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-red-500" size={18} />;
+    return <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />;
   };
 
   return (
@@ -57,7 +91,7 @@ export default function VincularArquivos() {
         </div>
 
         <div className="grid grid-cols-1 gap-6">
-          
+
           {/* BANCO DE DADOS PRINCIPAL */}
           <Card className="p-6 md:p-8 shadow-sm border-2 border-blue-100 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
@@ -72,14 +106,15 @@ export default function VincularArquivos() {
             </div>
             <div className="flex gap-3 mt-4">
               <div className="relative flex-1">
-                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <Input 
+                {getInputIcon('recebimento')}
+                <Input
                   name="recebimento"
                   value={links.recebimento}
                   onChange={handleChange}
                   placeholder="Cole o link da planilha de Recebimento Futuro aqui..."
-                  className="pl-10 bg-slate-50"
+                  className={`pl-10 bg-slate-50 ${erros.recebimento ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
                 />
+                {erros.recebimento && <p className="text-xs text-red-500 mt-1">URL inválida. Use o link completo do Google Sheets.</p>}
               </div>
               <Button variant="outline" onClick={() => handleClear('recebimento')} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                 <Trash2 size={18} />
@@ -101,14 +136,15 @@ export default function VincularArquivos() {
             </div>
             <div className="flex gap-3 mt-4">
               <div className="relative flex-1">
-                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <Input 
+                {getInputIcon('demandas')}
+                <Input
                   name="demandas"
                   value={links.demandas}
                   onChange={handleChange}
                   placeholder="Cole o link da planilha de Demandas aqui..."
-                  className="pl-10 bg-slate-50"
+                  className={`pl-10 bg-slate-50 ${erros.demandas ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
                 />
+                {erros.demandas && <p className="text-xs text-red-500 mt-1">URL inválida. Use o link completo do Google Sheets.</p>}
               </div>
               <Button variant="outline" onClick={() => handleClear('demandas')} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                 <Trash2 size={18} />
@@ -130,14 +166,15 @@ export default function VincularArquivos() {
             </div>
             <div className="flex gap-3 mt-4">
               <div className="relative flex-1">
-                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <Input 
+                {getInputIcon('avarias')}
+                <Input
                   name="avarias"
                   value={links.avarias}
                   onChange={handleChange}
                   placeholder="Cole o link da planilha de Avarias aqui..."
-                  className="pl-10 bg-slate-50"
+                  className={`pl-10 bg-slate-50 ${erros.avarias ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
                 />
+                {erros.avarias && <p className="text-xs text-red-500 mt-1">URL inválida. Use o link completo do Google Sheets.</p>}
               </div>
               <Button variant="outline" onClick={() => handleClear('avarias')} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                 <Trash2 size={18} />
