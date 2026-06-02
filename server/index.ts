@@ -13,15 +13,15 @@ import { upsertUser, getUserByOpenId } from "./db";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const DOMINIO_PERMITIDO = "tramontinastore.com";
+
 // MIDDLEWARE DE SEGURANÇA (COOP/COEP) - DEVE SER O PRIMEIRO
-// Resolve o erro de bloqueio de popup do Google e fotos de perfil.
 app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
   next();
 });
 
-// Middlewares de processamento
 app.use(cors());
 app.use(express.json());
 
@@ -58,8 +58,14 @@ app.post("/api/auth/login", async (req, res) => {
 
     const { email, name, picture } = payload;
 
-    // 1. Garante que o usuário existe no banco (cria se for o primeiro login)
-    //    O role padrão definido no schema é "user"
+    // 1. Valida o domínio — apenas @tramontinastore.com tem acesso
+    if (!email.endsWith(`@${DOMINIO_PERMITIDO}`)) {
+      return res.status(403).json({
+        message: `Acesso negado. Apenas contas @${DOMINIO_PERMITIDO} podem acessar esta plataforma.`
+      });
+    }
+
+    // 2. Garante que o usuário existe no banco (cria se for o primeiro login)
     await upsertUser({
       openId: email,
       email,
@@ -67,11 +73,11 @@ app.post("/api/auth/login", async (req, res) => {
       loginMethod: "google",
     });
 
-    // 2. Busca o usuário para pegar o role real (pode ter sido promovido a admin)
+    // 3. Busca o usuário para pegar o role real
     const dbUser = await getUserByOpenId(email);
-    const role = dbUser?.role ?? "user"; // ← nunca mais "admin" hardcoded
+    const role = dbUser?.role ?? "user";
 
-    // 3. Assina o JWT com o role real do banco
+    // 4. Assina o JWT com o role real do banco
     const authToken = jwt.sign(
       { id: email, email, role, name, picture },
       JWT_SECRET,
@@ -115,5 +121,5 @@ app.use(
 // Início do Servidor
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
-  console.log(`🔒 Política COOP configurada para popups do Google.`);
+  console.log(`🔒 Domínio permitido: @${DOMINIO_PERMITIDO}`);
 });

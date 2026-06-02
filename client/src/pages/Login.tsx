@@ -2,8 +2,7 @@
  * client/src/pages/Login.tsx
  */
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { Loader2, Clock } from "lucide-react";
+import { Loader2, ShieldCheck, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
 import { setAuthToken, clearAuthToken } from "@/lib/auth";
@@ -11,16 +10,14 @@ import { registrarAtividade } from "@/lib/activity";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const SESSION_EXPIRED_KEY = "session_expired_reason";
+const DOMINIO_PERMITIDO = "tramontinastore.com";
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [motivoLogout, setMotivoLogout] = useState<string | null>(null);
 
   useEffect(() => {
-    // Garante que qualquer token residual seja limpo ao chegar na tela de login
     clearAuthToken();
-
-    // Verifica se há mensagem de sessão expirada para mostrar ao usuário
     const motivo = localStorage.getItem(SESSION_EXPIRED_KEY);
     if (motivo) {
       setMotivoLogout(motivo);
@@ -46,7 +43,7 @@ export default function Login() {
 
       setAuthToken(data.token);
       if (data.role) localStorage.setItem("userRole", data.role);
-      registrarAtividade(); // inicia o contador de inatividade
+      registrarAtividade();
 
       toast.success(`Bem-vindo, ${data.name?.split(" ")[0] || "Usuário"}!`);
 
@@ -55,51 +52,165 @@ export default function Login() {
       }, 1000);
 
     } catch (error: any) {
-      toast.error(error.message || "Erro ao conectar com o servidor.");
+      toast.error(error.message || "Acesso negado. Verifique suas credenciais.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-      <Card className="w-full max-w-md p-8 shadow-lg flex flex-col items-center animate-in zoom-in-95 duration-500">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">ESTOQUE</h1>
-          <p className="text-sm font-bold text-blue-600 mt-1 uppercase tracking-widest">T Store Curitiba</p>
+    <div className="min-h-screen flex" style={{ background: "#0A0F1E" }}>
+
+      {/* PAINEL ESQUERDO — Identidade visual */}
+      <div
+        className="hidden lg:flex flex-col justify-between w-1/2 p-14 relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1A35A0 0%, #0A0F1E 100%)" }}
+      >
+        {/* Grade geométrica decorativa */}
+        <div className="absolute inset-0 opacity-10" style={{
+          backgroundImage: `linear-gradient(#89B4DE 1px, transparent 1px), linear-gradient(90deg, #89B4DE 1px, transparent 1px)`,
+          backgroundSize: "48px 48px"
+        }} />
+
+        {/* Círculo decorativo */}
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full opacity-10"
+          style={{ background: "radial-gradient(circle, #89B4DE, transparent)" }} />
+        <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full opacity-10"
+          style={{ background: "radial-gradient(circle, #1A35A0, transparent)" }} />
+
+        {/* Logo */}
+        <div className="relative z-10 flex items-center gap-4">
+          <div
+            className="w-12 h-12 flex items-center justify-center rounded-xl font-black text-white text-2xl shadow-lg"
+            style={{ background: "#1A35A0", border: "2px solid rgba(137,180,222,0.4)" }}
+          >
+            T
+          </div>
+          <div>
+            <p className="text-white font-black text-lg tracking-widest uppercase">Tramontina</p>
+            <p className="text-xs tracking-widest uppercase" style={{ color: "#89B4DE" }}>Store Curitiba</p>
+          </div>
         </div>
 
-        {/* Aviso de sessão expirada */}
-        {motivoLogout && (
-          <div className="w-full flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 mb-6 text-sm font-medium">
-            <Clock size={16} className="flex-shrink-0" />
-            {motivoLogout}
-          </div>
-        )}
+        {/* Texto central */}
+        <div className="relative z-10 space-y-6">
+          <h1 className="text-5xl font-black text-white leading-tight tracking-tight">
+            Sistema de<br />
+            <span style={{ color: "#89B4DE" }}>Gestão</span><br />
+            de Estoque
+          </h1>
+          <p className="text-base leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Plataforma interna de logística, controle de recebimentos e monitoramento de demandas em tempo real.
+          </p>
 
-        {loading ? (
-          <div className="flex flex-col items-center py-6">
-            <Loader2 className="animate-spin text-blue-600 w-10 h-10 mb-4" />
-            <p className="text-gray-600 font-medium">Validando acessos...</p>
+          {/* Badges de features */}
+          <div className="flex flex-col gap-2 pt-4">
+            {["Recebimento Futuro", "Gestão de Avarias", "Alertas de Demanda"].map(item => (
+              <div key={item} className="flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#89B4DE" }} />
+                <span className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>{item}</span>
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="w-full flex flex-col items-center py-2">
-            <p className="text-gray-500 text-sm mb-6 text-center">
-              Faça login com a sua conta autorizada para acessar o sistema.
+        </div>
+
+        {/* Rodapé esquerdo */}
+        <div className="relative z-10">
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+            © {new Date().getFullYear()} Tramontina Store Curitiba — Uso Interno
+          </p>
+        </div>
+      </div>
+
+      {/* PAINEL DIREITO — Formulário de login */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 relative">
+
+        {/* Logo mobile */}
+        <div className="lg:hidden flex items-center gap-3 mb-12">
+          <div
+            className="w-10 h-10 flex items-center justify-center rounded-xl font-black text-white text-xl"
+            style={{ background: "#1A35A0" }}
+          >
+            T
+          </div>
+          <div>
+            <p className="text-white font-black tracking-widest uppercase text-sm">Tramontina</p>
+            <p className="text-xs tracking-widest uppercase" style={{ color: "#89B4DE" }}>Store Curitiba</p>
+          </div>
+        </div>
+
+        <div className="w-full max-w-sm space-y-8">
+
+          {/* Cabeçalho */}
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black text-white tracking-tight">Acesso ao Sistema</h2>
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Utilize sua conta corporativa para entrar.
             </p>
-
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => {
-                toast.error("O login com o Google falhou ou foi cancelado.");
-              }}
-              shape="pill"
-              theme="filled_blue"
-              size="large"
-            />
           </div>
-        )}
-      </Card>
+
+          {/* Aviso de sessão expirada */}
+          {motivoLogout && (
+            <div
+              className="flex items-start gap-3 rounded-xl px-4 py-3 text-sm"
+              style={{ background: "rgba(255,180,0,0.1)", border: "1px solid rgba(255,180,0,0.25)", color: "#FFCC55" }}
+            >
+              <Clock size={16} className="flex-shrink-0 mt-0.5" />
+              <span>{motivoLogout}</span>
+            </div>
+          )}
+
+          {/* Card de login */}
+          <div
+            className="rounded-2xl p-7 space-y-6"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              backdropFilter: "blur(12px)"
+            }}
+          >
+            {/* Badge de acesso restrito */}
+            <div className="flex items-center gap-2 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <ShieldCheck size={15} style={{ color: "#89B4DE" }} />
+              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#89B4DE" }}>
+                Acesso restrito — @tramontinastore.com
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center py-6 gap-4">
+                <Loader2 className="animate-spin w-9 h-9" style={{ color: "#1A35A0" }} />
+                <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  Validando credenciais...
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-5">
+                <p className="text-xs text-center leading-relaxed" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  Apenas contas com domínio <strong style={{ color: "rgba(255,255,255,0.65)" }}>@tramontinastore.com</strong> têm acesso a esta plataforma.
+                </p>
+
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => toast.error("Login com o Google falhou ou foi cancelado.")}
+                  shape="pill"
+                  theme="filled_blue"
+                  size="large"
+                  hosted_domain={DOMINIO_PERMITIDO}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Aviso de segurança */}
+          <div className="flex items-center gap-2 justify-center">
+            <AlertTriangle size={12} style={{ color: "rgba(255,255,255,0.2)" }} />
+            <p className="text-xs text-center" style={{ color: "rgba(255,255,255,0.2)" }}>
+              Sessão encerrada automaticamente após 1h de inatividade
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
