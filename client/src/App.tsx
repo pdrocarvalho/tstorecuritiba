@@ -1,13 +1,15 @@
 /**
  * client/src/App.tsx
  */
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
+import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ROUTES } from "./constants";
 import { isTokenPresent } from "@/lib/auth";
+import { iniciarMonitorDeAtividade, sessaoExpirou } from "@/lib/activity";
 
 import Home from "./pages/home/index";
 import RecebimentoProdutos from "./pages/recebimento/Produtos";
@@ -18,14 +20,31 @@ import VincularArquivos from "./pages/configuracoes/VincularArquivos";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
-// 🛡️ PROTECTED ROUTE: Bloqueia acesso anônimo
+// 🛡️ PROTECTED ROUTE: Bloqueia acesso anônimo e verifica inatividade
 const ProtectedRoute = ({ component: Component, path }: { component: any, path: string }) => {
   return (
     <Route path={path}>
-      {() => (isTokenPresent() ? <Component /> : <Redirect to="/login" />)}
+      {() => {
+        if (!isTokenPresent() || sessaoExpirou()) return <Redirect to="/login" />;
+        return <Component />;
+      }}
     </Route>
   );
 };
+
+// Monitor de inatividade — iniciado apenas quando logado
+function ActivityMonitor() {
+  const [location] = useLocation();
+  const isLoggedIn = isTokenPresent();
+
+  useEffect(() => {
+    if (!isLoggedIn || location === "/login") return;
+    const cleanup = iniciarMonitorDeAtividade();
+    return cleanup;
+  }, [isLoggedIn, location]);
+
+  return null;
+}
 
 export default function App() {
   return (
@@ -33,13 +52,14 @@ export default function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
+          <ActivityMonitor />
           <Switch>
-            {/* Rotas públicas */}
+            {/* Login — sempre acessível, nunca redireciona automaticamente */}
             <Route path="/login" component={Login} />
 
-            {/* Rota raiz */}
-            <Route path="/" component={Home} />
-            <Route path={ROUTES.home} component={Home} />
+            {/* Rota raiz — protegida */}
+            <ProtectedRoute path="/" component={Home} />
+            <ProtectedRoute path={ROUTES.home} component={Home} />
 
             {/* Rotas protegidas */}
             <ProtectedRoute path={ROUTES.recebimento.produtos} component={RecebimentoProdutos} />
