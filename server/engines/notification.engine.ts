@@ -34,10 +34,16 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     })).filter(r => r.ref);
 
     // 2. FUNÇÃO QUE PROCESSA CADA ABA (ALERTA E VENDA)
-    const processarAba = async (abaNome: string) => {
+    // Retorna count total e breakdown por consultor
+    const processarAba = async (abaNome: string): Promise<{
+      count: number;
+      porConsultor: Record<string, number>;
+    }> => {
       let count = 0;
+      const porConsultor: Record<string, number> = {};
+
       const demId = extractSpreadsheetId(urlDemandas);
-      if (!demId) return 0;
+      if (!demId) return { count, porConsultor };
 
       const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${abaNome}'!A:G` });
       const demRows = demRes.data.values || [];
@@ -45,6 +51,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       for (let i = 1; i < demRows.length; i++) {
         const row = demRows[i];
         const dataRegistroRaw = row[0];
+        const consultor = String(row[1] || "SEM CONSULTOR").toUpperCase().trim(); // Coluna B
         const ref = String(row[4] || "").toUpperCase().trim();
         const statusFisico = String(row[5] || "AGUARDANDO").toUpperCase().trim();
 
@@ -76,7 +83,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
 
         if (newRank > currentRank) {
           const rowNumber = i + 1;
-          console.log(`[Engine] Evolução detectada na ref ${ref} (Linha ${rowNumber}): ${statusFisico} -> ${bestStatus}`);
+          console.log(`[Engine] Evolução detectada na ref ${ref} (Linha ${rowNumber}): ${statusFisico} -> ${bestStatus} | Consultor: ${consultor}`);
 
           const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
@@ -86,20 +93,25 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
             valueInputOption: "USER_ENTERED",
             requestBody: { values: [[bestStatus, hoje]] }
           });
+
           count++;
+          porConsultor[consultor] = (porConsultor[consultor] || 0) + 1;
         }
       }
-      return count;
+
+      return { count, porConsultor };
     };
 
-    const countAlertas = await processarAba("DB-ALERTA_DE_DEMANDA");
-    const countVendas = await processarAba("DB-VENDA_FUTURA");
+    const alertas = await processarAba("DB-ALERTA_DE_DEMANDA");
+    const vendas = await processarAba("DB-VENDA_FUTURA");
 
     return {
       success: true,
-      alertasNotificados: countAlertas,
-      vendasNotificadas: countVendas,
-      mensagem: `Processamento Logístico Concluído. ${countAlertas + countVendas} estágios evoluídos na planilha.`
+      alertasNotificados: alertas.count,
+      alertasPorConsultor: alertas.porConsultor,
+      vendasNotificadas: vendas.count,
+      vendasPorConsultor: vendas.porConsultor,
+      mensagem: `Processamento Logístico Concluído. ${alertas.count + vendas.count} estágios evoluídos na planilha.`
     };
   } catch (error: any) {
     console.error("❌ Erro fatal no processamento logístico:", error);
