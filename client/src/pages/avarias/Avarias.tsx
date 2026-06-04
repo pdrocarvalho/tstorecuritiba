@@ -4,8 +4,8 @@
 import { useState, useMemo } from "react";
 import {
   Plus, Search, RefreshCw, X, AlertOctagon,
-  CheckCircle2, Truck, ChevronDown, ChevronUp, PackageCheck,
-  HelpCircle, Printer, Save, Edit, Trash2
+  Truck, ChevronDown, ChevronUp, PackageCheck,
+  HelpCircle, Printer, Save, Edit, Trash2, Lock
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,18 +15,15 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 
+const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || "";
+
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
   { id: "EM PROCESSO", label: "EM PROCESSO", color: "blue" },
   { id: "CONCLUÍDA", label: "CONCLUÍDA", color: "emerald" },
 ];
 
-const MOTIVO_OPTIONS = [
-  "ACIDENTE",
-  "QUEBRADO",
-  "MAU USO",
-  "PROBLEMA TÉCNICO"
-];
+const MOTIVO_OPTIONS = ["ACIDENTE", "QUEBRADO", "MAU USO", "PROBLEMA TÉCNICO"];
 
 const OPERACIONAL_OPTIONS = [
   "AGUARDANDO TRATATIVA",
@@ -42,6 +39,8 @@ const FORM_VAZIO = {
   nfSaida: "", nfReposicao: "", dataColeta: "", cupomFiscal: "", observacoes: ""
 };
 
+type AcaoPin = "edit" | "delete";
+
 export default function GestaoAvarias() {
   const [urlPlanilha] = useState(() => localStorage.getItem("url_avarias") || "");
   const isVinculado = !!urlPlanilha;
@@ -53,6 +52,11 @@ export default function GestaoAvarias() {
   const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
 
+  // Modal de PIN
+  const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: any }>({ isOpen: false, acao: null });
+  const [pinValue, setPinValue] = useState("");
+  const [pinErro, setPinErro] = useState(false);
+
   const { data: todasAvarias = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' },
     { enabled: isVinculado }
@@ -61,24 +65,27 @@ export default function GestaoAvarias() {
   const formatUpper = (val: string) => String(val || "").toUpperCase();
 
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
-    onSuccess: () => { toast.success("AVARIA REGISTRADA COM SUCESSO!"); fecharModal(); refetch(); },
+    onSuccess: () => { toast.success("AVARIA REGISTRADA COM SUCESSO!"); fecharTudo(); refetch(); },
     onError: (err) => toast.error("ERRO AO SALVAR: " + err.message)
   });
 
   const mutationEdit = trpc.notifications.editAvariaFull.useMutation({
-    onSuccess: () => { toast.success("AVARIA ATUALIZADA COM SUCESSO!"); fecharModal(); refetch(); },
+    onSuccess: () => { toast.success("AVARIA ATUALIZADA COM SUCESSO!"); fecharTudo(); refetch(); },
     onError: (err) => toast.error("ERRO NA EDIÇÃO: " + err.message)
   });
 
   const mutationDelete = trpc.notifications.deleteAvariaRow.useMutation({
-    onSuccess: () => { toast.success("AVARIA EXCLUÍDA PERMANENTEMENTE."); refetch(); },
+    onSuccess: () => { toast.success("AVARIA EXCLUÍDA PERMANENTEMENTE."); fecharTudo(); refetch(); },
     onError: (err) => toast.error("ERRO AO EXCLUIR: " + err.message)
   });
 
-  const fecharModal = () => {
+  const fecharTudo = () => {
     setShowModal(false);
+    setPinModal({ isOpen: false, acao: null });
     setEditingAvaria(null);
     setForm(FORM_VAZIO);
+    setPinValue("");
+    setPinErro(false);
   };
 
   const abrirModalNova = () => {
@@ -110,17 +117,29 @@ export default function GestaoAvarias() {
     setShowModal(true);
   };
 
-  const handleSalvarClicked = () => {
-    if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("CAMPOS OBRIGATÓRIOS FALTANDO.");
+  // Abre o modal de PIN antes de qualquer ação sensível
+  const pedirPin = (acao: AcaoPin, alvo?: any) => {
+    setPinValue("");
+    setPinErro(false);
+    setPinModal({ isOpen: true, acao, alvo });
+  };
 
-    if (editingAvaria) {
-      // Edição — autenticação via JWT (sem PIN)
+  // Valida o PIN no frontend e executa a ação
+  const confirmarPin = () => {
+    if (pinValue !== MANAGER_PIN) {
+      setPinErro(true);
+      return;
+    }
+
+    if (pinModal.acao === "delete" && pinModal.alvo) {
+      mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber });
+    } else if (pinModal.acao === "edit" && editingAvaria) {
       const linhaAtualizada = [
         editingAvaria.DATA_DE_ENTRADA || "", form.fabrica, editingAvaria.COD_AVARIA || "",
         form.ref, form.descricao, form.qtde, form.nfEntrada, form.cupomFiscal,
         form.motivo, form.responsavel, form.lancadoSistema, form.tratativa,
         form.constaFisicamente, form.dataColeta, form.nfSaida, form.nfReposicao, form.status,
-        "", // R: limpa o carimbo do robô para forçar novo envio de e-mail
+        "",
         form.observacoes
       ];
       mutationEdit.mutate({
@@ -128,8 +147,17 @@ export default function GestaoAvarias() {
         rowNumber: editingAvaria.rowNumber,
         row: linhaAtualizada.map(v => typeof v === 'string' ? v.toUpperCase() : v),
       });
+    }
+  };
+
+  const handleSalvarClicked = () => {
+    if (!form.fabrica || !form.ref || !form.qtde) return toast.warning("CAMPOS OBRIGATÓRIOS FALTANDO.");
+
+    if (editingAvaria) {
+      // Edição sensível — pede PIN antes
+      pedirPin("edit");
     } else {
-      // Nova avaria
+      // Nova avaria — sem PIN
       const fabricaObj = FABRICAS.find(f => f.nome === form.fabrica);
       const prefixo = fabricaObj?.prefixo || "AVR";
       const codigosExistentes = todasAvarias.map((a: any) => String(a.COD_AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
@@ -140,18 +168,10 @@ export default function GestaoAvarias() {
         new Date().toLocaleDateString('pt-BR'), form.fabrica, codAvaria, form.ref, form.descricao,
         form.qtde, form.nfEntrada, form.cupomFiscal, form.motivo, form.responsavel,
         form.lancadoSistema, form.tratativa, form.constaFisicamente, form.dataColeta,
-        form.nfSaida, form.nfReposicao, form.status,
-        "", // R: em branco para disparar e-mail de nova avaria
-        form.observacoes
+        form.nfSaida, form.nfReposicao, form.status, "", form.observacoes
       ];
       mutationAdd.mutate({ url: urlPlanilha, row: novaLinha.map(v => typeof v === 'string' ? v.toUpperCase() : v) });
     }
-  };
-
-  const handleExcluir = (av: any) => {
-    const confirmado = window.confirm(`Excluir permanentemente a avaria ${av.COD_AVARIA}? Esta ação não pode ser desfeita.`);
-    if (!confirmado) return;
-    mutationDelete.mutate({ url: urlPlanilha, rowNumber: av.rowNumber });
   };
 
   const getTratativaStyle = (texto: string) => {
@@ -163,19 +183,14 @@ export default function GestaoAvarias() {
   };
 
   const toggleFiltro = (statusId: string) => {
-    setFiltrosAtivos(prev =>
-      prev.includes(statusId) ? prev.filter(s => s !== statusId) : [...prev, statusId]
-    );
+    setFiltrosAtivos(prev => prev.includes(statusId) ? prev.filter(s => s !== statusId) : [...prev, statusId]);
   };
 
   const avariasFiltradas = useMemo(() => {
     return todasAvarias.filter((a: any) => {
       const search = filtroSku.toLowerCase();
-      const refValue = String(a.REF || "").toLowerCase();
-      const codValue = String(a.COD_AVARIA || "").toLowerCase();
-      const matchesSearch = !filtroSku || refValue.includes(search) || codValue.includes(search);
-      const tratativaRow = formatUpper(a.TRATATIVA || "PENDENTE");
-      const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(tratativaRow);
+      const matchesSearch = !filtroSku || String(a.REF || "").toLowerCase().includes(search) || String(a.COD_AVARIA || "").toLowerCase().includes(search);
+      const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(formatUpper(a.TRATATIVA || "PENDENTE"));
       return matchesSearch && matchesStatus;
     });
   }, [todasAvarias, filtroSku, filtrosAtivos]);
@@ -183,8 +198,7 @@ export default function GestaoAvarias() {
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    const html = `
-      <html><head><title>RELATÓRIO - T STORE</title><style>body { font-family: sans-serif; padding: 20px; font-size: 12px; text-transform: uppercase; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; }</style></head>
+    const html = `<html><head><title>RELATÓRIO - T STORE</title><style>body { font-family: sans-serif; padding: 20px; font-size: 12px; text-transform: uppercase; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; }</style></head>
       <body><h2>GESTÃO DE AVARIAS</h2><table><thead><tr><th>CÓD.</th><th>REF</th><th>DESCRIÇÃO</th><th>QTD</th><th>STATUS</th><th>TRATATIVA</th></tr></thead>
       <tbody>${avariasFiltradas.map((av: any) => `<tr><td>${av.COD_AVARIA || ""}</td><td>${av.REF || ""}</td><td>${av.DESCRICAO || ""}</td><td>${av.QTDE || ""}</td><td>${av.STATUS || ""}</td><td>${av.TRATATIVA || ""}</td></tr>`).join("")}</tbody></table>
       <script>setTimeout(() => { window.print(); window.close(); }, 500);</script></body></html>`;
@@ -229,10 +243,8 @@ export default function GestaoAvarias() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map(s => (
-                  <button
-                    key={s.id} onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
+                  <button key={s.id} onClick={() => toggleFiltro(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-white text-slate-500 border-slate-200'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -268,11 +280,8 @@ export default function GestaoAvarias() {
                             <td colSpan={7} className="px-10 py-8 relative">
                               <div className="absolute top-4 right-10 flex gap-2">
                                 <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase"><Edit size={14} /> EDITAR</button>
-                                <button
-                                  onClick={() => handleExcluir(av)}
-                                  disabled={mutationDelete.isPending}
-                                  className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase disabled:opacity-50"
-                                >
+                                <button onClick={() => pedirPin("delete", av)} disabled={mutationDelete.isPending}
+                                  className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase disabled:opacity-50">
                                   <Trash2 size={14} /> {mutationDelete.isPending ? 'EXCLUINDO...' : 'EXCLUIR'}
                                 </button>
                               </div>
@@ -307,6 +316,7 @@ export default function GestaoAvarias() {
         )}
       </div>
 
+      {/* MODAL DE FORMULÁRIO */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -314,7 +324,7 @@ export default function GestaoAvarias() {
               <h2 className="font-bold text-lg uppercase">
                 {editingAvaria ? `EDITAR AVARIA - ${editingAvaria.COD_AVARIA || editingAvaria.COD__AVARIA}` : "REGISTRAR NOVA AVARIA"}
               </h2>
-              <button onClick={fecharModal} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
+              <button onClick={fecharTudo} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
             </div>
 
             <div className="p-6 space-y-6">
@@ -364,12 +374,8 @@ export default function GestaoAvarias() {
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">OBSERVAÇÕES DETALHADAS</label>
-                <textarea
-                   className="w-full min-h-[80px] rounded-md border border-slate-200 p-3 text-sm uppercase focus:ring-2 focus:ring-[#2563eb] outline-none"
-                   value={form.observacoes}
-                   onChange={(e) => setForm({...form, observacoes: e.target.value.toUpperCase()})}
-                   placeholder="DETALHE O OCORRIDO AQUI..."
-                />
+                <textarea className="w-full min-h-[80px] rounded-md border border-slate-200 p-3 text-sm uppercase focus:ring-2 focus:ring-[#2563eb] outline-none"
+                   value={form.observacoes} onChange={(e) => setForm({...form, observacoes: e.target.value.toUpperCase()})} placeholder="DETALHE O OCORRIDO AQUI..." />
               </div>
 
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-5">
@@ -406,13 +412,41 @@ export default function GestaoAvarias() {
             </div>
 
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50 sticky bottom-0">
-              <button onClick={fecharModal} className="px-4 py-2 text-sm font-bold text-slate-600 uppercase">CANCELAR</button>
-              <button
-                onClick={handleSalvarClicked}
-                disabled={mutationAdd.isPending || mutationEdit.isPending}
-                className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md uppercase disabled:opacity-50 ${editingAvaria ? 'bg-[#2563eb]' : 'bg-red-600'}`}
-              >
+              <button onClick={fecharTudo} className="px-4 py-2 text-sm font-bold text-slate-600 uppercase">CANCELAR</button>
+              <button onClick={handleSalvarClicked} disabled={mutationAdd.isPending || mutationEdit.isPending}
+                className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md uppercase disabled:opacity-50 ${editingAvaria ? 'bg-[#2563eb]' : 'bg-red-600'}`}>
                 <Save size={16} /> {editingAvaria ? "SALVAR ALTERAÇÕES" : "REGISTRAR AVARIA"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE PIN */}
+      {pinModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-7 text-center max-w-sm w-full shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <Lock size={22} className="text-slate-700" />
+            </div>
+            <h3 className="text-lg font-black mb-1 uppercase">Senha de Gerente</h3>
+            <p className="text-xs text-slate-400 mb-5 uppercase">
+              {pinModal.acao === "delete" ? "Confirme para excluir permanentemente" : "Confirme para salvar as alterações"}
+            </p>
+            <Input
+              type="password"
+              value={pinValue}
+              onChange={(e) => { setPinValue(e.target.value); setPinErro(false); }}
+              onKeyDown={(e) => e.key === "Enter" && confirmarPin()}
+              className={`text-center text-lg font-bold mb-2 ${pinErro ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+              autoFocus
+            />
+            {pinErro && <p className="text-xs text-red-500 font-bold mb-3 uppercase">Senha incorreta. Tente novamente.</p>}
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setPinModal({ isOpen: false, acao: null })} className="flex-1 py-2.5 bg-slate-100 rounded-lg uppercase text-xs font-bold hover:bg-slate-200 transition-colors">CANCELAR</button>
+              <button onClick={confirmarPin} disabled={mutationEdit.isPending || mutationDelete.isPending}
+                className={`flex-1 py-2.5 text-white rounded-lg uppercase text-xs font-bold disabled:opacity-50 transition-colors ${pinModal.acao === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-[#2563eb] hover:bg-blue-700"}`}>
+                {mutationEdit.isPending || mutationDelete.isPending ? "AGUARDE..." : "CONFIRMAR"}
               </button>
             </div>
           </div>
