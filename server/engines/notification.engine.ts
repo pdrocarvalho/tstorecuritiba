@@ -34,19 +34,23 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     })).filter(r => r.ref);
 
     // 2. FUNÇÃO QUE PROCESSA CADA ABA (ALERTA E VENDA)
-    // Retorna count total e breakdown por consultor
+    // Retorna count total, breakdown por consultor e flag de registros
     const processarAba = async (abaNome: string): Promise<{
       count: number;
       porConsultor: Record<string, number>;
+      temRegistros: boolean;
     }> => {
       let count = 0;
       const porConsultor: Record<string, number> = {};
 
       const demId = extractSpreadsheetId(urlDemandas);
-      if (!demId) return { count, porConsultor };
+      if (!demId) return { count, porConsultor, temRegistros: false };
 
       const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${abaNome}'!A:G` });
       const demRows = demRes.data.values || [];
+
+      // Verifica se há linhas de dados além do cabeçalho
+      const temRegistros = demRows.length > 1;
 
       for (let i = 1; i < demRows.length; i++) {
         const row = demRows[i];
@@ -99,7 +103,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
         }
       }
 
-      return { count, porConsultor };
+      return { count, porConsultor, temRegistros };
     };
 
     const alertas = await processarAba("DB-ALERTA_DE_DEMANDA");
@@ -109,8 +113,10 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       success: true,
       alertasNotificados: alertas.count,
       alertasPorConsultor: alertas.porConsultor,
+      alertasTemRegistros: alertas.temRegistros,
       vendasNotificadas: vendas.count,
       vendasPorConsultor: vendas.porConsultor,
+      vendasTemRegistros: vendas.temRegistros,
       mensagem: `Processamento Logístico Concluído. ${alertas.count + vendas.count} estágios evoluídos na planilha.`
     };
   } catch (error: any) {

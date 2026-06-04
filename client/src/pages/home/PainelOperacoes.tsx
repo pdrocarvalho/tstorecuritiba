@@ -2,7 +2,7 @@
  * client/src/pages/home/PainelOperacoes.tsx
  */
 import { useState, useMemo, useEffect } from "react";
-import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2, User } from "lucide-react";
+import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2, User, PackageOpen } from "lucide-react";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
@@ -18,17 +18,17 @@ interface PainelOperacoesProps {
 interface ResultadoAutomacao {
   alertas: number;
   alertasPorConsultor: Record<string, number>;
+  alertasTemRegistros: boolean;
   vendas: number;
   vendasPorConsultor: Record<string, number>;
+  vendasTemRegistros: boolean;
 }
 
-// Componente para exibir lista de consultores com contagem
-function ListaConsultores({ porConsultor, cor }: { 
-  porConsultor: Record<string, number>; 
+function ListaConsultores({ porConsultor, cor }: {
+  porConsultor: Record<string, number>;
   cor: "red" | "blue";
 }) {
   const entries = Object.entries(porConsultor).sort((a, b) => b[1] - a[1]);
-
   if (entries.length === 0) return null;
 
   return (
@@ -66,7 +66,14 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     { enabled: isVinculado, refetchInterval: 60000 }
   );
 
-  const [resultadoAutomacao, setResultadoAutomacao] = useState<ResultadoAutomacao | null>(null);
+  const [resultadoAutomacao, setResultadoAutomacao] = useState<ResultadoAutomacao>({
+    alertas: 0,
+    alertasPorConsultor: {},
+    alertasTemRegistros: false,
+    vendas: 0,
+    vendasPorConsultor: {},
+    vendasTemRegistros: false,
+  });
 
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
     onSuccess: (data: any) => {
@@ -74,8 +81,10 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       setResultadoAutomacao({
         alertas: data.alertasNotificados ?? 0,
         alertasPorConsultor: data.alertasPorConsultor ?? {},
+        alertasTemRegistros: data.alertasTemRegistros ?? false,
         vendas: data.vendasNotificadas ?? 0,
         vendasPorConsultor: data.vendasPorConsultor ?? {},
+        vendasTemRegistros: data.vendasTemRegistros ?? false,
       });
     }
   });
@@ -129,6 +138,47 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
 
     return { caixasPorFabrica, skusPorMundo };
   }, [todosPedidos, isVinculado]);
+
+  // Conteúdo dos cards de automação
+  const renderCardContent = (
+    temRegistros: boolean,
+    count: number,
+    porConsultor: Record<string, number>,
+    cor: "red" | "blue"
+  ) => {
+    if (automacao.isPending) {
+      return (
+        <p className={`text-sm font-bold text-slate-400 uppercase flex items-center gap-2 mt-4`}>
+          <RefreshCw className={`animate-spin ${cor === "red" ? "text-red-500" : "text-blue-500"}`} size={16} />
+          Lendo estoque...
+        </p>
+      );
+    }
+
+    if (!temRegistros) {
+      return (
+        <div className="flex flex-col items-center gap-2 mt-4">
+          <PackageOpen size={28} className="text-slate-300" />
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest text-center">
+            Nenhum registro encontrado.
+          </p>
+        </div>
+      );
+    }
+
+    if (count === 0) {
+      return (
+        <div className="flex flex-col items-center gap-1 mt-4">
+          <CheckCircle2 size={28} className="text-green-400" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
+            Nenhuma atualização hoje
+          </p>
+        </div>
+      );
+    }
+
+    return <ListaConsultores porConsultor={porConsultor} cor={cor} />;
+  };
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
@@ -209,7 +259,6 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       {/* BLOCO 3: ALERTAS E DEMANDAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
 
-        {/* Card Alertas */}
         <Card className="p-0 overflow-hidden border-2 border-red-200 shadow-sm flex flex-col">
           <div className="bg-red-100 text-red-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-red-200 flex items-center justify-center gap-2">
             <AlertTriangle size={16} /> Alerta de Demanda
@@ -217,28 +266,15 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
           <div className="p-5 bg-white flex-1 flex flex-col items-center gap-2">
             {!urlDemandas ? (
               <p className="text-sm font-bold text-slate-400 uppercase mt-4">Planilha não vinculada</p>
-            ) : automacao.isPending ? (
-              <p className="text-sm font-bold text-slate-400 uppercase flex items-center gap-2 mt-4">
-                <RefreshCw className="animate-spin text-red-500" size={16} /> Lendo estoque...
-              </p>
-            ) : resultadoAutomacao ? (
-              resultadoAutomacao.alertas === 0 ? (
-                <div className="flex flex-col items-center gap-1 mt-4">
-                  <CheckCircle2 size={28} className="text-green-400" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
-                    Nenhuma atualização hoje
-                  </p>
-                </div>
-              ) : (
-                <ListaConsultores porConsultor={resultadoAutomacao.alertasPorConsultor} cor="red" />
-              )
-            ) : (
-              <p className="text-sm font-bold text-slate-400 uppercase mt-4">Processando...</p>
-            )}
+            ) : renderCardContent(
+                resultadoAutomacao.alertasTemRegistros,
+                resultadoAutomacao.alertas,
+                resultadoAutomacao.alertasPorConsultor,
+                "red"
+              )}
           </div>
         </Card>
 
-        {/* Card Vendas Futuras */}
         <Card className="p-0 overflow-hidden border-2 border-blue-200 shadow-sm flex flex-col">
           <div className="bg-blue-100 text-blue-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-blue-200 flex items-center justify-center gap-2">
             <TrendingUp size={16} /> Venda Futura
@@ -246,24 +282,12 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
           <div className="p-5 bg-white flex-1 flex flex-col items-center gap-2">
             {!urlDemandas ? (
               <p className="text-sm font-bold text-slate-400 uppercase mt-4">Planilha não vinculada</p>
-            ) : automacao.isPending ? (
-              <p className="text-sm font-bold text-slate-400 uppercase flex items-center gap-2 mt-4">
-                <RefreshCw className="animate-spin text-blue-500" size={16} /> Lendo estoque...
-              </p>
-            ) : resultadoAutomacao ? (
-              resultadoAutomacao.vendas === 0 ? (
-                <div className="flex flex-col items-center gap-1 mt-4">
-                  <CheckCircle2 size={28} className="text-green-400" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
-                    Nenhuma atualização hoje
-                  </p>
-                </div>
-              ) : (
-                <ListaConsultores porConsultor={resultadoAutomacao.vendasPorConsultor} cor="blue" />
-              )
-            ) : (
-              <p className="text-sm font-bold text-slate-400 uppercase mt-4">Processando...</p>
-            )}
+            ) : renderCardContent(
+                resultadoAutomacao.vendasTemRegistros,
+                resultadoAutomacao.vendas,
+                resultadoAutomacao.vendasPorConsultor,
+                "blue"
+              )}
           </div>
         </Card>
 
