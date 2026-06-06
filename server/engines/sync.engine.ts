@@ -2,19 +2,10 @@
  * server/engines/sync.engine.ts
  */
 import { google } from "googleapis";
+import { getGoogleAuth, parseDataLimpa } from "./google.helpers";
 
 const sheetsCache: Record<string, { data: any[]; timestamp: number }> = {};
 const CACHE_TTL_MS = 30 * 1000;
-
-function getGoogleAuth() {
-  const client_email = process.env.GOOGLE_SERVICE_EMAIL;
-  const private_key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!client_email || !private_key) throw new Error("Credenciais do Google ausentes.");
-  return new google.auth.GoogleAuth({
-    credentials: { client_email, private_key },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-}
 
 export function extractSpreadsheetId(url: string) {
   const match = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
@@ -34,25 +25,6 @@ function getSheetInfoFromUrl(url: string, spreadsheet: any) {
 
 function getSheetNameFromUrl(url: string, spreadsheet: any) {
   return getSheetInfoFromUrl(url, spreadsheet).title;
-}
-
-function parseDataLimpa(dataRaw: any) {
-  if (!dataRaw) return null;
-  const str = String(dataRaw).trim();
-  if (str.includes('/')) {
-    const parts = str.split(/[/\s:-]/);
-    if (parts.length >= 3) {
-      const p0 = parseInt(parts[0], 10);
-      const p1 = parseInt(parts[1], 10);
-      const p2 = parseInt(parts[2], 10);
-      if (p0 > 12) return new Date(p2, p1 - 1, p0); // DD/MM/YYYY
-      if (p1 > 12) return new Date(p2, p0 - 1, p1); // MM/DD/YYYY
-      return new Date(p2, p1 - 1, p0); // Assume DD/MM/YYYY como padrão BR
-    }
-  }
-  const d = new Date(dataRaw);
-  if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return null;
 }
 
 export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' | 'demandas' = 'recebimento', targetTab?: string) {
@@ -132,7 +104,14 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
         if (hLimpo.includes("REMETENTE")) obj.remetente = val;
         if (hLimpo.includes("NOTAFISCAL")) obj.notaFiscal = val;
         if (hLimpo.includes("MUNDO")) obj.mundo = val;
+        if (hLimpo.includes("TRANSPORT")) obj.transportadora = val;
+        if (hLimpo.includes("DIVERG")) obj.divergencia = String(val).toUpperCase().trim() || "SEM DIVERGÊNCIA";
+        if (hLimpo === "MES" || (hLimpo.includes("MES") && !hLimpo.includes("PREVIS"))) obj.mes = val;
 
+        if (hLimpo.includes("EMBARQUE")) {
+          const p = String(val).split("/");
+          obj.dataEmbarque = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
+        }
         if (hLimpo.includes("PREVIS")) {
           const p = String(val).split("/");
           obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
