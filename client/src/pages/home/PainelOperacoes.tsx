@@ -2,11 +2,14 @@
  * client/src/pages/home/PainelOperacoes.tsx
  */
 import { useState, useMemo, useEffect } from "react";
-import { Box, Globe, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2, User, PackageOpen } from "lucide-react";
+import {
+  Package, FileText, Layers, Calendar,
+  AlertTriangle, TrendingUp, RefreshCw,
+  CheckCircle2, User, PackageOpen, Clock
+} from "lucide-react";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { MUNDO_COLORS, FABRICAS_FIXAS, MUNDOS_FIXOS } from "@/constants";
 
 const AUTOMACAO_INTERVALO_MS = 60 * 60 * 1000;
 const AUTOMACAO_STORAGE_KEY = "automacao_ultima_execucao";
@@ -30,25 +33,16 @@ function ListaConsultores({ porConsultor, cor }: {
 }) {
   const entries = Object.entries(porConsultor).sort((a, b) => b[1] - a[1]);
   if (entries.length === 0) return null;
-
   return (
     <div className="w-full mt-2 space-y-1.5">
       {entries.map(([consultor, qtd]) => (
-        <div
-          key={consultor}
+        <div key={consultor}
           className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
-            cor === "red"
-              ? "bg-red-50 text-red-700 border border-red-100"
-              : "bg-blue-50 text-blue-700 border border-blue-100"
+            cor === "red" ? "bg-red-50 text-red-700 border border-red-100" : "bg-blue-50 text-blue-700 border border-blue-100"
           }`}
         >
-          <div className="flex items-center gap-1.5">
-            <User size={11} />
-            <span>{consultor}</span>
-          </div>
-          <span className={`text-base font-black ${cor === "red" ? "text-red-600" : "text-blue-600"}`}>
-            {qtd}
-          </span>
+          <div className="flex items-center gap-1.5"><User size={11} /><span>{consultor}</span></div>
+          <span className={`text-base font-black ${cor === "red" ? "text-red-600" : "text-blue-600"}`}>{qtd}</span>
         </div>
       ))}
     </div>
@@ -58,7 +52,6 @@ function ListaConsultores({ porConsultor, cor }: {
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
-
   const isVinculado = !!urlPlanilha;
 
   const { data: todosPedidos = [] } = trpc.notifications.getLiveData.useQuery(
@@ -67,12 +60,8 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   );
 
   const [resultadoAutomacao, setResultadoAutomacao] = useState<ResultadoAutomacao>({
-    alertas: 0,
-    alertasPorConsultor: {},
-    alertasTemRegistros: false,
-    vendas: 0,
-    vendasPorConsultor: {},
-    vendasTemRegistros: false,
+    alertas: 0, alertasPorConsultor: {}, alertasTemRegistros: false,
+    vendas: 0, vendasPorConsultor: {}, vendasTemRegistros: false,
   });
 
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
@@ -91,114 +80,99 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
 
   useEffect(() => {
     if (!urlPlanilha || !urlDemandas) return;
-
     const ultimaExecucao = localStorage.getItem(AUTOMACAO_STORAGE_KEY);
     const agora = Date.now();
-
     if (ultimaExecucao && agora - parseInt(ultimaExecucao) < AUTOMACAO_INTERVALO_MS) return;
-
     automacao.mutate(
       { urlRecebimento: urlPlanilha, urlDemandas },
-      {
-        onSuccess: () => {
-          localStorage.setItem(AUTOMACAO_STORAGE_KEY, String(agora));
-        }
-      }
+      { onSuccess: () => localStorage.setItem(AUTOMACAO_STORAGE_KEY, String(agora)) }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlPlanilha, urlDemandas]);
 
   const kpis = useMemo(() => {
-    if (!isVinculado) return { caixasPorFabrica: {}, skusPorMundo: {} };
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const em7Dias = new Date(hoje);
+    em7Dias.setDate(hoje.getDate() + 7);
 
-    const futuros = (todosPedidos as any[]).filter((p) => !p.dataEntrega);
+    const emTransito = (todosPedidos as any[]).filter(p => !p.dataEntrega);
 
-    const caixasPorFabrica: Record<string, number> = {};
-    const skusPorMundo: Record<string, Set<string>> = {};
+    let totalCaixas = 0;
+    const notasUnicas = new Set<string>();
+    const skusUnicos = new Set<string>();
+    let chegandoSemana = 0;
+    const atrasados: any[] = [];
 
-    FABRICAS_FIXAS.forEach(f => caixasPorFabrica[f] = 0);
-    MUNDOS_FIXOS.forEach(m => skusPorMundo[m] = new Set());
+    emTransito.forEach(p => {
+      totalCaixas += p.volumesCaixas || 0;
+      if (p.notaFiscal) notasUnicas.add(String(p.notaFiscal).trim());
+      if (p.produtoSku) skusUnicos.add(String(p.produtoSku).trim());
 
-    futuros.forEach(p => {
-      const remetente = String(p.remetente || "").toUpperCase();
-      const fabricaMatch = FABRICAS_FIXAS.find(f => remetente.includes(f));
-      const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
-
-      if (fabricaMatch) {
-        caixasPorFabrica[fabricaMatch] += qtdeCaixas;
-      } else {
-        caixasPorFabrica["DELTA"] = (caixasPorFabrica["DELTA"] || 0) + qtdeCaixas;
-      }
-
-      const mundo = String(p.mundo || "").toUpperCase().trim();
-      if (MUNDOS_FIXOS.includes(mundo as any)) {
-        if (p.produtoSku) skusPorMundo[mundo].add(p.produtoSku);
+      if (p.previsaoEntrega) {
+        const prev = new Date(p.previsaoEntrega);
+        prev.setHours(0, 0, 0, 0);
+        if (prev >= hoje && prev <= em7Dias) chegandoSemana++;
+        if (prev < hoje) atrasados.push(p);
       }
     });
 
-    return { caixasPorFabrica, skusPorMundo };
-  }, [todosPedidos, isVinculado]);
+    return {
+      totalCaixas,
+      notasAtivas: notasUnicas.size,
+      skusDiferentes: skusUnicos.size,
+      chegandoSemana,
+      atrasados,
+    };
+  }, [todosPedidos]);
 
-  // Conteúdo dos cards de automação
   const renderCardContent = (
     temRegistros: boolean,
     count: number,
     porConsultor: Record<string, number>,
     cor: "red" | "blue"
   ) => {
-    if (automacao.isPending) {
-      return (
-        <p className={`text-sm font-bold text-slate-400 uppercase flex items-center gap-2 mt-4`}>
-          <RefreshCw className={`animate-spin ${cor === "red" ? "text-red-500" : "text-blue-500"}`} size={16} />
-          Lendo estoque...
-        </p>
-      );
-    }
-
-    if (!temRegistros) {
-      return (
-        <div className="flex flex-col items-center gap-2 mt-4">
-          <PackageOpen size={28} className="text-slate-300" />
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest text-center">
-            Nenhum registro encontrado.
-          </p>
-        </div>
-      );
-    }
-
-    if (count === 0) {
-      return (
-        <div className="flex flex-col items-center gap-1 mt-4">
-          <CheckCircle2 size={28} className="text-green-400" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
-            Nenhuma atualização hoje
-          </p>
-        </div>
-      );
-    }
-
+    if (automacao.isPending) return (
+      <p className="text-sm font-bold text-slate-400 uppercase flex items-center gap-2 mt-4">
+        <RefreshCw className={`animate-spin ${cor === "red" ? "text-red-500" : "text-blue-500"}`} size={16} />
+        Lendo estoque...
+      </p>
+    );
+    if (!temRegistros) return (
+      <div className="flex flex-col items-center gap-2 mt-4">
+        <PackageOpen size={28} className="text-slate-300" />
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest text-center">Nenhum registro encontrado.</p>
+      </div>
+    );
+    if (count === 0) return (
+      <div className="flex flex-col items-center gap-1 mt-4">
+        <CheckCircle2 size={28} className="text-green-400" />
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Nenhuma atualização hoje</p>
+      </div>
+    );
     return <ListaConsultores porConsultor={porConsultor} cor={cor} />;
   };
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+
+      {/* CABEÇALHO */}
       <div>
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">
           Olá, {userName?.split(" ")[0]}! 👋
         </h1>
-        <p className="text-slate-500 font-medium">Aqui está a visão geral do trânsito de mercadorias no momento.</p>
+        <p className="text-slate-500 font-medium">Visão geral do trânsito de mercadorias em tempo real.</p>
       </div>
 
+      {/* AVISO DE CONFIGURAÇÃO */}
       {(!urlPlanilha || !urlDemandas) && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3 text-amber-800">
             <AlertTriangle size={20} />
             <p className="text-sm font-bold">
-              {!urlPlanilha && !urlDemandas
-                ? "As fontes de dados do painel não foram configuradas."
-                : !urlPlanilha
-                  ? "A fonte de dados de Recebimento Futuro não foi configurada."
-                  : "A fonte de dados de Demandas não foi configurada."}
+              {!urlPlanilha && !urlDemandas ? "As fontes de dados do painel não foram configuradas."
+                : !urlPlanilha ? "A fonte de dados de Recebimento Futuro não foi configurada."
+                : "A fonte de dados de Demandas não foi configurada."}
             </p>
           </div>
           <Link href="/configuracoes">
@@ -209,55 +183,103 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         </div>
       )}
 
-      {/* BLOCO 1: CAIXAS POR FÁBRICA */}
-      <div className="space-y-3">
-        <div className="bg-blue-700 text-white p-3 rounded-t-xl flex items-center justify-center gap-2 shadow-md">
-          <Box size={20} />
-          <h2 className="font-black tracking-widest uppercase text-sm">Caixas - Por Fábrica</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {FABRICAS_FIXAS.map(fabrica => (
-            <Card key={fabrica} className="p-0 overflow-hidden border-2 border-slate-200 shadow-sm flex flex-col">
-              <div className="bg-blue-600 text-white text-center py-2 text-[11px] font-black uppercase tracking-widest">
-                {fabrica}
-              </div>
-              <div className="flex-1 bg-blue-50 flex items-center justify-center py-6">
-                <span className="text-5xl font-black text-slate-800">
-                  {kpis.caixasPorFabrica[fabrica] === 0 || !isVinculado ? "-" : kpis.caixasPorFabrica[fabrica]}
-                </span>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
+      {/* BLOCO 1: 4 KPIs PRINCIPAIS */}
+      {isVinculado && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 
-      {/* BLOCO 2: VARIEDADE POR MUNDO */}
-      <div className="space-y-3">
-        <div className="bg-blue-700 text-white p-3 rounded-t-xl flex items-center justify-center gap-2 shadow-md">
-          <Globe size={20} />
-          <h2 className="font-black tracking-widest uppercase text-sm">Variedade de Produtos - Por Mundo</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {MUNDOS_FIXOS.map(mundo => (
-            <Card key={mundo} className="p-0 overflow-hidden border-2 border-slate-200 shadow-sm flex flex-col">
-              <div
-                className="text-center py-2 text-[11px] font-black uppercase tracking-widest text-slate-900 border-b-2 border-slate-900"
-                style={{ backgroundColor: MUNDO_COLORS[mundo] || '#eee' }}
-              >
-                {mundo}
+          {/* Caixas em Trânsito */}
+          <Card className="p-6 flex flex-col gap-3 border-l-4 border-l-blue-600 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Caixas em Trânsito</span>
+              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                <Package size={18} className="text-blue-600" />
               </div>
-              <div className="flex-1 bg-slate-900 flex items-center justify-center py-6">
-                <span className="text-5xl font-black text-white">
-                  {kpis.skusPorMundo[mundo]?.size === 0 || !isVinculado ? "-" : kpis.skusPorMundo[mundo]?.size}
-                </span>
+            </div>
+            <span className="text-5xl font-black text-slate-900">{kpis.totalCaixas}</span>
+            <span className="text-xs text-slate-400">volumes sem data de entrega</span>
+          </Card>
+
+          {/* Notas Fiscais Ativas */}
+          <Card className="p-6 flex flex-col gap-3 border-l-4 border-l-violet-600 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Notas Fiscais Ativas</span>
+              <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center">
+                <FileText size={18} className="text-violet-600" />
               </div>
-            </Card>
-          ))}
+            </div>
+            <span className="text-5xl font-black text-slate-900">{kpis.notasAtivas}</span>
+            <span className="text-xs text-slate-400">notas únicas em aberto</span>
+          </Card>
+
+          {/* SKUs Diferentes */}
+          <Card className="p-6 flex flex-col gap-3 border-l-4 border-l-emerald-600 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">SKUs Diferentes</span>
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <Layers size={18} className="text-emerald-600" />
+              </div>
+            </div>
+            <span className="text-5xl font-black text-slate-900">{kpis.skusDiferentes}</span>
+            <span className="text-xs text-slate-400">referências únicas em trânsito</span>
+          </Card>
+
+          {/* Chegando esta Semana */}
+          <Card className="p-6 flex flex-col gap-3 border-l-4 border-l-orange-500 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Chegando esta Semana</span>
+              <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+                <Calendar size={18} className="text-orange-500" />
+              </div>
+            </div>
+            <span className="text-5xl font-black text-slate-900">{kpis.chegandoSemana}</span>
+            <span className="text-xs text-slate-400">previsão nos próximos 7 dias</span>
+          </Card>
+
         </div>
-      </div>
+      )}
+
+      {/* BLOCO 2: ALERTA DE ATRASO */}
+      {isVinculado && kpis.atrasados.length > 0 && (
+        <div className="rounded-xl border-2 border-red-200 overflow-hidden shadow-sm">
+          <div className="bg-red-600 text-white px-5 py-3 flex items-center gap-3">
+            <Clock size={18} />
+            <span className="font-black uppercase tracking-widest text-sm">
+              {kpis.atrasados.length} {kpis.atrasados.length === 1 ? "Entrega Atrasada" : "Entregas Atrasadas"}
+            </span>
+            <span className="ml-auto text-xs text-red-200 font-medium">Previsão vencida sem data de entrega</span>
+          </div>
+          <div className="bg-white divide-y divide-red-50">
+            {kpis.atrasados.slice(0, 5).map((p: any, idx: number) => (
+              <div key={idx} className="px-5 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700 flex-shrink-0">
+                    {p.produtoSku || "-"}
+                  </span>
+                  <span className="text-sm text-slate-600 truncate">{p.descricao || "-"}</span>
+                </div>
+                <div className="flex items-center gap-4 flex-shrink-0 text-xs text-slate-500">
+                  <span>{p.remetente || "-"}</span>
+                  <span className="font-bold text-red-600">
+                    Prev: {p.previsaoEntrega ? new Date(p.previsaoEntrega).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "-"}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {kpis.atrasados.length > 5 && (
+              <div className="px-5 py-2 text-center">
+                <Link href="/recebimento/produtos">
+                  <span className="text-xs text-red-600 font-bold cursor-pointer hover:underline">
+                    Ver todos os {kpis.atrasados.length} itens atrasados →
+                  </span>
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* BLOCO 3: ALERTAS E DEMANDAS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <Card className="p-0 overflow-hidden border-2 border-red-200 shadow-sm flex flex-col">
           <div className="bg-red-100 text-red-700 text-center py-3 text-xs font-black uppercase tracking-widest border-b border-red-200 flex items-center justify-center gap-2">
