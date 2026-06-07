@@ -14,6 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const DOMINIO_PERMITIDO = "tramontinastore.com";
+const EMAILS_EXCECAO = ["pdrolcarvalho@gmail.com"];
 
 // MIDDLEWARE DE SEGURANÇA (COOP/COEP) - DEVE SER O PRIMEIRO
 app.use((_req, res, next) => {
@@ -58,8 +59,8 @@ app.post("/api/auth/login", async (req, res) => {
 
     const { email, name, picture } = payload;
 
-    // 1. Valida o domínio — apenas @tramontinastore.com tem acesso
-    if (!email.endsWith(`@${DOMINIO_PERMITIDO}`)) {
+    // 1. Valida o domínio — permite @tramontinastore.com e e-mails de exceção
+    if (!email.endsWith(`@${DOMINIO_PERMITIDO}`) && !EMAILS_EXCECAO.includes(email)) {
       return res.status(403).json({
         message: `Acesso negado. Apenas contas @${DOMINIO_PERMITIDO} podem acessar esta plataforma.`
       });
@@ -122,4 +123,5 @@ app.use(
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
   console.log(`🔒 Domínio permitido: @${DOMINIO_PERMITIDO}`);
+  console.log(`✉️  E-mails de exceção: ${EMAILS_EXCECAO.join(", ")}`);
 });
