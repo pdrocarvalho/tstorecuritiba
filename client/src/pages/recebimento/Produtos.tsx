@@ -1,290 +1,314 @@
 /**
  * client/src/pages/recebimento/Produtos.tsx
  */
-
 import { useState, useMemo, useEffect } from "react";
-import { 
-  RefreshCw, Package, Truck, AlertTriangle, 
-  ChevronDown, ChevronUp, Printer 
+import {
+  RefreshCw, AlertTriangle, Printer, Search,
+  Clock, CheckCircle2, PackageOpen, X, Filter
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
-import { 
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, 
-  Tooltip, ResponsiveContainer, Legend 
-} from "recharts";
-import { toast } from "sonner"; 
+import { toast } from "sonner";
 import { Link } from "wouter";
-
 import { MUNDO_COLORS } from "@/constants";
+
 const COR_PADRAO = "#94a3b8";
 
-// Formatador de Data seguro
 const formatarData = (dataStr?: string | Date | null) => {
-  if (!dataStr) return "-";
+  if (!dataStr) return "—";
   try {
     const d = new Date(dataStr);
-    if (isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("pt-BR", { timeZone: 'UTC' });
-  } catch {
-    return "-";
-  }
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  } catch { return "—"; }
+};
+
+const getPrazoBadge = (previsao: Date | null, entregue: boolean) => {
+  if (entregue) return { label: "Entregue", bg: "#dcfce7", text: "#16a34a", dot: "#16a34a" };
+  if (!previsao) return { label: "Sem previsão", bg: "#f1f5f9", text: "#64748b", dot: "#94a3b8" };
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const prev = new Date(previsao); prev.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((prev.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0)  return { label: `${Math.abs(diff)}d atrasado`, bg: "#fef2f2", text: "#dc2626", dot: "#ef4444" };
+  if (diff <= 7) return { label: `em ${diff}d`, bg: "#fffbeb", text: "#d97706", dot: "#f59e0b" };
+  return { label: formatarData(previsao), bg: "#f0fdf4", text: "#15803d", dot: "#22c55e" };
 };
 
 export default function RecebimentoFuturo() {
-  // 🚀 ATUALIZADO: Lendo o link do Cofre Central
   const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const isVinculado = !!urlPlanilha;
-  
-  const [mostrarLista, setMostrarLista] = useState(false);
+
+  const [busca, setBusca] = useState("");
+  const [filtroMundo, setFiltroMundo] = useState("");
+  const [filtroRemetente, setFiltroRemetente] = useState("");
+  const [filtroTransportadora, setFiltroTransportadora] = useState("");
+  const [filtroPrazo, setFiltroPrazo] = useState<"todos" | "atrasado" | "semana" | "ok">("todos");
 
   const { data: todosPedidos = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
-    { url: urlPlanilha, mode: 'recebimento' }, 
+    { url: urlPlanilha, mode: "recebimento" },
     { enabled: isVinculado }
   );
 
-  useEffect(() => {
-    if (isVinculado) refetch();
-  }, [isVinculado]);
+  useEffect(() => { if (isVinculado) refetch(); }, [isVinculado]);
 
-  const kpis = useMemo(() => {
-    const futuros = (todosPedidos as any[]).filter((p) => !p.dataEntrega);
-    
-    // ORDENAÇÃO: Por Remetente (A-Z) e depois por Nota Fiscal
-    const listaOrdenada = [...futuros].sort((a, b) => {
-      const remA = (a.remetente || "").toUpperCase();
-      const remB = (b.remetente || "").toUpperCase();
-      if (remA !== remB) return remA.localeCompare(remB);
+  const { emTransito, mundos, remetentes, transportadoras, stats } = useMemo(() => {
+    const em = (todosPedidos as any[]).filter(p => !p.dataEntrega);
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
 
-      const notaA = (a.notaFiscal || "").toUpperCase();
-      const notaB = (b.notaFiscal || "").toUpperCase();
-      return notaA.localeCompare(notaB);
-    });
-
-    let totalVolumesFisicos = 0;
-    const notasEmTransitoSet = new Set<string>();
-    const skusPorMundo: Record<string, Set<string>> = {};
-    const volumesPorRemetente: Record<string, number> = {};
-
-    listaOrdenada.forEach((p) => {
-      const qtdeCaixas = p.volumesCaixas !== undefined ? p.volumesCaixas : (p.quantidade || 0);
-
-      totalVolumesFisicos += qtdeCaixas;
-      if (p.notaFiscal) notasEmTransitoSet.add(p.notaFiscal);
-      
-      const mundo = p.mundo?.trim().toUpperCase() || "SEM MUNDO";
-      if (!skusPorMundo[mundo]) skusPorMundo[mundo] = new Set();
-      skusPorMundo[mundo].add(p.produtoSku);
-      
-      const remetente = p.remetente || "Desconhecido";
-      volumesPorRemetente[remetente] = (volumesPorRemetente[remetente] || 0) + qtdeCaixas;
+    let atrasados = 0, semana = 0;
+    em.forEach(p => {
+      if (!p.previsaoEntrega) return;
+      const prev = new Date(p.previsaoEntrega); prev.setHours(0, 0, 0, 0);
+      if (prev < hoje) atrasados++;
+      else if (prev <= em7) semana++;
     });
 
     return {
-      listaRecebimento: listaOrdenada, 
-      totalVolumesFisicos, 
-      notasEmTransito: notasEmTransitoSet.size,
-      grafSkusMundo: Object.entries(skusPorMundo).map(([name, skus]) => ({ name, value: skus.size })).sort((a, b) => b.value - a.value),
-      grafRemetente: Object.entries(volumesPorRemetente).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+      emTransito: em,
+      mundos: [...new Set(em.map((p: any) => String(p.mundo || "").toUpperCase().trim()).filter(Boolean))].sort(),
+      remetentes: [...new Set(em.map((p: any) => p.remetente || "").filter(Boolean))].sort(),
+      transportadoras: [...new Set(em.map((p: any) => p.transportadora || "").filter(Boolean))].sort(),
+      stats: { total: em.length, atrasados, semana },
     };
   }, [todosPedidos]);
 
-  // IMPRESSÃO OTIMIZADA PARA A4
+  const listaFiltrada = useMemo(() => {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
+    const q = busca.toLowerCase();
+
+    return emTransito
+      .filter(p => {
+        if (q && !String(p.produtoSku || "").toLowerCase().includes(q) &&
+                  !String(p.descricao || "").toLowerCase().includes(q) &&
+                  !String(p.notaFiscal || "").toLowerCase().includes(q)) return false;
+        if (filtroMundo && String(p.mundo || "").toUpperCase().trim() !== filtroMundo) return false;
+        if (filtroRemetente && p.remetente !== filtroRemetente) return false;
+        if (filtroTransportadora && (p.transportadora || "") !== filtroTransportadora) return false;
+        if (filtroPrazo !== "todos") {
+          if (!p.previsaoEntrega) return filtroPrazo === "ok";
+          const prev = new Date(p.previsaoEntrega); prev.setHours(0, 0, 0, 0);
+          if (filtroPrazo === "atrasado" && prev >= hoje) return false;
+          if (filtroPrazo === "semana" && (prev < hoje || prev > em7)) return false;
+          if (filtroPrazo === "ok" && prev <= em7) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (!a.previsaoEntrega && !b.previsaoEntrega) return 0;
+        if (!a.previsaoEntrega) return 1;
+        if (!b.previsaoEntrega) return -1;
+        return new Date(a.previsaoEntrega).getTime() - new Date(b.previsaoEntrega).getTime();
+      });
+  }, [emTransito, busca, filtroMundo, filtroRemetente, filtroTransportadora, filtroPrazo]);
+
+  const temFiltro = busca || filtroMundo || filtroRemetente || filtroTransportadora || filtroPrazo !== "todos";
+  const limparFiltros = () => {
+    setBusca(""); setFiltroMundo(""); setFiltroRemetente("");
+    setFiltroTransportadora(""); setFiltroPrazo("todos");
+  };
+
   const gerarRelatorioImpressao = () => {
-    if (kpis.listaRecebimento.length === 0) return toast.warning("Não há dados.");
-    const janelaImpressao = window.open('', '_blank');
-    if (!janelaImpressao) return toast.error("Habilite popups.");
-
-    const htmlRelatorio = `
-      <html>
-        <head>
-          <title>Recebimento Futuro - T Store</title>
-          <style>
-            @page { size: A4 portrait; margin: 1cm; }
-            body { font-family: sans-serif; font-size: 10px; color: #000; margin: 0; padding: 0; }
-            .header { border-bottom: 2px solid #000; margin-bottom: 15px; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: flex-end; }
-            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            th, td { border: 1px solid #000; padding: 6px 4px; text-align: left; word-wrap: break-word; }
-            th { background-color: #eee !important; -webkit-print-color-adjust: exact; font-weight: bold; text-transform: uppercase; }
-            
-            .col-rem { width: 16%; }
-            .col-desc { width: 25%; }
-            .col-ref { width: 10%; }
-            .col-mundo { width: 12%; text-align: center; }
-            .col-nf { width: 15%; }
-            .col-prev { width: 12%; }
-            .col-qtd { width: 10%; text-align: right; }
-
-            .mundo-cell { 
-                font-weight: bold; 
-                text-transform: uppercase; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 style="margin:0; font-size: 16px;">T STORE - RECEBIMENTO FUTURO</h1>
-            <span>Emissão: ${new Date().toLocaleString('pt-BR')}</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th class="col-rem">Remetente</th>
-                <th class="col-desc">Descrição</th>
-                <th class="col-ref">Ref.</th>
-                <th class="col-mundo">Mundo</th>
-                <th class="col-nf">Nota Fiscal</th>
-                <th class="col-prev">Previsão</th>
-                <th class="col-qtd">Qtde</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${kpis.listaRecebimento.map(item => {
-                const cor = MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO;
-                return `
-                  <tr>
-                    <td>${item.remetente || '-'}</td>
-                    <td>${item.descricao || '-'}</td>
-                    <td style="font-family: monospace;">${item.produtoSku}</td>
-                    <td class="mundo-cell" style="background-color: ${cor} !important;">
-                      ${item.mundo || '-'}
-                    </td>
-                    <td><b>${item.notaFiscal || '-'}</b></td>
-                    <td>${formatarData(item.previsaoEntrega)}</td>
-                    <td style="text-align: right;"><b>${item.quantidade}</b></td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-          <script>setTimeout(() => { window.print(); window.close(); }, 500);</script>
-        </body>
-      </html>
-    `;
-    janelaImpressao.document.write(htmlRelatorio);
-    janelaImpressao.document.close();
+    if (listaFiltrada.length === 0) return toast.warning("Não há dados para imprimir.");
+    const w = window.open("", "_blank");
+    if (!w) return toast.error("Habilite popups.");
+    w.document.write(`
+      <html><head><title>Recebimento Futuro - T Store</title>
+      <style>@page{size:A4 portrait;margin:1cm}body{font-family:sans-serif;font-size:10px}
+      table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:6px 4px;text-align:left}
+      th{background:#eee;font-weight:bold;text-transform:uppercase}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;margin-bottom:15px;padding-bottom:5px}</style></head>
+      <body><div class="header"><h1 style="margin:0;font-size:16px">T STORE — RECEBIMENTO FUTURO</h1><span>${new Date().toLocaleString("pt-BR")}</span></div>
+      <table><thead><tr><th>Remetente</th><th>Transportadora</th><th>Ref.</th><th>Descrição</th><th>Mundo</th><th>NF</th><th>Previsão</th><th style="text-align:right">Volumes</th></tr></thead>
+      <tbody>${listaFiltrada.map(p => `<tr>
+        <td>${p.remetente || "—"}</td><td>${p.transportadora || "—"}</td>
+        <td style="font-family:monospace">${p.produtoSku || "—"}</td><td>${p.descricao || "—"}</td>
+        <td>${p.mundo || "—"}</td><td><b>${p.notaFiscal || "—"}</b></td>
+        <td>${formatarData(p.previsaoEntrega)}</td><td style="text-align:right"><b>${p.volumesCaixas || 0}</b></td>
+      </tr>`).join("")}</tbody></table>
+      <script>setTimeout(()=>{window.print();window.close()},500)</script></body></html>
+    `);
+    w.document.close();
   };
 
   return (
     <MainLayout>
-      <div className="space-y-6 pb-12">
-        <div className="flex justify-between items-center">
+      <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+
+        {/* CABEÇALHO */}
+        <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Recebimento Futuro</h1>
-            <p className="text-gray-600">Gestão de mercadorias em trânsito</p>
+            <p className="text-gray-500 mt-1">Mercadorias em trânsito — ordenadas por previsão de entrega</p>
           </div>
           {isVinculado && (
             <div className="flex gap-3">
-              <button onClick={() => refetch()} className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors">
-                <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
+              <button onClick={() => refetch()}
+                className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors text-sm">
+                <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} /> Atualizar
               </button>
-              <button onClick={gerarRelatorioImpressao} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-slate-800 transition-all">
-                <Printer size={18} /> Imprimir A4
+              <button onClick={gerarRelatorioImpressao}
+                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition-colors text-sm shadow-sm">
+                <Printer size={16} /> Imprimir A4
               </button>
             </div>
           )}
         </div>
 
-        {/* 🚀 AVISO INTELIGENTE SE NÃO ESTIVER VINCULADO */}
+        {/* AVISO */}
         {!isVinculado && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-3 text-amber-800">
-              <AlertTriangle size={20} />
-              <p className="text-sm font-bold">A fonte de dados do Recebimento Futuro não foi configurada.</p>
+              <AlertTriangle size={18} />
+              <p className="text-sm font-bold">Fonte de dados não configurada.</p>
             </div>
             <Link href="/configuracoes">
-              <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors">
-                Ir para Configurações
+              <button className="bg-amber-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-amber-700 transition-colors">
+                Configurações
               </button>
             </Link>
           </div>
         )}
 
         {isVinculado && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            {/* GRÁFICOS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-6">
-                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">SKUs por Mundo</h3>
-                <div style={{ width: '100%', height: 320 }}>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <PieChart>
-                      <Pie data={kpis.grafSkusMundo} cx="50%" cy="40%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value">
-                        {kpis.grafSkusMundo.map((entry, i) => (
-                          <Cell key={i} fill={MUNDO_COLORS[entry.name.toUpperCase()] || COR_PADRAO} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold', paddingTop: '15px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+          <>
+            {/* STATS */}
+            <div className="grid grid-cols-3 gap-4">
+              <button onClick={() => setFiltroPrazo("todos")}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "todos" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Em Trânsito</p>
+                <p className="text-4xl font-black text-slate-900 mt-1">{stats.total}</p>
+                <p className="text-xs text-slate-400 mt-1">produtos sem data de entrega</p>
+              </button>
 
-              <Card className="p-6">
-                <h3 className="font-bold text-gray-800 mb-6 uppercase text-sm tracking-widest text-center">Volumes por Remetente</h3>
-                <div style={{ width: '100%', height: 320 }}>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={kpis.grafRemetente} layout="vertical">
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
-                      <Tooltip cursor={{fill: 'transparent'}} />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            </div>
+              <button onClick={() => setFiltroPrazo(filtroPrazo === "atrasado" ? "todos" : "atrasado")}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "atrasado" ? "border-red-500 bg-red-50" : "border-slate-200 bg-white hover:border-red-200"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Atrasados</p>
+                <p className={`text-4xl font-black mt-1 ${stats.atrasados > 0 ? "text-red-600" : "text-slate-900"}`}>{stats.atrasados}</p>
+                <p className="text-xs text-slate-400 mt-1">previsão vencida</p>
+              </button>
 
-            <div className="flex justify-center">
-              <button onClick={() => setMostrarLista(!mostrarLista)} className="bg-slate-900 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-all">
-                {mostrarLista ? "Ocultar Lista" : "Ver Lista Organizada"}
+              <button onClick={() => setFiltroPrazo(filtroPrazo === "semana" ? "todos" : "semana")}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "semana" ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-200"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Esta Semana</p>
+                <p className={`text-4xl font-black mt-1 ${stats.semana > 0 ? "text-amber-600" : "text-slate-900"}`}>{stats.semana}</p>
+                <p className="text-xs text-slate-400 mt-1">chegando em até 7 dias</p>
               </button>
             </div>
 
-            {mostrarLista && (
-              <Card className="overflow-hidden border-slate-200 shadow-xl">
-                <div className="overflow-x-auto max-h-[550px]">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-100 sticky top-0 uppercase text-[10px] font-black text-slate-600 border-b">
+            {/* FILTROS */}
+            <Card className="p-4">
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                  <Input placeholder="Buscar por REF, descrição ou NF..." className="pl-9 text-sm"
+                    value={busca} onChange={e => setBusca(e.target.value)} />
+                </div>
+
+                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                  value={filtroMundo} onChange={e => setFiltroMundo(e.target.value)}>
+                  <option value="">Todos os Mundos</option>
+                  {mundos.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+
+                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                  value={filtroRemetente} onChange={e => setFiltroRemetente(e.target.value)}>
+                  <option value="">Todos os Remetentes</option>
+                  {remetentes.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+
+                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                  value={filtroTransportadora} onChange={e => setFiltroTransportadora(e.target.value)}>
+                  <option value="">Todas as Transportadoras</option>
+                  {transportadoras.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+
+                {temFiltro && (
+                  <button onClick={limparFiltros}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors border border-slate-200">
+                    <X size={14} /> Limpar
+                  </button>
+                )}
+              </div>
+
+              {temFiltro && (
+                <p className="text-xs text-slate-400 mt-2 pl-1">
+                  {listaFiltrada.length} de {emTransito.length} itens exibidos
+                </p>
+              )}
+            </Card>
+
+            {/* TABELA */}
+            {listaFiltrada.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <PackageOpen size={40} className="text-slate-300" />
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Nenhum item encontrado</p>
+                {temFiltro && (
+                  <button onClick={limparFiltros} className="text-xs text-blue-600 font-bold hover:underline">
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+            ) : (
+              <Card className="overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="px-4 py-4">Remetente</th>
-                        <th className="px-4 py-4">Descrição</th>
-                        <th className="px-4 py-4">Ref.</th>
-                        <th className="px-4 py-4">Mundo</th>
-                        <th className="px-4 py-4">Nota Fiscal</th>
-                        <th className="px-4 py-4">Previsão</th>
-                        <th className="px-4 py-4 text-right">Qtde</th>
+                        {["Remetente / Transportadora", "Ref.", "Descrição", "Mundo", "NF", "Volumes", "Previsão"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {kpis.listaRecebimento.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-slate-700">{item.remetente || '-'}</td>
-                          <td className="px-4 py-3 text-xs text-slate-600 max-w-xs">{item.descricao || '-'}</td>
-                          <td className="px-4 py-3 font-mono text-[11px]">{item.produtoSku}</td>
-                          <td className="px-4 py-3">
-                            <span 
-                                className="px-2 py-1 rounded text-[10px] font-black uppercase text-slate-900" 
-                                style={{ backgroundColor: MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO }}
-                            >
-                                {item.mundo || '-'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 font-bold text-slate-900">{item.notaFiscal || '-'}</td>
-                          <td className="px-4 py-3 font-medium text-slate-700">{formatarData(item.previsaoEntrega)}</td>
-                          <td className="px-4 py-3 text-right font-black text-blue-600">{item.quantidade}</td>
-                        </tr>
-                      ))}
+                      {listaFiltrada.map((item: any, idx: number) => {
+                        const badge = getPrazoBadge(item.previsaoEntrega, !!item.dataEntrega);
+                        const corMundo = MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO;
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-slate-800">{item.remetente || "—"}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{item.transportadora || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700">
+                                {item.produtoSku || "—"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 max-w-[220px]">
+                              <p className="text-slate-600 text-xs leading-snug truncate">{item.descricao || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              {item.mundo ? (
+                                <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-slate-900"
+                                  style={{ backgroundColor: corMundo }}>
+                                  {item.mundo}
+                                </span>
+                              ) : <span className="text-slate-400">—</span>}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{item.notaFiscal || "—"}</td>
+                            <td className="px-4 py-3 font-black text-slate-900">{item.volumesCaixas || 0}</td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                                style={{ background: badge.bg, color: badge.text }}>
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{ background: badge.dot }} />
+                                {badge.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </Card>
             )}
-          </div>
+          </>
         )}
       </div>
     </MainLayout>
