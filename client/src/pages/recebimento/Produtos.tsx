@@ -257,7 +257,7 @@ export default function RecebimentoFuturo() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        {["Remetente / Transportadora", "NF", "Ref.", "Descrição", "Mundo", "Previsão", "Qtde. Unitária"].map(h => (
+                        {["Remetente / Transportadora", "NF", "Ref.", "Descrição", "Qtde. Unitária", "Mundo", "Previsão"].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             {h}
                           </th>
@@ -283,6 +283,7 @@ export default function RecebimentoFuturo() {
                             <td className="px-4 py-3 max-w-[220px]">
                               <p className="text-slate-600 text-xs leading-snug truncate">{item.descricao || "—"}</p>
                             </td>
+                            <td className="px-4 py-3 font-black text-slate-900">{item.quantidade || 0}</td>
                             <td className="px-4 py-3">
                               {item.mundo ? (
                                 <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-slate-900"
@@ -299,7 +300,6 @@ export default function RecebimentoFuturo() {
                                 {badge.label}
                               </span>
                             </td>
-                            <td className="px-4 py-3 font-black text-slate-900 text-right">{item.quantidade || 0}</td>
                           </tr>
                         );
                       })}
