@@ -257,7 +257,7 @@ export default function RecebimentoFuturo() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        {["Remetente / Transportadora", "Ref.", "Descrição", "Mundo", "NF", "Volumes", "Previsão"].map(h => (
+                        {["Remetente / Transportadora", "NF", "Ref.", "Descrição", "Mundo", "Previsão", "Qtde. Unitária"].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             {h}
                           </th>
@@ -274,6 +274,7 @@ export default function RecebimentoFuturo() {
                               <p className="font-semibold text-slate-800">{item.remetente || "—"}</p>
                               <p className="text-xs text-slate-400 mt-0.5">{item.transportadora || "—"}</p>
                             </td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{item.notaFiscal || "—"}</td>
                             <td className="px-4 py-3">
                               <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700">
                                 {item.produtoSku || "—"}
@@ -290,8 +291,6 @@ export default function RecebimentoFuturo() {
                                 </span>
                               ) : <span className="text-slate-400">—</span>}
                             </td>
-                            <td className="px-4 py-3 font-bold text-slate-800">{item.notaFiscal || "—"}</td>
-                            <td className="px-4 py-3 font-black text-slate-900">{item.volumesCaixas || 0}</td>
                             <td className="px-4 py-3">
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
                                 style={{ background: badge.bg, color: badge.text }}>
@@ -300,6 +299,7 @@ export default function RecebimentoFuturo() {
                                 {badge.label}
                               </span>
                             </td>
+                            <td className="px-4 py-3 font-black text-slate-900 text-right">{item.quantidade || 0}</td>
                           </tr>
                         );
                       })}

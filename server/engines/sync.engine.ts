@@ -130,7 +130,11 @@ export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento
 
     if (mode === 'recebimento') {
       obj.volumesCaixas = tempVolumes;
-      obj.quantidade = hasQtdeCaixa ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes) : tempVolumes;
+      obj.qtdePorCaixa = tempQtdeCaixa;
+      // quantidade unitária = QTDE POR CAIXA × VOLUMES
+      obj.quantidade = hasQtdeCaixa
+        ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes)
+        : tempVolumes;
     }
     return obj;
   });
