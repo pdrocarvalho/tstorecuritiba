@@ -6,22 +6,21 @@ version: "3.9"
 
 services:
   # ---------------------------------------------------------------------------
-  # Banco de dados MySQL
+  # Banco de dados PostgreSQL
   # ---------------------------------------------------------------------------
   db:
-    image: mysql:8.0
+    image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: tstore_estoque
-      MYSQL_USER: tstore_user
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tstore_password}
+      POSTGRES_DB: tstore_estoque
+      POSTGRES_USER: tstore_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tstore_password}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U tstore_user -d tstore_estoque"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,11 +38,9 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      DATABASE_URL: mysql://tstore_user:${MYSQL_PASSWORD:-tstore_password}@db:3306/tstore_estoque
+      DATABASE_URL: postgresql://tstore_user:${POSTGRES_PASSWORD:-tstore_password}@db:5432/tstore_estoque
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_SHEETS_API_KEY: ${GOOGLE_SHEETS_API_KEY}
-      GMAIL_USER: ${GMAIL_USER}
-      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
@@ -53,5 +50,5 @@ services:
 # =============================================================================
 
 volumes:
-  mysql_data:
+  postgres_data:
     driver: local
