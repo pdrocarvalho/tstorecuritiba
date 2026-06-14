@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Package, FileText, Layers, Calendar,
   AlertTriangle, TrendingUp, RefreshCw,
-  CheckCircle2, Clock, Truck
+  CheckCircle2, Clock, Truck, PackageOpen
 } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
