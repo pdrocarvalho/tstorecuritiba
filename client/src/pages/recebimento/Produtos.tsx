@@ -26,14 +26,14 @@ const formatarData = (dataStr?: string | Date | null) => {
 };
 
 const getPrazoBadge = (previsao: Date | null, entregue: boolean) => {
-  if (entregue) return { label: "Entregue", bg: "#dcfce7", text: "#16a34a", dot: "#16a34a" };
-  if (!previsao) return { label: "Sem previsão", bg: "#f1f5f9", text: "#64748b", dot: "#94a3b8" };
+  if (entregue) return { label: "Entregue", bg: "rgba(34, 197, 94, 0.15)", text: "#4ade80", dot: "#22c55e" };
+  if (!previsao) return { label: "Sem previsão", bg: "rgba(148, 163, 184, 0.15)", text: "#cbd5e1", dot: "#64748b" };
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const prev = new Date(previsao); prev.setHours(0, 0, 0, 0);
   const diff = Math.ceil((prev.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-  if (diff < 0)  return { label: `${Math.abs(diff)}d atrasado`, bg: "#fef2f2", text: "#dc2626", dot: "#ef4444" };
-  if (diff <= 7) return { label: `em ${diff}d`, bg: "#fffbeb", text: "#d97706", dot: "#f59e0b" };
-  return { label: formatarData(previsao), bg: "#f0fdf4", text: "#15803d", dot: "#22c55e" };
+  if (diff < 0)  return { label: `${Math.abs(diff)}d atrasado`, bg: "rgba(239, 68, 68, 0.15)", text: "#f87171", dot: "#ef4444" };
+  if (diff <= 7) return { label: `em ${diff}d`, bg: "rgba(245, 158, 11, 0.15)", text: "#fbbf24", dot: "#f59e0b" };
+  return { label: formatarData(previsao), bg: "rgba(34, 197, 94, 0.15)", text: "#4ade80", dot: "#22c55e" };
 };
 
 export default function RecebimentoFuturo() {
@@ -286,7 +286,7 @@ export default function RecebimentoFuturo() {
                             <td className="px-4 py-3 font-black text-white">{item.quantidade || 0}</td>
                             <td className="px-4 py-3">
                               {item.mundo ? (
-                                <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-white"
+                                <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-[#050A15]"
                                   style={{ backgroundColor: corMundo }}>
                                   {item.mundo}
                                 </span>
