@@ -25,6 +25,15 @@ function isRefHeader(hLimpo: string): boolean {
   return hLimpo === "REF" || hLimpo.includes("REFERENCIA") || hLimpo === "REF_";
 }
 
+export function parseDataLimpa(val: any): Date | null {
+  if (!val) return null;
+  const p = String(val).split("/");
+  if (p.length === 3) {
+    return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10), 12);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Mapeamento por Modo
 // ---------------------------------------------------------------------------
