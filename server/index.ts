@@ -9,9 +9,10 @@ import { appRouter } from "./routers";
 import { createContext } from "./_core/trpc";
 import { OAuth2Client } from "google-auth-library";
 import { upsertUser, getUserByOpenId, updateUserRole } from "./db";
+import { env } from "./_core/env";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = env.PORT;
 
 const DOMINIO_PERMITIDO = "tramontinastore.com";
 const EMAILS_EXCECAO = ["pdrolcarvalho@gmail.com"];
@@ -31,8 +32,8 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000"
 ];
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
+if (env.FRONTEND_URL) {
+  allowedOrigins.push(env.FRONTEND_URL);
 }
 
 app.use(cors({
@@ -44,7 +45,7 @@ app.use(cors({
     }
     
     // Permite deploys preview da Vercel apenas em ambiente que não seja produção estrita
-    if (origin.endsWith('.vercel.app') && process.env.NODE_ENV !== 'production') {
+    if (origin.endsWith('.vercel.app') && env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
 
@@ -54,11 +55,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("❌ FATAL: A variável de ambiente JWT_SECRET não está definida. O servidor não pode iniciar sem ela.");
-}
-const JWT_SECRET = process.env.JWT_SECRET;
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const JWT_SECRET = env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID;
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 

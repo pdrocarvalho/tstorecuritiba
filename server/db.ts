@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, like } from "drizzle-orm";
+import { env } from "./_core/env";
 import {
   users, consultores, clientes, produtos, pedidosRastreio,
   syncLogs, googleSheetsConfig, syncHistory,
@@ -11,13 +12,13 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (_db) return _db;
-  if (!process.env.DATABASE_URL) {
+  if (!env.DATABASE_URL) {
     console.warn("[DB] DATABASE_URL não definida.");
     return null;
   }
   try {
     // Limpa parâmetros extras (como sslmode) para o Render não dar conflito com o código
-    let connString = process.env.DATABASE_URL;
+    let connString = env.DATABASE_URL;
     if (connString.includes("?")) {
       connString = connString.split("?")[0];
     }

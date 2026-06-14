@@ -7,7 +7,9 @@
  */
 
 import { google, sheets_v4 } from "googleapis";
-import { getGoogleAuth, parseDataLimpa } from "./google.helpers";
+import { parseDataLimpa } from "./sheets-parser";
+import { getGoogleAuth } from "./google.helpers";
+import { env } from "../_core/env";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -28,7 +30,7 @@ export type StatusDemanda = "AGUARDANDO" | "FATURADA" | "PREVISÃO" | "CHEGOU";
 
 /** Lê os registos do DB_SPREADSHEET_ID e devolve-os normalizados. */
 export async function fetchDbRecords(sheets?: sheets_v4.Sheets): Promise<DbRecord[]> {
-  const dbSpreadsheetId = process.env.DB_SPREADSHEET_ID;
+  const dbSpreadsheetId = env.DB_SPREADSHEET_ID;
   if (!dbSpreadsheetId) throw new Error("DB_SPREADSHEET_ID não definido no .env");
 
   if (!sheets) {

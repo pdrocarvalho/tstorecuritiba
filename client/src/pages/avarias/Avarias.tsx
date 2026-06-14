@@ -14,8 +14,8 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
-
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ConfirmModal, AcaoPin } from "./components/ConfirmModal";
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
@@ -39,7 +39,7 @@ const FORM_VAZIO = {
   nfSaida: "", nfReposicao: "", dataColeta: "", cupomFiscal: "", observacoes: ""
 };
 
-type AcaoPin = "edit" | "delete";
+
 
 export default function GestaoAvarias() {
   const [urlPlanilha] = useState(() => localStorage.getItem("url_avarias") || "");
@@ -415,27 +415,13 @@ export default function GestaoAvarias() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO */}
-      {pinModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-7 text-center max-w-sm w-full shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <Lock size={22} className="text-slate-700" />
-            </div>
-            <h3 className="text-lg font-black mb-1 uppercase">Atenção</h3>
-            <p className="text-xs text-slate-400 mb-5 uppercase">
-              {pinModal.acao === "delete" ? "Confirme para excluir permanentemente" : "Confirme para salvar as alterações"}
-            </p>
-            <div className="flex gap-3 mt-4">
-              <button onClick={() => setPinModal({ isOpen: false, acao: null })} className="flex-1 py-2.5 bg-slate-100 rounded-lg uppercase text-xs font-bold hover:bg-slate-200 transition-colors">CANCELAR</button>
-              <button onClick={confirmarPin} disabled={mutationEdit.isPending || mutationDelete.isPending}
-                className={`flex-1 py-2.5 text-white rounded-lg uppercase text-xs font-bold disabled:opacity-50 transition-colors ${pinModal.acao === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-[#2563eb] hover:bg-blue-700"}`}>
-                {mutationEdit.isPending || mutationDelete.isPending ? "AGUARDE..." : "CONFIRMAR"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal 
+        isOpen={pinModal.isOpen}
+        acao={pinModal.acao}
+        onClose={() => setPinModal({ isOpen: false, acao: null })}
+        onConfirm={confirmarPin}
+        isPending={mutationEdit.isPending || mutationDelete.isPending}
+      />
     </MainLayout>
   );
 }

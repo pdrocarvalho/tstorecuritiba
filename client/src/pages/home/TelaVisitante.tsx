@@ -1,9 +1,9 @@
 /**
  * client/src/pages/home/TelaVisitante.tsx
  */
+import { Link } from "wouter";
 import { PackageOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
 
 export default function TelaVisitante() {
   return (
@@ -17,11 +17,11 @@ export default function TelaVisitante() {
         <p className="text-gray-500 mt-4 mb-8 leading-relaxed">
           Plataforma inteligente de rastreamento de pedidos e notificações automáticas.
         </p>
-        <a href={getLoginUrl()}>
+        <Link href="/login">
           <Button size="lg" className="bg-blue-600 hover:bg-blue-700 w-full text-lg h-12 shadow-lg">
             Fazer Login no Sistema
           </Button>
-        </a>
+        </Link>
       </div>
     </div>
   );

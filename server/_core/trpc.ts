@@ -4,11 +4,9 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import jwt from "jsonwebtoken";
+import { env } from "./env";
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("❌ FATAL: A variável de ambiente JWT_SECRET não está definida. O servidor não pode iniciar sem ela.");
-}
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = env.JWT_SECRET;
 
 // Contexto criado a cada requisição — lê o token do header Authorization
 export function createContext({ req }: CreateExpressContextOptions) {

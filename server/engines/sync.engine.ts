@@ -79,15 +79,3 @@ export async function fetchLiveGoogleSheet(
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
-
-// ---------------------------------------------------------------------------
-// Stubs — Funcionalidades pendentes de implementação
-// ---------------------------------------------------------------------------
-
-export async function syncPedidosFromGoogleSheets(url: string) {
-  return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] as string[] };
-}
-
-export async function testarLeituraRobo(url: string) {
-  return { sucesso: true, aba: "Planilha", totalLinhas: 0, mensagem: "" };
-}

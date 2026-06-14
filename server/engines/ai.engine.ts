@@ -2,9 +2,10 @@
  * server/engines/ai.engine.ts
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { env } from "../_core/env";
 
 // Pega a chave do seu arquivo .env ou do painel do Render
-const apiKey = process.env.GEMINI_API_KEY || "";
+const apiKey = env.GEMINI_API_KEY || "";
 
 if (!apiKey) {
   console.warn("⚠️ GEMINI_API_KEY não foi encontrada nas variáveis de ambiente!");

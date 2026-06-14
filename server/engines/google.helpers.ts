@@ -6,10 +6,11 @@
  */
 
 import { google } from "googleapis";
+import { env } from "../_core/env";
 
 export function getGoogleAuth() {
-  const client_email = process.env.GOOGLE_SERVICE_EMAIL;
-  const private_key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const client_email = env.GOOGLE_SERVICE_EMAIL;
+  const private_key = env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (!client_email || !private_key) throw new Error("Credenciais do Google ausentes.");
   return new google.auth.GoogleAuth({
     credentials: { client_email, private_key },
