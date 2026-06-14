@@ -140,17 +140,17 @@ export default function RecebimentoFuturo() {
         {/* CABEÇALHO */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Recebimento Futuro</h1>
-            <p className="text-gray-500 mt-1">Mercadorias em trânsito — ordenadas por previsão de entrega</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Recebimento Futuro</h1>
+            <p className="text-white/50 mt-1">Mercadorias em trânsito — ordenadas por previsão de entrega</p>
           </div>
           {isVinculado && (
             <div className="flex gap-3">
               <button onClick={() => refetch()}
-                className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors text-sm">
+                className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-lg font-bold hover:bg-emerald-500/20 shadow-sm transition-colors text-sm">
                 <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} /> Atualizar
               </button>
               <button onClick={gerarRelatorioImpressao}
-                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition-colors text-sm shadow-sm">
+                className="flex items-center gap-2 bg-glass border border-glass-border text-white px-4 py-2 rounded-lg font-bold hover:bg-glass-hover transition-colors text-sm shadow-sm">
                 <Printer size={16} /> Imprimir A4
               </button>
             </div>
@@ -159,8 +159,8 @@ export default function RecebimentoFuturo() {
 
         {/* AVISO */}
         {!isVinculado && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-3 text-amber-800">
+          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-3 text-amber-400">
               <AlertTriangle size={18} />
               <p className="text-sm font-bold">Fonte de dados não configurada.</p>
             </div>
@@ -177,64 +177,64 @@ export default function RecebimentoFuturo() {
             {/* STATS */}
             <div className="grid grid-cols-3 gap-4">
               <button onClick={() => setFiltroPrazo("todos")}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "todos" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Em Trânsito</p>
-                <p className="text-4xl font-black text-slate-900 mt-1">{stats.total}</p>
-                <p className="text-xs text-slate-400 mt-1">produtos sem data de entrega</p>
+                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "todos" ? "border-blue-500/50 bg-blue-500/10" : "bg-glass hover:bg-glass-hover hover:border-white/20"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Em Trânsito</p>
+                <p className="text-4xl font-black text-white mt-1">{stats.total}</p>
+                <p className="text-xs text-white/40 mt-1">produtos sem data de entrega</p>
               </button>
 
               <button onClick={() => setFiltroPrazo(filtroPrazo === "atrasado" ? "todos" : "atrasado")}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "atrasado" ? "border-red-500 bg-red-50" : "border-slate-200 bg-white hover:border-red-200"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Atrasados</p>
-                <p className={`text-4xl font-black mt-1 ${stats.atrasados > 0 ? "text-red-600" : "text-slate-900"}`}>{stats.atrasados}</p>
-                <p className="text-xs text-slate-400 mt-1">previsão vencida</p>
+                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "atrasado" ? "border-red-500/50 bg-red-500/10" : "bg-glass hover:bg-glass-hover hover:border-red-500/30"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Atrasados</p>
+                <p className={`text-4xl font-black mt-1 ${stats.atrasados > 0 ? "text-red-400" : "text-white"}`}>{stats.atrasados}</p>
+                <p className="text-xs text-white/40 mt-1">previsão vencida</p>
               </button>
 
               <button onClick={() => setFiltroPrazo(filtroPrazo === "semana" ? "todos" : "semana")}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${filtroPrazo === "semana" ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-200"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Esta Semana</p>
-                <p className={`text-4xl font-black mt-1 ${stats.semana > 0 ? "text-amber-600" : "text-slate-900"}`}>{stats.semana}</p>
-                <p className="text-xs text-slate-400 mt-1">chegando em até 7 dias</p>
+                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "semana" ? "border-amber-500/50 bg-amber-500/10" : "bg-glass hover:bg-glass-hover hover:border-amber-500/30"}`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Esta Semana</p>
+                <p className={`text-4xl font-black mt-1 ${stats.semana > 0 ? "text-amber-400" : "text-white"}`}>{stats.semana}</p>
+                <p className="text-xs text-white/40 mt-1">chegando em até 7 dias</p>
               </button>
             </div>
 
             {/* FILTROS */}
-            <Card className="p-4">
+            <Card className="p-4 bg-glass border-glass-border">
               <div className="flex flex-wrap gap-3 items-center">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-                  <Input placeholder="Buscar por REF, descrição ou NF..." className="pl-9 text-sm"
+                  <Search className="absolute left-3 top-2.5 text-white/40" size={15} />
+                  <Input placeholder="Buscar por REF, descrição ou NF..." className="pl-9 text-sm bg-black/20 border-white/10 text-white placeholder:text-white/30"
                     value={busca} onChange={e => setBusca(e.target.value)} />
                 </div>
 
-                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                <select className="h-10 rounded-md border border-white/10 px-3 text-sm text-white bg-black/20 focus:outline-none focus:ring-1 focus:ring-brand-secondary"
                   value={filtroMundo} onChange={e => setFiltroMundo(e.target.value)}>
-                  <option value="">Todos os Mundos</option>
-                  {mundos.map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="" className="bg-[#0A0F1E]">Todos os Mundos</option>
+                  {mundos.map(m => <option key={m} value={m} className="bg-[#0A0F1E]">{m}</option>)}
                 </select>
 
-                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                <select className="h-10 rounded-md border border-white/10 px-3 text-sm text-white bg-black/20 focus:outline-none focus:ring-1 focus:ring-brand-secondary"
                   value={filtroRemetente} onChange={e => setFiltroRemetente(e.target.value)}>
-                  <option value="">Todos os Remetentes</option>
-                  {remetentes.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value="" className="bg-[#0A0F1E]">Todos os Remetentes</option>
+                  {remetentes.map(r => <option key={r} value={r} className="bg-[#0A0F1E]">{r}</option>)}
                 </select>
 
-                <select className="h-10 rounded-md border border-slate-200 px-3 text-sm text-slate-700 bg-white"
+                <select className="h-10 rounded-md border border-white/10 px-3 text-sm text-white bg-black/20 focus:outline-none focus:ring-1 focus:ring-brand-secondary"
                   value={filtroTransportadora} onChange={e => setFiltroTransportadora(e.target.value)}>
-                  <option value="">Todas as Transportadoras</option>
-                  {transportadoras.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="" className="bg-[#0A0F1E]">Todas as Transportadoras</option>
+                  {transportadoras.map(t => <option key={t} value={t} className="bg-[#0A0F1E]">{t}</option>)}
                 </select>
 
                 {temFiltro && (
                   <button onClick={limparFiltros}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors border border-slate-200">
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-colors border border-white/10">
                     <X size={14} /> Limpar
                   </button>
                 )}
               </div>
 
               {temFiltro && (
-                <p className="text-xs text-slate-400 mt-2 pl-1">
+                <p className="text-xs text-white/40 mt-2 pl-1">
                   {listaFiltrada.length} de {emTransito.length} itens exibidos
                 </p>
               )}
@@ -243,54 +243,54 @@ export default function RecebimentoFuturo() {
             {/* TABELA */}
             {listaFiltrada.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <PackageOpen size={40} className="text-slate-300" />
-                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Nenhum item encontrado</p>
+                <PackageOpen size={40} className="text-white/20" />
+                <p className="text-sm font-bold text-white/40 uppercase tracking-widest">Nenhum item encontrado</p>
                 {temFiltro && (
-                  <button onClick={limparFiltros} className="text-xs text-blue-600 font-bold hover:underline">
+                  <button onClick={limparFiltros} className="text-xs text-brand-secondary font-bold hover:underline">
                     Limpar filtros
                   </button>
                 )}
               </div>
             ) : (
-              <Card className="overflow-hidden shadow-sm">
+              <Card className="overflow-hidden shadow-sm bg-glass border-glass-border">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
+                    <thead className="bg-black/20 border-b border-glass-border">
                       <tr>
                         {["Remetente / Transportadora", "NF", "Ref.", "Descrição", "Qtde. Unitária", "Mundo", "Previsão"].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-white/50">
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-white/5">
                       {listaFiltrada.map((item: any, idx: number) => {
                         const badge = getPrazoBadge(item.previsaoEntrega, !!item.dataEntrega);
                         const corMundo = MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO;
                         return (
-                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                          <tr key={idx} className="hover:bg-white/5 transition-colors">
                             <td className="px-4 py-3">
-                              <p className="font-semibold text-slate-800">{item.remetente || "—"}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">{item.transportadora || "—"}</p>
+                              <p className="font-semibold text-white">{item.remetente || "—"}</p>
+                              <p className="text-xs text-white/50 mt-0.5">{item.transportadora || "—"}</p>
                             </td>
-                            <td className="px-4 py-3 font-bold text-slate-800">{item.notaFiscal || "—"}</td>
+                            <td className="px-4 py-3 font-bold text-white">{item.notaFiscal || "—"}</td>
                             <td className="px-4 py-3">
-                              <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700">
+                              <span className="font-mono text-xs bg-black/30 border border-white/5 px-2 py-1 rounded text-white/80">
                                 {item.produtoSku || "—"}
                               </span>
                             </td>
                             <td className="px-4 py-3 max-w-[220px]">
-                              <p className="text-slate-600 text-xs leading-snug truncate">{item.descricao || "—"}</p>
+                              <p className="text-white/80 text-xs leading-snug truncate">{item.descricao || "—"}</p>
                             </td>
-                            <td className="px-4 py-3 font-black text-slate-900">{item.quantidade || 0}</td>
+                            <td className="px-4 py-3 font-black text-white">{item.quantidade || 0}</td>
                             <td className="px-4 py-3">
                               {item.mundo ? (
-                                <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-slate-900"
+                                <span className="px-2 py-1 rounded text-[10px] font-black uppercase text-white"
                                   style={{ backgroundColor: corMundo }}>
                                   {item.mundo}
                                 </span>
-                              ) : <span className="text-slate-400">—</span>}
+                              ) : <span className="text-white/40">—</span>}
                             </td>
                             <td className="px-4 py-3">
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"

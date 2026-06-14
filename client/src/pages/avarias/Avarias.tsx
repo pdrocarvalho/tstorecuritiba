@@ -202,23 +202,23 @@ export default function GestaoAvarias() {
       <div className="space-y-6 pb-10">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight uppercase">Gestão de Avarias</h1>
-            <p className="text-slate-500 uppercase">Fluxo operacional de produtos danificados</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight uppercase">Gestão de Avarias</h1>
+            <p className="text-white/50 uppercase">Fluxo operacional de produtos danificados</p>
           </div>
           {isVinculado && (
             <div className="flex gap-3">
-              <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 shadow-sm transition-colors uppercase text-xs"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => refetch()} className="flex items-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-50 shadow-sm transition-colors uppercase text-xs">
+              <button onClick={handlePrint} className="flex items-center gap-2 bg-glass border border-glass-border text-white px-4 py-2 rounded-lg font-bold hover:bg-glass-hover shadow-sm transition-colors uppercase text-xs"><Printer size={18}/> Imprimir</button>
+              <button onClick={() => refetch()} className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-lg font-bold hover:bg-emerald-500/20 shadow-sm transition-colors uppercase text-xs">
                 <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
               </button>
-              <button onClick={abrirModalNova} className="flex items-center gap-2 bg-red-600 text-white px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-700 transition-colors uppercase text-xs"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={abrirModalNova} className="flex items-center gap-2 bg-red-600/20 border border-red-500/30 text-red-400 px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-600/30 transition-colors uppercase text-xs"><Plus size={20}/> Nova Avaria</button>
             </div>
           )}
         </div>
 
         {!isVinculado && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
-            <p className="text-sm font-bold text-amber-800">A fonte de dados de Avarias não foi configurada.</p>
+          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
+            <p className="text-sm font-bold text-amber-400">A fonte de dados de Avarias não foi configurada.</p>
             <Link href="/configuracoes">
               <button className="bg-amber-600 text-white hover:bg-amber-700 px-6 py-2 rounded-lg font-bold transition-colors">Ir para Configurações</button>
             </Link>
@@ -226,16 +226,16 @@ export default function GestaoAvarias() {
         )}
 
         {isVinculado && (
-          <Card className="overflow-hidden border-slate-200 shadow-xl rounded-xl">
-            <div className="p-5 border-b bg-slate-50/50 flex flex-col lg:flex-row justify-between gap-4">
+          <Card className="overflow-hidden border-glass-border bg-glass backdrop-blur-md shadow-xl rounded-xl">
+            <div className="p-5 border-b border-glass-border bg-white/5 flex flex-col lg:flex-row justify-between gap-4">
               <div className="relative w-full lg:w-96">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                <Input placeholder="BUSCAR POR REF OU CÓDIGO..." className="pl-10 bg-white uppercase" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value.toUpperCase())} />
+                <Search className="absolute left-3 top-2.5 text-white/40" size={18} />
+                <Input placeholder="BUSCAR POR REF OU CÓDIGO..." className="pl-10 bg-black/20 border-white/10 text-white uppercase" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value.toUpperCase())} />
               </div>
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map(s => (
                   <button key={s.id} onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-white text-slate-500 border-slate-200'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-glass text-white/50 border-glass-border hover:text-white'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -244,22 +244,22 @@ export default function GestaoAvarias() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white text-slate-400 text-[10px] font-black uppercase border-b">
+                <thead className="bg-black/20 text-white/40 text-[10px] font-black uppercase border-b border-glass-border">
                   <tr><th className="px-6 py-4 w-10"></th><th>CÓD.</th><th>REF</th><th>DESCRIÇÃO</th><th className="text-center">QTDE</th><th>STATUS (OPERACIONAL)</th><th className="text-right px-6">TRATATIVA</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-white/5">
                   {avariasFiltradas.map((av: any, idx: number) => {
                     const isExpanded = expandedRow === idx;
                     const style = getTratativaStyle(av.TRATATIVA);
                     return (
                       <>
-                        <tr key={idx} onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}>
-                          <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-red-500"/> : <ChevronDown size={18}/>}</td>
-                          <td className="font-bold uppercase">{av.COD_AVARIA || '-'}</td>
-                          <td><span className="bg-slate-100 px-2 py-1 rounded font-mono text-xs uppercase">{av.REF || '-'}</span></td>
-                          <td className="font-medium text-slate-700 uppercase">{av.DESCRICAO || '-'}</td>
-                          <td className="text-center font-black text-red-600 uppercase">{av.QTDE || '-'}</td>
-                          <td><span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase">{av.STATUS || 'AGUARDANDO'}</span></td>
+                        <tr key={idx} onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer ${isExpanded ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                          <td className="px-6 py-5">{isExpanded ? <ChevronUp size={18} className="text-brand-secondary"/> : <ChevronDown size={18} className="text-white/40"/>}</td>
+                          <td className="font-bold uppercase text-white/90">{av.COD_AVARIA || '-'}</td>
+                          <td><span className="bg-black/30 text-white/80 border border-white/5 px-2 py-1 rounded font-mono text-xs uppercase">{av.REF || '-'}</span></td>
+                          <td className="font-medium text-white/80 uppercase">{av.DESCRICAO || '-'}</td>
+                          <td className="text-center font-black text-red-400 uppercase">{av.QTDE || '-'}</td>
+                          <td><span className="text-[10px] font-bold text-white/60 bg-black/20 border border-white/5 px-2 py-1 rounded uppercase">{av.STATUS || 'AGUARDANDO'}</span></td>
                           <td className="text-right px-6">
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border shadow-sm ${style.class}`}>
                               {style.icon} {formatUpper(av.TRATATIVA) || 'PENDENTE'}
@@ -267,33 +267,33 @@ export default function GestaoAvarias() {
                           </td>
                         </tr>
                         {isExpanded && (
-                          <tr key={`exp-${idx}`} className="bg-slate-50/80">
+                          <tr key={`exp-${idx}`} className="bg-black/20 border-b border-glass-border">
                             <td colSpan={7} className="px-10 py-8 relative">
                               {user?.role === "admin" && (
                                 <div className="absolute top-4 right-10 flex gap-2">
-                                  <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase"><Edit size={14} /> EDITAR</button>
+                                  <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase hover:bg-blue-500/20"><Edit size={14} /> EDITAR</button>
                                   <button onClick={() => pedirPin("delete", av)} disabled={mutationDelete.isPending}
-                                    className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase disabled:opacity-50">
+                                    className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase hover:bg-red-500/20 disabled:opacity-50">
                                     <Trash2 size={14} /> {mutationDelete.isPending ? 'EXCLUINDO...' : 'EXCLUIR'}
                                   </button>
                                 </div>
                               )}
                               <div className="grid grid-cols-3 gap-8 mt-4 uppercase">
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-black text-slate-400 border-b pb-1">LOGÍSTICA</h4>
-                                  <p className="text-xs text-slate-600"><strong>DATA COLETA:</strong> {av.DATA_DA_COLETA || '-'}</p>
-                                  <p className="text-xs text-slate-600"><strong>NF SAÍDA:</strong> {av.NOTA_FISCAL_DE_SAIDA || '-'}</p>
-                                  <p className="text-xs text-slate-600"><strong>NF REPOSIÇÃO:</strong> {av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p>
+                                  <h4 className="text-[10px] font-black text-brand-secondary border-b border-white/10 pb-1">LOGÍSTICA</h4>
+                                  <p className="text-xs text-white/70"><strong>DATA COLETA:</strong> {av.DATA_DA_COLETA || '-'}</p>
+                                  <p className="text-xs text-white/70"><strong>NF SAÍDA:</strong> {av.NOTA_FISCAL_DE_SAIDA || '-'}</p>
+                                  <p className="text-xs text-white/70"><strong>NF REPOSIÇÃO:</strong> {av.NOTA_FISCAL_DE_REPOSICAO || '-'}</p>
                                 </div>
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-black text-slate-400 border-b pb-1">IDENTIFICAÇÃO</h4>
-                                  <p className="text-xs text-slate-600"><strong>RESPONSÁVEL:</strong> {av.RESPONSAVEL || '-'}</p>
-                                  <p className="text-xs text-slate-600"><strong>ENTRADA:</strong> {av.DATA_DE_ENTRADA || '-'}</p>
-                                  <p className="text-xs text-slate-600"><strong>MOTIVO:</strong> {av.MOTIVO || '-'}</p>
+                                  <h4 className="text-[10px] font-black text-brand-secondary border-b border-white/10 pb-1">IDENTIFICAÇÃO</h4>
+                                  <p className="text-xs text-white/70"><strong>RESPONSÁVEL:</strong> {av.RESPONSAVEL || '-'}</p>
+                                  <p className="text-xs text-white/70"><strong>ENTRADA:</strong> {av.DATA_DE_ENTRADA || '-'}</p>
+                                  <p className="text-xs text-white/70"><strong>MOTIVO:</strong> {av.MOTIVO || '-'}</p>
                                 </div>
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-black text-slate-400 border-b pb-1">OBSERVAÇÕES</h4>
-                                  <p className="text-[10px] text-slate-600 italic bg-white p-2 rounded border border-slate-100 min-h-[40px] whitespace-pre-wrap">{av.OBSERVACOES || 'SEM OBSERVAÇÕES ADICIONAIS.'}</p>
+                                  <h4 className="text-[10px] font-black text-brand-secondary border-b border-white/10 pb-1">OBSERVAÇÕES</h4>
+                                  <p className="text-[10px] text-white/60 italic bg-black/20 p-2 rounded border border-white/5 min-h-[40px] whitespace-pre-wrap">{av.OBSERVACOES || 'SEM OBSERVAÇÕES ADICIONAIS.'}</p>
                                 </div>
                               </div>
                             </td>

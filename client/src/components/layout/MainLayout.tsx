@@ -37,24 +37,24 @@ export default function MainLayout({ children }: MainLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-brand-dark text-white overflow-hidden font-sans">
       <Sidebar userName={user?.name} userEmail={user?.email} userRole={user?.role} />
 
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         {/* Barra de Topo */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm flex-shrink-0 z-10">
+        <header className="h-16 bg-glass border-b border-glass-border flex items-center justify-between px-8 shadow-sm flex-shrink-0 z-10 backdrop-blur-md">
           {/* Título da página atual */}
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-400 font-medium">T Store</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-sm font-semibold text-slate-700">{pageTitle}</span>
+            <span className="text-sm text-white/50 font-medium">T Store</span>
+            <span className="text-white/20">/</span>
+            <span className="text-sm font-semibold text-white/90">{pageTitle}</span>
           </div>
 
           {/* Usuário logado */}
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-semibold text-slate-700 leading-none">{primeiroNome}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{user?.role === "admin" ? "Administrador" : "Colaborador"}</p>
+              <p className="text-sm font-semibold text-white leading-none">{primeiroNome}</p>
+              <p className="text-xs text-white/50 mt-0.5">{user?.role === "admin" ? "Administrador" : "Colaborador"}</p>
             </div>
 
             {/* Avatar com iniciais */}
@@ -69,7 +69,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             <button
               onClick={handleLogout}
               title="Sair do sistema"
-              className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-red-400 hover:bg-white/5 transition-colors"
             >
               <LogOut size={16} />
             </button>

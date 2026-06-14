@@ -32,21 +32,21 @@ export default function Sidebar({ userName, userEmail, userRole }: SidebarProps)
     : "U";
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-20 flex-shrink-0">
+    <aside className="w-64 bg-[#050A15] border-r border-glass-border text-white/80 flex flex-col h-full shadow-xl z-20 flex-shrink-0">
 
       {/* Logotipo */}
       <Link href="/">
-        <a className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950 hover:bg-slate-900 transition-colors cursor-pointer group">
-          <Store className="text-blue-500 mr-3 group-hover:scale-110 transition-transform" size={24} />
+        <a className="h-16 flex items-center px-6 border-b border-glass-border bg-black/20 hover:bg-black/40 transition-colors cursor-pointer group">
+          <Store className="text-brand-secondary mr-3 group-hover:scale-110 transition-transform" size={24} />
           <span className="text-lg font-bold text-white tracking-wide">
-            T Store <span className="text-blue-500 font-light">Admin</span>
+            T Store <span className="text-brand-secondary font-light">Admin</span>
           </span>
         </a>
       </Link>
 
       {/* Navegação */}
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1.5">
-        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-3">
+        <div className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-4 px-3">
           Menu Principal
         </div>
 
@@ -56,9 +56,9 @@ export default function Sidebar({ userName, userEmail, userRole }: SidebarProps)
           return (
             <Link key={item.path} href={item.path}>
               <a className={`flex items-center px-3 py-2.5 rounded-lg transition-colors group cursor-pointer ${
-                isActive ? "bg-blue-600/10 text-blue-400 font-medium" : "hover:bg-slate-800 hover:text-white"
+                isActive ? "bg-brand-primary/20 text-brand-secondary font-medium" : "hover:bg-glass hover:text-white"
               }`}>
-                <Icon size={20} className={`mr-3 ${isActive ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300"}`} />
+                <Icon size={20} className={`mr-3 ${isActive ? "text-brand-secondary" : "text-white/40 group-hover:text-white/70"}`} />
                 {item.label}
               </a>
             </Link>
@@ -67,7 +67,7 @@ export default function Sidebar({ userName, userEmail, userRole }: SidebarProps)
       </nav>
 
       {/* Perfil do usuário */}
-      <div className="px-4 py-4 border-t border-slate-800 space-y-3">
+      <div className="px-4 py-4 border-t border-glass-border space-y-3">
         <div className="flex items-center gap-3 px-1">
           {/* Avatar */}
           <div
@@ -78,29 +78,21 @@ export default function Sidebar({ userName, userEmail, userRole }: SidebarProps)
           </div>
 
           {/* Nome e role */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
-              {userName?.split(" ")[0] || "Usuário"}
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <p className="text-sm font-bold text-white truncate">{userName || "Usuário"}</p>
+            <p className="text-xs text-white/50 truncate">
+              {userRole === "admin" ? "Administrador" : "Colaborador"}
             </p>
-            <div className="flex items-center gap-1 mt-0.5">
-              {userRole === "admin"
-                ? <ShieldCheck size={10} className="text-blue-400 flex-shrink-0" />
-                : <User size={10} className="text-slate-500 flex-shrink-0" />
-              }
-              <span className="text-[10px] text-slate-400 truncate">
-                {userRole === "admin" ? "Administrador" : "Colaborador"}
-              </span>
-            </div>
           </div>
         </div>
 
         {/* Botão sair */}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center px-3 py-2.5 rounded-lg transition-colors group cursor-pointer text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-glass hover:bg-red-500/10 text-white/60 hover:text-red-400 transition-colors cursor-pointer"
         >
-          <LogOut size={20} className="mr-3 text-slate-500 group-hover:text-red-400" />
-          <span className="font-medium">Sair do Sistema</span>
+          <LogOut size={16} />
+          <span className="text-sm font-medium">Sair do sistema</span>
         </button>
 
         <div className="text-xs text-slate-600 text-center">
