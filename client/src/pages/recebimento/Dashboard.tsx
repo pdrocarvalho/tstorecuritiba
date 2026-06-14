@@ -1,7 +1,7 @@
 /**
  * client/src/pages/recebimento/Dashboard.tsx
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Package, Truck, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import MainLayout from "@/components/layout/MainLayout";
@@ -14,7 +14,11 @@ import type { Pedido } from "@/types";
 const CORES_MUNDO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function RecebimentoDashboard() {
-  const { data: todosPedidos = [], isLoading } = trpc.notifications.getPending.useQuery();
+  const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
+  const { data: todosPedidos = [], isLoading } = trpc.notifications.getLiveData.useQuery(
+    { url: urlPlanilha, mode: "recebimento" },
+    { enabled: !!urlPlanilha }
+  );
 
   // 🧠 CÁLCULO CALIBRADO DOS KPIS
   const kpis = useMemo(() => {

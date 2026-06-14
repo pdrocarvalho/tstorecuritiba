@@ -260,5 +260,5 @@ export async function deleteSheetRow(url: string, rowNumber: number) {
   });
 }
 
-export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] }; }
-export async function testarLeituraRobo(url: string) { return { status: "success", linhasLidas: 0, exemplo: "" }; }
+export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] as string[] }; }
+export async function testarLeituraRobo(url: string) { return { sucesso: true, aba: "Planilha", totalLinhas: 0, mensagem: "" }; }
