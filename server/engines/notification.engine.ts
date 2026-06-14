@@ -4,11 +4,14 @@
  * Motor de processamento logístico INTELIGENTE.
  * Utiliza a Regra Cronológica (Linha do Tempo) para garantir que
  * demandas só sejam atualizadas com base em cargas faturadas APÓS a data do pedido.
+ *
+ * Agora utiliza o módulo cross-reference.ts para evitar duplicação (ARCH-03).
  */
 
 import { google } from "googleapis";
-import { extractSpreadsheetId } from "./sync.engine";
+import { extractSpreadsheetId } from "./sheets-client";
 import { getGoogleAuth, parseDataLimpa } from "./google.helpers";
+import { fetchDbRecords, determinarStatusDemanda } from "./cross-reference";
 
 // =============================================================================
 // LÓGICA PRINCIPAL DE AUTOMAÇÃO
@@ -19,22 +22,10 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
 
-    // 1. LÊ O BANCO DE DADOS BRUTO PARA PEGAR A DATA DE EMBARQUE (A âncora cronológica)
-    const dbId = process.env.DB_SPREADSHEET_ID;
-    if (!dbId) throw new Error("DB_SPREADSHEET_ID não definido no .env");
-
-    const dbRes = await sheets.spreadsheets.values.get({ spreadsheetId: dbId, range: 'A:O' });
-    const dbRows = dbRes.data.values || [];
-
-    const dbRecords = dbRows.map(r => ({
-      ref: String(r[0] || "").toUpperCase().trim(),
-      dataEmbarque: parseDataLimpa(r[12]),           // Coluna M
-      previsao: r[13] ? String(r[13]).trim() : "",   // Coluna N
-      dataEntrega: r[14] ? String(r[14]).trim() : "" // Coluna O
-    })).filter(r => r.ref);
+    // 1. LÊ O BANCO DE DADOS BRUTO (usando o módulo compartilhado)
+    const dbRecords = await fetchDbRecords(sheets);
 
     // 2. FUNÇÃO QUE PROCESSA CADA ABA (ALERTA E VENDA)
-    // Retorna count total, breakdown por consultor e flag de registros
     const processarAba = async (abaNome: string): Promise<{
       count: number;
       porConsultor: Record<string, number>;
@@ -49,13 +40,12 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${abaNome}'!A:G` });
       const demRows = demRes.data.values || [];
 
-      // Verifica se há linhas de dados além do cabeçalho
       const temRegistros = demRows.length > 1;
 
       for (let i = 1; i < demRows.length; i++) {
         const row = demRows[i];
         const dataRegistroRaw = row[0];
-        const consultor = String(row[1] || "SEM CONSULTOR").toUpperCase().trim(); // Coluna B
+        const consultor = String(row[1] || "SEM CONSULTOR").toUpperCase().trim();
         const ref = String(row[4] || "").toUpperCase().trim();
         const statusFisico = String(row[5] || "AGUARDANDO").toUpperCase().trim();
 
@@ -64,22 +54,8 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
         const dataRegistro = parseDataLimpa(dataRegistroRaw);
         if (!dataRegistro) continue;
 
-        let bestStatus = "AGUARDANDO";
-
-        for (let j = dbRecords.length - 1; j >= 1; j--) {
-          const rec = dbRecords[j];
-
-          if (rec.ref === ref && rec.dataEmbarque && rec.dataEmbarque.getTime() >= dataRegistro.getTime()) {
-            if (rec.dataEntrega) {
-              bestStatus = "CHEGOU";
-            } else if (rec.previsao) {
-              bestStatus = "PREVISÃO";
-            } else {
-              bestStatus = "FATURADA";
-            }
-            break;
-          }
-        }
+        // Usa a função compartilhada para determinar o status
+        const bestStatus = determinarStatusDemanda(ref, dataRegistro, dbRecords);
 
         const hierarchy = { "AGUARDANDO": 0, "FATURADA": 1, "PREVISÃO": 2, "CHEGOU": 3 };
         const currentRank = hierarchy[statusFisico as keyof typeof hierarchy] || 0;

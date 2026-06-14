@@ -1,264 +1,93 @@
 /**
  * server/engines/sync.engine.ts
+ *
+ * Orquestrador principal de sincronização com Google Sheets.
+ * Delega I/O para sheets-client, parsing para sheets-parser
+ * e cruzamento de demandas para cross-reference.
+ *
+ * Re-exporta funções de escrita para manter compatibilidade com os routers.
  */
-import { google } from "googleapis";
-import { getGoogleAuth, parseDataLimpa } from "./google.helpers";
+
+import { readSheetData } from "./sheets-client";
+import { parseHeaders, mapRecebimentoRow, mapAvariaRow, mapDemandaRow } from "./sheets-parser";
+import { enriquecerDemandas } from "./cross-reference";
+
+// Re-exporta funções de I/O para compatibilidade com os routers existentes
+export { extractSpreadsheetId, addRowToSheet, updateFullRow, updateSheetRow, deleteSheetRow } from "./sheets-client";
+
+// ---------------------------------------------------------------------------
+// Cache em Memória (com evicção automática — resolve ARCH-10)
+// ---------------------------------------------------------------------------
 
 const sheetsCache: Record<string, { data: any[]; timestamp: number }> = {};
 const CACHE_TTL_MS = 30 * 1000;
 
-export function extractSpreadsheetId(url: string) {
-  const match = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
-}
-
-function getSheetInfoFromUrl(url: string, spreadsheet: any) {
-  const match = String(url).match(/[#&]gid=([0-9]+)/);
-  const gid = match ? parseInt(match[1], 10) : null;
-  if (gid !== null) {
-    const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.sheetId === gid);
-    if (sheet?.properties?.title) return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
+function limparCacheExpirado() {
+  const now = Date.now();
+  for (const key of Object.keys(sheetsCache)) {
+    if (now - sheetsCache[key].timestamp >= CACHE_TTL_MS) {
+      delete sheetsCache[key];
+    }
   }
-  const firstSheet = spreadsheet.data.sheets?.[0]?.properties;
-  return { title: firstSheet?.title || "Página1", sheetId: firstSheet?.sheetId || 0 };
 }
 
-function getSheetNameFromUrl(url: string, spreadsheet: any) {
-  return getSheetInfoFromUrl(url, spreadsheet).title;
-}
+// ---------------------------------------------------------------------------
+// Função Principal — Orquestradora
+// ---------------------------------------------------------------------------
 
-export async function fetchLiveGoogleSheet(sheetsUrl: string, mode: 'recebimento' | 'avarias' | 'demandas' = 'recebimento', targetTab?: string) {
+export async function fetchLiveGoogleSheet(
+  sheetsUrl: string,
+  mode: "recebimento" | "avarias" | "demandas" = "recebimento",
+  targetTab?: string
+) {
+  // 1. Cache
   const cacheKey = `${mode}-${targetTab || sheetsUrl}`;
   const now = Date.now();
-  if (sheetsCache[cacheKey] && (now - sheetsCache[cacheKey].timestamp < CACHE_TTL_MS)) return sheetsCache[cacheKey].data;
+  if (sheetsCache[cacheKey] && now - sheetsCache[cacheKey].timestamp < CACHE_TTL_MS) {
+    return sheetsCache[cacheKey].data;
+  }
+  limparCacheExpirado();
 
-  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-  if (!spreadsheetId) throw new Error("URL inválida.");
+  // 2. Leitura da planilha
+  const { rows, sheets } = await readSheetData(sheetsUrl, targetTab);
+  if (rows.length === 0) return [];
 
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-
-  let targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
-
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId as string,
-    range: `'${targetSheetName}'!A:Z`
-  });
-
-  const rows = response.data.values;
-  if (!rows || rows.length === 0) return [];
-
-  let headerRowIndex = mode === 'avarias' || mode === 'demandas' ? 1 : 0;
+  // 3. Parse dos cabeçalhos
+  const headerRowIndex = mode === "avarias" || mode === "demandas" ? 1 : 0;
   if (!rows[headerRowIndex]) return [];
 
-  const headersOriginais = rows[headerRowIndex].map((h: any) => String(h || "").trim());
-  const headersLimpos = headersOriginais.map(h => h.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, ""));
+  const { originais, limpos } = parseHeaders(rows[headerRowIndex]);
 
-  const data = rows.slice(headerRowIndex + 1).map((row, index) => {
-    const obj: any = { rowNumber: headerRowIndex + index + 2 };
-    let tempQtdeCaixa = 0, tempVolumes = 0, hasQtdeCaixa = false;
+  // 4. Mapeamento das linhas pelo modo correto
+  const mapFn =
+    mode === "avarias" ? mapAvariaRow :
+    mode === "demandas" ? mapDemandaRow :
+    mapRecebimentoRow;
 
-    headersOriginais.forEach((header, idx) => {
-      const val = row[idx] || "";
-      const hLimpo = headersLimpos[idx];
-      const key = header.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "_");
-      obj[key] = val;
+  const data = rows.slice(headerRowIndex + 1).map((row, index) =>
+    mapFn(originais, limpos, row, headerRowIndex + index + 2)
+  );
 
-      const isRef = hLimpo === "REF" || hLimpo.includes("REFERENCIA") || hLimpo === "REF_";
+  const filtered = data.filter(d => d.referencia || d.produtoSku || d.REF || d.COD_AVARIA);
 
-      if (mode === 'avarias') {
-        if (isRef) obj.REF = String(val).trim();
-        if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
-        if (hLimpo.includes("FABRICA")) obj.FABRICA = val;
-        if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
-        if (hLimpo.includes("QTDE")) obj.QTDE = val;
-        if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
-        if (hLimpo === "STATUS") obj.STATUS = val;
-        if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val;
-        if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
-        if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
-        if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
-        if (hLimpo.includes("SISTEMA")) obj.FOI_LANCADO_NO_SISTEMA = val;
-        if (hLimpo.includes("FISICAMENTE")) obj.CONSTA_FISICAMENTE = val;
-        if (hLimpo.includes("MOTIVO")) obj.MOTIVO = val;
-        if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
-        if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
-        if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
-        if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
-      }
-
-      if (mode === 'demandas') {
-        if (hLimpo === "DATA") obj.data = val;
-        if (hLimpo.includes("CONSULTOR")) obj.consultor = val;
-        if (hLimpo.includes("CLIENTE")) obj.cliente = val;
-        if (hLimpo.includes("CONTATO")) obj.contato = val;
-        if (isRef) obj.referencia = String(val).trim();
-        if (hLimpo.includes("STATUS")) obj.status = val;
-      }
-
-      if (mode === 'recebimento') {
-        if (isRef) obj.produtoSku = String(val).trim();
-        if (hLimpo.includes("DESCRI")) obj.descricao = val;
-        if (hLimpo.includes("REMETENTE")) obj.remetente = val;
-        if (hLimpo.includes("NOTAFISCAL")) obj.notaFiscal = val;
-        if (hLimpo.includes("MUNDO")) obj.mundo = val;
-        if (hLimpo.includes("TRANSPORT")) obj.transportadora = val;
-        if (hLimpo.includes("DIVERG")) obj.divergencia = String(val).toUpperCase().trim() || "SEM DIVERGÊNCIA";
-        if (hLimpo === "MES" || (hLimpo.includes("MES") && !hLimpo.includes("PREVIS"))) obj.mes = val;
-
-        if (hLimpo.includes("EMBARQUE")) {
-          const p = String(val).split("/");
-          obj.dataEmbarque = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
-        }
-        if (hLimpo.includes("PREVIS")) {
-          const p = String(val).split("/");
-          obj.previsaoEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
-        }
-        if (hLimpo.includes("ENTREGA") && !hLimpo.includes("PREVIS")) {
-          const p = String(val).split("/");
-          obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
-        }
-        if (hLimpo === "VOLUMES") tempVolumes = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
-        if (hLimpo.includes("QTDE") && hLimpo.includes("CAIXA")) {
-          tempQtdeCaixa = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
-          hasQtdeCaixa = true;
-        }
-      }
-    });
-
-    if (mode === 'recebimento') {
-      obj.volumesCaixas = tempVolumes;
-      obj.qtdePorCaixa = tempQtdeCaixa;
-      // quantidade unitária = QTDE POR CAIXA × VOLUMES
-      obj.quantidade = hasQtdeCaixa
-        ? (tempVolumes === 0 ? tempQtdeCaixa : tempQtdeCaixa * tempVolumes)
-        : tempVolumes;
-    }
-    return obj;
-  });
-
-  const filtered = data.filter(d => (d.referencia || d.produtoSku || d.REF || d.COD_AVARIA));
-
-  // CROSS-REFERENCE LOGIC FOR DEMANDAS (Linha do Tempo Inteligente)
-  if (mode === 'demandas') {
-    try {
-      const dbSpreadsheetId = process.env.DB_SPREADSHEET_ID; // ← antes era hardcoded
-      if (!dbSpreadsheetId) throw new Error("DB_SPREADSHEET_ID não definido no .env");
-
-      const dbResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: dbSpreadsheetId,
-        range: 'A:O'
-      });
-      const dbRows = dbResponse.data.values || [];
-
-      const dbRecords = dbRows.map(r => ({
-        ref: String(r[0] || "").toUpperCase().trim(),
-        dataEmbarque: parseDataLimpa(r[12]), // Col M
-        previsao: r[13] ? String(r[13]).trim() : "", // Col N
-        dataEntrega: r[14] ? String(r[14]).trim() : "" // Col O
-      })).filter(r => r.ref);
-
-      filtered.forEach(demanda => {
-        if (!demanda.referencia || !demanda.data) return;
-        const dataRegistro = parseDataLimpa(demanda.data);
-
-        let bestStatus = "AGUARDANDO";
-
-        for (let i = dbRecords.length - 1; i >= 1; i--) {
-          const rec = dbRecords[i];
-          if (rec.ref === demanda.referencia.toUpperCase()) {
-            if (rec.dataEmbarque && dataRegistro && rec.dataEmbarque.getTime() >= dataRegistro.getTime()) {
-              if (rec.dataEntrega) {
-                bestStatus = "CHEGOU";
-                break;
-              } else if (rec.previsao) {
-                bestStatus = "PREVISÃO";
-                break;
-              } else {
-                bestStatus = "FATURADA";
-                break;
-              }
-            }
-          }
-        }
-        demanda.status = bestStatus;
-      });
-    } catch (e) {
-      console.error("Erro ao cruzar demandas com o BD na nuvem:", e);
-    }
+  // 5. Cross-reference para demandas
+  if (mode === "demandas") {
+    await enriquecerDemandas(filtered, sheets);
   }
 
+  // 6. Atualiza cache
   sheetsCache[cacheKey] = { data: filtered, timestamp: now };
   return filtered;
 }
 
-export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
-  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
-  const targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: spreadsheetId as string,
-    range: `'${targetSheetName}'!A:Z`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [rowData] }
-  });
+// ---------------------------------------------------------------------------
+// Stubs — Funcionalidades pendentes de implementação
+// ---------------------------------------------------------------------------
+
+export async function syncPedidosFromGoogleSheets(url: string) {
+  return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] as string[] };
 }
 
-export async function updateFullRow(url: string, rowNumber: number, rowData: any[]) {
-  const id = extractSpreadsheetId(url);
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
-  const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: id as string,
-    range: `'${targetSheetName}'!A${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [rowData] }
-  });
+export async function testarLeituraRobo(url: string) {
+  return { sucesso: true, aba: "Planilha", totalLinhas: 0, mensagem: "" };
 }
-
-export async function updateSheetRow(url: string, row: number, col: string, val: string) {
-  const id = extractSpreadsheetId(url);
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
-  const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: id as string,
-    range: `'${targetSheetName}'!${col}${row}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[val]] }
-  });
-}
-
-export async function deleteSheetRow(url: string, rowNumber: number) {
-  const id = extractSpreadsheetId(url);
-  const auth = getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
-  const sheetInfo = getSheetInfoFromUrl(url, spreadsheet);
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: id as string,
-    requestBody: {
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId: sheetInfo.sheetId,
-            dimension: "ROWS",
-            startIndex: rowNumber - 1,
-            endIndex: rowNumber
-          }
-        }
-      }]
-    }
-  });
-}
-
-export async function syncPedidosFromGoogleSheets(url: string) { return { novosPedidos: 0, novasPrevisoes: 0, chegadas: 0, erros: [] as string[] }; }
-export async function testarLeituraRobo(url: string) { return { sucesso: true, aba: "Planilha", totalLinhas: 0, mensagem: "" }; }
