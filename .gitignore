@@ -1,1 +1,36 @@
+# Dependências
 node_modules
+
+# Build
+dist
+build
+.vite
+
+# Variáveis de Ambiente (NUNCA versionar)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Artefatos de Sistema
+.DS_Store
+Thumbs.db
+*.zip
+*.tar.gz
+
+# IDE
+.vscode/settings.json
+.idea
+
+# Drizzle
+drizzle/meta
+
+# Temporários
+*.tmp
+*.swp
