@@ -26,7 +26,7 @@ export async function getDb() {
     
     const pool = new Pool({ 
       connectionString: connString,
-      ssl: isSupabase ? { rejectUnauthorized: true } : undefined,
+      ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
     });
     _db = drizzle(pool);
   } catch (error) {
