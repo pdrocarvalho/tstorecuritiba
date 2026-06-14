@@ -55,29 +55,56 @@ function Modal({ tipo, dados, onClose }: {
 
   const renderConteudo = () => {
     if (tipo === "caixas") {
-      const entries = Object.entries(dados.volumesPorRemetente as Record<string, number>)
-        .sort((a, b) => b[1] - a[1]);
-      if (entries.length === 0) return <Vazio />;
-      const max = entries[0][1];
-      return (
-        <div className="space-y-3">
-          {entries.map(([rem, vol]) => (
-            <div key={rem} className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="font-semibold text-white/80 uppercase">{rem}</span>
-                <span className="font-black text-white">{vol} cx</span>
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${(vol / max) * 100}%`, background: cfg.cor }}
-                />
-              </div>
-            </div>
-          ))}
+  const entries = Object.entries(dados.volumesPorRemetente as Record<string, number>)
+    .sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return <Vazio />;
+  const max = entries[0][1];
+  const total = entries.reduce((acc, [, v]) => acc + v, 0);
+  return (
+    <div className="space-y-5">
+      {/* Resumo total */}
+      <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+        style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)" }}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Total de volumes em trânsito
+          </p>
+          <p className="text-2xl font-black text-white mt-0.5">{total} <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.4)" }}>caixas</span></p>
         </div>
-      );
-    }
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(59,130,246,0.15)" }}>
+          <Package size={20} style={{ color: "#3b82f6" }} />
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <p className="text-[11px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
+        Distribuição por remetente
+      </p>
+
+      {/* Barras por remetente */}
+      {entries.map(([rem, vol]) => (
+        <div key={rem} className="space-y-2">
+          <div className="flex justify-between items-baseline">
+            <span className="text-sm font-semibold text-white/80 uppercase">{rem}</span>
+            <div className="text-right">
+              <span className="font-black text-white">{vol}</span>
+              <span className="text-xs ml-1" style={{ color: "rgba(255,255,255,0.35)" }}>cx</span>
+              <span className="text-xs ml-2" style={{ color: "rgba(255,255,255,0.25)" }}>
+                ({Math.round((vol / total) * 100)}%)
+              </span>
+            </div>
+          </div>
+          <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${(vol / max) * 100}%`, background: cfg.cor }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
     if (tipo === "notas") {
       const notas = dados.listaNotas as any[];
@@ -161,7 +188,7 @@ function Modal({ tipo, dados, onClose }: {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl"
+        className="w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl"
         style={{
           background: "#0D1526",
           border: "1px solid rgba(255,255,255,0.1)",
