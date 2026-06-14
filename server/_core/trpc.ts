@@ -19,9 +19,8 @@ export function createContext({ req }: CreateExpressContextOptions) {
 
   try {
     const user = jwt.verify(token, JWT_SECRET) as {
-      id: string;
+      sub: number | string;
       email: string;
-      name: string;
       role: string;
     };
     return { user };

@@ -111,14 +111,17 @@ app.post("/api/auth/login", async (req, res) => {
 
     const role = roleEsperada;
 
-    // 4. Assina o JWT com o role real do banco
+    // 4. Busca o ID numérico do banco para usar como 'sub' no JWT
+    const dbUser = await getUserByOpenId(email);
+
+    // 5. Assina o JWT apenas com dados de autorização (SEC-08)
     const authToken = jwt.sign(
-      { id: email, email, role, name, picture },
+      { sub: dbUser?.id ?? email, email, role },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    return res.json({ token: authToken, role, name, picture });
+    return res.json({ token: authToken, role, name });
   } catch (error) {
     console.error("Erro na verificação do Google:", error);
     return res.status(401).json({ message: "Token do Google inválido ou expirado." });
@@ -128,14 +131,23 @@ app.post("/api/auth/login", async (req, res) => {
 /**
  * ENDPOINT: Validação de Sessão
  */
-app.get("/api/auth/me", (req, res) => {
+app.get("/api/auth/me", async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: "Não autenticado." });
 
   try {
     const token = authHeader.replace("Bearer ", "");
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return res.json(decoded);
+    const decoded = jwt.verify(token, JWT_SECRET) as { sub: number | string; email: string; role: string };
+
+    // Busca nome atualizado do banco (não armazenado no JWT)
+    const dbUser = await getUserByOpenId(decoded.email);
+
+    return res.json({
+      id: decoded.sub,
+      email: decoded.email,
+      role: decoded.role,
+      name: dbUser?.name ?? "Usuário",
+    });
   } catch {
     return res.status(401).json({ message: "Token inválido." });
   }
