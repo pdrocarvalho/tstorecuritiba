@@ -57,6 +57,11 @@ export async function getUserByOpenId(openId: string) {
   return result[0] ?? undefined;
 }
 
+export async function updateUserRole(openId: string, role: "user" | "admin"): Promise<void> {
+  const db = await requireDb("users");
+  await db.update(users).set({ role }).where(eq(users.openId, openId));
+}
+
 export async function upsertProduto(produto: InsertProduto): Promise<void> {
   const db = await requireDb("produtos");
   await db.insert(produtos).values(produto).onConflictDoUpdate({

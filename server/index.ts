@@ -8,13 +8,17 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/trpc";
 import { OAuth2Client } from "google-auth-library";
-import { upsertUser, getUserByOpenId } from "./db";
+import { upsertUser, getUserByOpenId, updateUserRole } from "./db";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const DOMINIO_PERMITIDO = "tramontinastore.com";
 const EMAILS_EXCECAO = ["pdrolcarvalho@gmail.com"];
+const ADMIN_EMAILS = [
+  "pdrolcarvalho@gmail.com",
+  "francisco.honorio@tramontinastore.com"
+];
 
 // MIDDLEWARE DE SEGURANÇA (COOP/COEP) - DEVE SER O PRIMEIRO
 app.use((_req, res, next) => {
@@ -101,9 +105,11 @@ app.post("/api/auth/login", async (req, res) => {
       loginMethod: "google",
     });
 
-    // 3. Busca o usuário para pegar o role real
-    const dbUser = await getUserByOpenId(email);
-    const role = dbUser?.role ?? "user";
+    // 3. Sincroniza a role com base na lista de administradores
+    const roleEsperada = ADMIN_EMAILS.includes(email) ? "admin" : "user";
+    await updateUserRole(email, roleEsperada);
+
+    const role = roleEsperada;
 
     // 4. Assina o JWT com o role real do banco
     const authToken = jwt.sign(
