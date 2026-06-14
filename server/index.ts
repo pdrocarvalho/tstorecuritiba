@@ -26,7 +26,10 @@ app.use((_req, res, next) => {
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+if (!process.env.JWT_SECRET) {
+  throw new Error("❌ FATAL: A variável de ambiente JWT_SECRET não está definida. O servidor não pode iniciar sem ela.");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
