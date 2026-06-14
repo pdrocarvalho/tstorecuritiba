@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 
-const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || "";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
@@ -52,10 +52,9 @@ export default function GestaoAvarias() {
   const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
 
-  // Modal de PIN
+  // Modal de Confirmação (Antigo PIN)
   const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: any }>({ isOpen: false, acao: null });
-  const [pinValue, setPinValue] = useState("");
-  const [pinErro, setPinErro] = useState(false);
+  const { user } = useAuth();
 
   const { data: todasAvarias = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: 'avarias' },
@@ -84,8 +83,6 @@ export default function GestaoAvarias() {
     setPinModal({ isOpen: false, acao: null });
     setEditingAvaria(null);
     setForm(FORM_VAZIO);
-    setPinValue("");
-    setPinErro(false);
   };
 
   const abrirModalNova = () => {
@@ -117,19 +114,13 @@ export default function GestaoAvarias() {
     setShowModal(true);
   };
 
-  // Abre o modal de PIN antes de qualquer ação sensível
+  // Abre o modal de confirmação antes de qualquer ação sensível
   const pedirPin = (acao: AcaoPin, alvo?: any) => {
-    setPinValue("");
-    setPinErro(false);
     setPinModal({ isOpen: true, acao, alvo });
   };
 
-  // Valida o PIN no frontend e executa a ação
+  // Executa a ação confirmada
   const confirmarPin = () => {
-    if (pinValue !== MANAGER_PIN) {
-      setPinErro(true);
-      return;
-    }
 
     if (pinModal.acao === "delete" && pinModal.alvo) {
       mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber });
@@ -278,13 +269,15 @@ export default function GestaoAvarias() {
                         {isExpanded && (
                           <tr key={`exp-${idx}`} className="bg-slate-50/80">
                             <td colSpan={7} className="px-10 py-8 relative">
-                              <div className="absolute top-4 right-10 flex gap-2">
-                                <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase"><Edit size={14} /> EDITAR</button>
-                                <button onClick={() => pedirPin("delete", av)} disabled={mutationDelete.isPending}
-                                  className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase disabled:opacity-50">
-                                  <Trash2 size={14} /> {mutationDelete.isPending ? 'EXCLUINDO...' : 'EXCLUIR'}
-                                </button>
-                              </div>
+                              {user?.role === "admin" && (
+                                <div className="absolute top-4 right-10 flex gap-2">
+                                  <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase"><Edit size={14} /> EDITAR</button>
+                                  <button onClick={() => pedirPin("delete", av)} disabled={mutationDelete.isPending}
+                                    className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase disabled:opacity-50">
+                                    <Trash2 size={14} /> {mutationDelete.isPending ? 'EXCLUINDO...' : 'EXCLUIR'}
+                                  </button>
+                                </div>
+                              )}
                               <div className="grid grid-cols-3 gap-8 mt-4 uppercase">
                                 <div className="space-y-2">
                                   <h4 className="text-[10px] font-black text-slate-400 border-b pb-1">LOGÍSTICA</h4>
@@ -422,26 +415,17 @@ export default function GestaoAvarias() {
         </div>
       )}
 
-      {/* MODAL DE PIN */}
+      {/* MODAL DE CONFIRMAÇÃO */}
       {pinModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-7 text-center max-w-sm w-full shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
               <Lock size={22} className="text-slate-700" />
             </div>
-            <h3 className="text-lg font-black mb-1 uppercase">Senha de Gerente</h3>
+            <h3 className="text-lg font-black mb-1 uppercase">Atenção</h3>
             <p className="text-xs text-slate-400 mb-5 uppercase">
               {pinModal.acao === "delete" ? "Confirme para excluir permanentemente" : "Confirme para salvar as alterações"}
             </p>
-            <Input
-              type="password"
-              value={pinValue}
-              onChange={(e) => { setPinValue(e.target.value); setPinErro(false); }}
-              onKeyDown={(e) => e.key === "Enter" && confirmarPin()}
-              className={`text-center text-lg font-bold mb-2 ${pinErro ? "border-red-400 focus-visible:ring-red-400" : ""}`}
-              autoFocus
-            />
-            {pinErro && <p className="text-xs text-red-500 font-bold mb-3 uppercase">Senha incorreta. Tente novamente.</p>}
             <div className="flex gap-3 mt-4">
               <button onClick={() => setPinModal({ isOpen: false, acao: null })} className="flex-1 py-2.5 bg-slate-100 rounded-lg uppercase text-xs font-bold hover:bg-slate-200 transition-colors">CANCELAR</button>
               <button onClick={confirmarPin} disabled={mutationEdit.isPending || mutationDelete.isPending}

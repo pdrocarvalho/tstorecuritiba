@@ -3,7 +3,7 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { notificationsRouter } from "./notification.router";
 import {
   syncPedidosFromGoogleSheets,
@@ -15,11 +15,11 @@ export const appRouter = router({
   notifications: notificationsRouter,
 
   admin: router({
-    getConfig: protectedProcedure.query(async () => {
+    getConfig: adminProcedure.query(async () => {
       return await getGoogleSheetsConfig();
     }),
 
-    configSheets: protectedProcedure
+    configSheets: adminProcedure
       .input(z.object({ sheetsUrl: z.string() }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -30,7 +30,7 @@ export const appRouter = router({
         }
       }),
 
-    syncNow: protectedProcedure.mutation(async () => {
+    syncNow: adminProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
         if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada.");
@@ -48,7 +48,7 @@ export const appRouter = router({
       }
     }),
 
-    testarRobo: protectedProcedure.mutation(async () => {
+    testarRobo: adminProcedure.mutation(async () => {
       try {
         const config = await getGoogleSheetsConfig();
         if (!config || !config.sheetsUrl) throw new Error("Planilha não configurada.");

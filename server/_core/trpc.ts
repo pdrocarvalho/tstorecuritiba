@@ -49,3 +49,14 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   }
   return next({ ctx: { user: ctx.user } });
 });
+
+// Apenas administradores podem chamar
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Acesso negado. Apenas administradores podem realizar esta ação.",
+    });
+  }
+  return next({ ctx });
+});

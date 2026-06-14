@@ -2,7 +2,7 @@
  * server/routers/notification.router.ts
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import {
   fetchLiveGoogleSheet,
   addRowToSheet,
@@ -50,14 +50,14 @@ export const notificationsRouter = router({
       return await updateSheetRow(input.url, input.rowNumber, input.columnLetter, input.newValue);
     }),
 
-  // Validação de acesso feita no frontend via VITE_MANAGER_PIN
-  editAvariaFull: protectedProcedure
+  // Validação de acesso feita no backend via adminProcedure
+  editAvariaFull: adminProcedure
     .input(z.object({ url: z.string(), rowNumber: z.number(), row: z.array(z.any()) }))
     .mutation(async ({ input }) => {
       return await updateFullRow(input.url, input.rowNumber, input.row);
     }),
 
-  deleteAvariaRow: protectedProcedure
+  deleteAvariaRow: adminProcedure
     .input(z.object({ url: z.string(), rowNumber: z.number() }))
     .mutation(async ({ input }) => {
       return await deleteSheetRow(input.url, input.rowNumber);
