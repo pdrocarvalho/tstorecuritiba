@@ -23,7 +23,31 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Permite deploys preview da Vercel apenas em ambiente que não seja produção estrita
+    if (origin.endsWith('.vercel.app') && process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    callback(new Error('Origem não permitida pela política de CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 if (!process.env.JWT_SECRET) {
