@@ -5,12 +5,16 @@
  * em objetos tipados, separando a lógica de parsing por modo.
  */
 
+// Tipo de célula bruta da API do Google Sheets
+export type SheetCell = string | number | boolean | null | undefined;
+export type SheetRow = SheetCell[];
+
 // ---------------------------------------------------------------------------
 // Normalização de Cabeçalhos
 // ---------------------------------------------------------------------------
 
-export function parseHeaders(headerRow: any[]) {
-  const originais = headerRow.map((h: any) => String(h || "").trim());
+export function parseHeaders(headerRow: SheetRow) {
+  const originais = headerRow.map(h => String(h || "").trim());
   const limpos = originais.map(h =>
     h.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "")
   );
@@ -25,7 +29,7 @@ function isRefHeader(hLimpo: string): boolean {
   return hLimpo === "REF" || hLimpo.includes("REFERENCIA") || hLimpo === "REF_";
 }
 
-export function parseDataLimpa(val: any): Date | null {
+export function parseDataLimpa(val: SheetCell): Date | null {
   if (!val) return null;
   const p = String(val).split("/");
   if (p.length === 3) {
@@ -34,6 +38,11 @@ export function parseDataLimpa(val: any): Date | null {
   return null;
 }
 
+// Tipos de Registros Mapeados
+export type AvariaRecord = Record<string, string | number | null>;
+export type DemandaRecord = Record<string, string | number | null>;
+export type RecebimentoRecord = Record<string, string | number | Date | null>;
+
 // ---------------------------------------------------------------------------
 // Mapeamento por Modo
 // ---------------------------------------------------------------------------
@@ -41,13 +50,13 @@ export function parseDataLimpa(val: any): Date | null {
 export function mapAvariaRow(
   headersOriginais: string[],
   headersLimpos: string[],
-  row: any[],
+  row: SheetRow,
   rowNumber: number
-): any {
-  const obj: any = { rowNumber };
+): AvariaRecord {
+  const obj: AvariaRecord = { rowNumber };
 
   headersOriginais.forEach((header, idx) => {
-    const val = row[idx] || "";
+    const val = row[idx] !== undefined && row[idx] !== null ? String(row[idx]) : "";
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 
@@ -77,13 +86,13 @@ export function mapAvariaRow(
 export function mapDemandaRow(
   headersOriginais: string[],
   headersLimpos: string[],
-  row: any[],
+  row: SheetRow,
   rowNumber: number
-): any {
-  const obj: any = { rowNumber };
+): DemandaRecord {
+  const obj: DemandaRecord = { rowNumber };
 
   headersOriginais.forEach((header, idx) => {
-    const val = row[idx] || "";
+    const val = row[idx] !== undefined && row[idx] !== null ? String(row[idx]) : "";
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 
@@ -101,16 +110,16 @@ export function mapDemandaRow(
 export function mapRecebimentoRow(
   headersOriginais: string[],
   headersLimpos: string[],
-  row: any[],
+  row: SheetRow,
   rowNumber: number
-): any {
-  const obj: any = { rowNumber };
+): RecebimentoRecord {
+  const obj: RecebimentoRecord = { rowNumber };
   let tempQtdeCaixa = 0;
   let tempVolumes = 0;
   let hasQtdeCaixa = false;
 
   headersOriginais.forEach((header, idx) => {
-    const val = row[idx] || "";
+    const val = row[idx] !== undefined && row[idx] !== null ? String(row[idx]) : "";
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 

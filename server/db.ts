@@ -129,9 +129,14 @@ export async function saveGoogleSheetsConfig(
       await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy, fileName });
     }
     return true;
-  } catch (error: any) {
-    console.error("[DB] Erro ao salvar configuração:", error);
-    throw new Error(error.message);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("[Postgres] Erro ao salvar configurações:", error.message);
+      throw new Error(error.message);
+    } else {
+      console.error("[Postgres] Erro ao salvar configurações:", error);
+      throw new Error("Erro desconhecido ao salvar configurações");
+    }
   }
 }
 

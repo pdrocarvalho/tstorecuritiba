@@ -9,7 +9,7 @@
  */
 
 import { readSheetData } from "./sheets-client";
-import { parseHeaders, mapRecebimentoRow, mapAvariaRow, mapDemandaRow } from "./sheets-parser";
+import { parseHeaders, mapRecebimentoRow, mapAvariaRow, mapDemandaRow, AvariaRecord, DemandaRecord, RecebimentoRecord } from "./sheets-parser";
 import { enriquecerDemandas } from "./cross-reference";
 
 // Re-exporta funções de I/O para compatibilidade com os routers existentes
@@ -19,7 +19,9 @@ export { extractSpreadsheetId, addRowToSheet, updateFullRow, updateSheetRow, del
 // Cache em Memória (com evicção automática — resolve ARCH-10)
 // ---------------------------------------------------------------------------
 
-const sheetsCache: Record<string, { data: any[]; timestamp: number }> = {};
+type AnySheetRecord = AvariaRecord | DemandaRecord | RecebimentoRecord;
+
+const sheetsCache: Record<string, { data: AnySheetRecord[]; timestamp: number }> = {};
 const CACHE_TTL_MS = 30 * 1000;
 
 function limparCacheExpirado() {
@@ -39,7 +41,7 @@ export async function fetchLiveGoogleSheet(
   sheetsUrl: string,
   mode: "recebimento" | "avarias" | "demandas" = "recebimento",
   targetTab?: string
-) {
+): Promise<AnySheetRecord[]> {
   // 1. Cache
   const cacheKey = `${mode}-${targetTab || sheetsUrl}`;
   const now = Date.now();
@@ -56,23 +58,34 @@ export async function fetchLiveGoogleSheet(
   const headerRowIndex = mode === "avarias" || mode === "demandas" ? 1 : 0;
   if (!rows[headerRowIndex]) return [];
 
-  const { originais, limpos } = parseHeaders(rows[headerRowIndex]);
+  const { originais, limpos } = parseHeaders(rows[headerRowIndex] as any[]);
 
   // 4. Mapeamento das linhas pelo modo correto
-  const mapFn =
-    mode === "avarias" ? mapAvariaRow :
-    mode === "demandas" ? mapDemandaRow :
-    mapRecebimentoRow;
+  let data: AnySheetRecord[] = [];
+  if (mode === "avarias") {
+    data = rows.slice(headerRowIndex + 1).map((row, index) =>
+      mapAvariaRow(originais, limpos, row as any[], headerRowIndex + index + 2)
+    );
+  } else if (mode === "demandas") {
+    data = rows.slice(headerRowIndex + 1).map((row, index) =>
+      mapDemandaRow(originais, limpos, row as any[], headerRowIndex + index + 2)
+    );
+  } else {
+    data = rows.slice(headerRowIndex + 1).map((row, index) =>
+      mapRecebimentoRow(originais, limpos, row as any[], headerRowIndex + index + 2)
+    );
+  }
 
-  const data = rows.slice(headerRowIndex + 1).map((row, index) =>
-    mapFn(originais, limpos, row, headerRowIndex + index + 2)
+  const filtered = data.filter(d => 
+    ("referencia" in d && d.referencia) || 
+    ("produtoSku" in d && d.produtoSku) || 
+    ("REF" in d && d.REF) || 
+    ("COD_AVARIA" in d && d.COD_AVARIA)
   );
-
-  const filtered = data.filter(d => d.referencia || d.produtoSku || d.REF || d.COD_AVARIA);
 
   // 5. Cross-reference para demandas
   if (mode === "demandas") {
-    await enriquecerDemandas(filtered, sheets);
+    await enriquecerDemandas(filtered as DemandaRecord[], sheets);
   }
 
   // 6. Atualiza cache

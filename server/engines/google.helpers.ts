@@ -18,7 +18,7 @@ export function getGoogleAuth() {
   });
 }
 
-export function parseDataLimpa(dataRaw: any): Date | null {
+export function parseDataLimpa(dataRaw: unknown): Date | null {
   if (!dataRaw) return null;
   const str = String(dataRaw).trim();
   if (str.includes('/')) {

@@ -2,12 +2,13 @@ import { useEffect } from "react";
 import { Package, FileText, Layers, Calendar, X } from "lucide-react";
 import { Vazio } from "./Vazio";
 import { MUNDO_COLORS } from "@/constants";
+import { Pedido } from "@/types";
 
 export type ModalTipo = "caixas" | "notas" | "skus" | "semana" | null;
 
 export function Modal({ tipo, dados, onClose }: {
   tipo: ModalTipo;
-  dados: any;
+  dados: Record<string, unknown>;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -18,7 +19,7 @@ export function Modal({ tipo, dados, onClose }: {
 
   if (!tipo) return null;
 
-  const configs: Record<NonNullable<ModalTipo>, { titulo: string; icone: any; cor: string }> = {
+  const configs: Record<NonNullable<ModalTipo>, { titulo: string; icone: React.ElementType; cor: string }> = {
     caixas: { titulo: "Volumes por Remetente", icone: Package, cor: "#3b82f6" },
     notas:  { titulo: "Notas Fiscais Ativas",  icone: FileText, cor: "#8b5cf6" },
     skus:   { titulo: "SKUs por Mundo",         icone: Layers,   cor: "#10b981" },
@@ -82,11 +83,11 @@ export function Modal({ tipo, dados, onClose }: {
     }
 
     if (tipo === "notas") {
-      const notas = dados.listaNotas as any[];
+      const notas = dados.listaNotas as { notaFiscal: string; remetente: string; volumes: number }[];
       if (notas.length === 0) return <Vazio />;
       return (
         <div className="space-y-2">
-          {notas.map((n: any, i: number) => (
+          {notas.map((n, i: number) => (
             <div key={i} className="flex items-center justify-between px-4 py-3 rounded-xl"
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
               <div className="space-y-0.5">
@@ -123,7 +124,7 @@ export function Modal({ tipo, dados, onClose }: {
     }
 
     if (tipo === "semana") {
-      const itens = dados.chegandoSemanaItens as any[];
+      const itens = dados.chegandoSemanaItens as Pedido[];
       if (itens.length === 0) return <Vazio />;
       return (
         <div className="overflow-x-auto">
@@ -137,7 +138,7 @@ export function Modal({ tipo, dados, onClose }: {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
-              {itens.map((item: any, i: number) => (
+              {itens.map((item: Pedido, i: number) => (
                 <tr key={i} className="hover:bg-white/5 transition-colors">
                   <td className="py-3 pr-4 font-black text-white font-mono">{item.notaFiscal || "—"}</td>
                   <td className="py-3 pr-4 text-white/70 uppercase">{item.remetente || "—"}</td>

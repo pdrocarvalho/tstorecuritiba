@@ -12,6 +12,7 @@ import { trpc } from "@/lib/trpc";
 import { Modal, ModalTipo } from "./components/Modal";
 import { KpiCard } from "./components/KpiCard";
 import { ListaConsultores } from "./components/ListaConsultores";
+import { Pedido } from "@/types";
 
 const AUTOMACAO_INTERVALO_MS = 60 * 60 * 1000;
 const AUTOMACAO_STORAGE_KEY = "automacao_ultima_execucao";
@@ -47,7 +48,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   });
 
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       if (!data.success) return;
       setResultadoAutomacao({
         alertas: data.alertasNotificados ?? 0,
@@ -75,15 +76,15 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const kpis = useMemo(() => {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const em7Dias = new Date(hoje); em7Dias.setDate(hoje.getDate() + 7);
-    const emTransito = (todosPedidos as any[]).filter(p => !p.dataEntrega);
+    const emTransito = (todosPedidos as Pedido[]).filter(p => !p.dataEntrega);
 
     let totalCaixas = 0;
     const notasMap = new Map<string, { notaFiscal: string; remetente: string; volumes: number }>();
     const skusPorMundo: Record<string, number> = {};
     const volumesPorRemetente: Record<string, number> = {};
     const skusUnicos = new Set<string>();
-    const chegandoSemanaItens: any[] = [];
-    const atrasados: any[] = [];
+    const chegandoSemanaItens: Pedido[] = [];
+    const atrasados: Pedido[] = [];
 
     emTransito.forEach(p => {
       totalCaixas += p.volumesCaixas || 0;
@@ -226,7 +227,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
             </span>
           </div>
           <div style={{ background: "#0D1526" }}>
-            {kpis.atrasados.slice(0, 5).map((p: any, idx: number) => (
+            {kpis.atrasados.slice(0, 5).map((p: Pedido, idx: number) => (
               <div key={idx} className="px-5 py-3 flex items-center justify-between gap-4"
                 style={{ borderTop: idx > 0 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
                 <div className="flex items-center gap-3 min-w-0">

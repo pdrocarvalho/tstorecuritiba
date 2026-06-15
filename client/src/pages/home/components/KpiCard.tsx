@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 
 export function KpiCard({ label, valor, descricao, cor, icone: Icone, onClick }: {
   label: string; valor: number; descricao: string;
-  cor: string; icone: any; onClick: () => void;
+  cor: string; icone: React.ElementType; onClick: () => void;
 }) {
   return (
     <button onClick={onClick} className="text-left w-full group" style={{ outline: "none" }}>

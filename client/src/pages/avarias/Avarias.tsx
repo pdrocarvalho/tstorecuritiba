@@ -16,6 +16,7 @@ import { Link } from "wouter";
 import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ConfirmModal, AcaoPin } from "./components/ConfirmModal";
+import { Avaria } from "@/types";
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
@@ -49,11 +50,11 @@ export default function GestaoAvarias() {
   const [filtroSku, setFiltroSku] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
-  const [editingAvaria, setEditingAvaria] = useState<any | null>(null);
+  const [editingAvaria, setEditingAvaria] = useState<Avaria | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
 
   // Modal de Confirmação (Antigo PIN)
-  const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: any }>({ isOpen: false, acao: null });
+  const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: Avaria }>({ isOpen: false, acao: null });
   const { user } = useAuth();
 
   const { data: todasAvarias = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
@@ -91,7 +92,7 @@ export default function GestaoAvarias() {
     setShowModal(true);
   };
 
-  const abrirModalEdicao = (av: any) => {
+  const abrirModalEdicao = (av: Avaria) => {
     setEditingAvaria(av);
     setForm({
       fabrica: formatUpper(av.FABRICA),
@@ -115,7 +116,7 @@ export default function GestaoAvarias() {
   };
 
   // Abre o modal de confirmação antes de qualquer ação sensível
-  const pedirPin = (acao: AcaoPin, alvo?: any) => {
+  const pedirPin = (acao: AcaoPin, alvo?: Avaria) => {
     setPinModal({ isOpen: true, acao, alvo });
   };
 
@@ -151,7 +152,7 @@ export default function GestaoAvarias() {
       // Nova avaria — sem PIN
       const fabricaObj = FABRICAS.find(f => f.nome === form.fabrica);
       const prefixo = fabricaObj?.prefixo || "AVR";
-      const codigosExistentes = todasAvarias.map((a: any) => String(a.COD_AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
+      const codigosExistentes = todasAvarias.map((a: Avaria) => String(a.COD_AVARIA || "")).filter((c: string) => c.startsWith(prefixo));
       const proximoNumero = codigosExistentes.length > 0 ? Math.max(...codigosExistentes.map(c => parseInt(c.replace(/[^\d]/g, ""), 10) || 0)) + 1 : 1;
       const codAvaria = `${prefixo}${String(proximoNumero).padStart(4, '0')}`;
 
@@ -178,7 +179,7 @@ export default function GestaoAvarias() {
   };
 
   const avariasFiltradas = useMemo(() => {
-    return todasAvarias.filter((a: any) => {
+    return todasAvarias.filter((a: Avaria) => {
       const search = filtroSku.toLowerCase();
       const matchesSearch = !filtroSku || String(a.REF || "").toLowerCase().includes(search) || String(a.COD_AVARIA || "").toLowerCase().includes(search);
       const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(formatUpper(a.TRATATIVA || "PENDENTE"));
@@ -191,7 +192,7 @@ export default function GestaoAvarias() {
     if (!printWindow) return;
     const html = `<html><head><title>RELATÓRIO - T STORE</title><style>body { font-family: sans-serif; padding: 20px; font-size: 12px; text-transform: uppercase; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; }</style></head>
       <body><h2>GESTÃO DE AVARIAS</h2><table><thead><tr><th>CÓD.</th><th>REF</th><th>DESCRIÇÃO</th><th>QTD</th><th>STATUS</th><th>TRATATIVA</th></tr></thead>
-      <tbody>${avariasFiltradas.map((av: any) => `<tr><td>${av.COD_AVARIA || ""}</td><td>${av.REF || ""}</td><td>${av.DESCRICAO || ""}</td><td>${av.QTDE || ""}</td><td>${av.STATUS || ""}</td><td>${av.TRATATIVA || ""}</td></tr>`).join("")}</tbody></table>
+      <tbody>${avariasFiltradas.map((av: Avaria) => `<tr><td>${av.COD_AVARIA || ""}</td><td>${av.REF || ""}</td><td>${av.DESCRICAO || ""}</td><td>${av.QTDE || ""}</td><td>${av.STATUS || ""}</td><td>${av.TRATATIVA || ""}</td></tr>`).join("")}</tbody></table>
       <script>setTimeout(() => { window.print(); window.close(); }, 500);</script></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
@@ -248,7 +249,7 @@ export default function GestaoAvarias() {
                   <tr><th className="px-6 py-4 w-10"></th><th>CÓD.</th><th>REF</th><th>DESCRIÇÃO</th><th className="text-center">QTDE</th><th>STATUS (OPERACIONAL)</th><th className="text-right px-6">TRATATIVA</th></tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {avariasFiltradas.map((av: any, idx: number) => {
+                  {avariasFiltradas.map((av: Avaria, idx: number) => {
                     const isExpanded = expandedRow === idx;
                     const style = getTratativaStyle(av.TRATATIVA);
                     return (

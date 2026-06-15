@@ -25,6 +25,11 @@ export interface Pedido {
   remetente?: string;
   notaFiscal?: string;
   mundo?: string;
+  transportadora?: string;
+  divergencia?: string;
+  mes?: string;
+  volumesCaixas?: number;
+  dataEmbarque?: string | null;
   consultorId?: number | null;
   clienteId?: number | null;
 }
@@ -68,4 +73,44 @@ export interface SyncResult {
   novosPedidos: number;
   novasPrevisoes: number;
   chegadas: number;
+}
+
+// =============================================================================
+// AVARIAS
+// =============================================================================
+
+export interface Avaria {
+  rowNumber?: number;
+  COD_AVARIA?: string;
+  REF?: string;
+  DESCRICAO?: string;
+  QTDE?: string | number;
+  STATUS?: string;
+  TRATATIVA?: string;
+  FABRICA?: string;
+  OK_STATUS?: string;
+  DATA_DA_COLETA?: string;
+  NOTA_FISCAL_DE_SAIDA?: string;
+  NOTA_FISCAL_DE_REPOSICAO?: string;
+  FOI_LANCADO_NO_SISTEMA?: string;
+  CONSTA_FISICAMENTE?: string;
+  MOTIVO?: string;
+  DATA_DE_ENTRADA?: string;
+  NOTA_FISCAL_DE_ENTRADA?: string;
+  CUPOM_FISCAL?: string;
+  OBSERVACOES?: string;
+}
+
+// =============================================================================
+// DEMANDAS
+// =============================================================================
+
+export interface Demanda {
+  rowNumber?: number;
+  data?: string;
+  consultor?: string;
+  cliente?: string;
+  contato?: string;
+  referencia?: string;
+  status?: string;
 }

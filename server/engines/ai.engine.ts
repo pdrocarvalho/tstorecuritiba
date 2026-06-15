@@ -25,8 +25,12 @@ export async function analisarComIA(prompt: string) {
     const result = await model.generateContent(prompt);
     const resposta = result.response.text();
     return { sucesso: true, dados: resposta };
-  } catch (error: any) {
-    console.error("❌ Erro ao comunicar com o Gemini:", error);
-    return { sucesso: false, erro: error.message };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("[AiEngine] Falha ao analisar avarias com IA:", error.message);
+    } else {
+      console.error("[AiEngine] Falha ao analisar avarias com IA:", error);
+    }
+    return { sucesso: false, erro: error instanceof Error ? error.message : "Erro desconhecido" };
   }
 }

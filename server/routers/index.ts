@@ -22,8 +22,8 @@ export const appRouter = router({
         try {
           await saveGoogleSheetsConfig(input.sheetsUrl, 1);
           return { success: true, url: input.sheetsUrl };
-        } catch (error: any) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro no BD: ${error.message}` });
+        } catch (error: unknown) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro no BD: ${error instanceof Error ? error.message : "Erro desconhecido"}` });
         }
       }),
 

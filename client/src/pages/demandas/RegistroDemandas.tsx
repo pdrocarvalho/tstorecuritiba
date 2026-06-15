@@ -87,8 +87,12 @@ export default function RegistroDemandas() {
       toast.success(`${tipo === "ALERTA" ? "Alerta(s)" : "Venda(s)"} registrado(s) com sucesso!`);
       setForm({ consultor: "", cliente: "", contato: "" });
       setReferencias([""]);
-    } catch (err: any) {
-      toast.error("Erro ao salvar: " + err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        toast.error("ERRO: " + err.message);
+      } else {
+        toast.error("ERRO DESCONHECIDO");
+      }
     } finally {
       enviando.current = false;
       setProgresso(null);

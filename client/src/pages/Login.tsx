@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, ShieldCheck, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { GoogleLogin } from "@react-oauth/google";
+import { CredentialResponse, GoogleLogin } from "@react-oauth/google";
 import { setAuthToken, clearAuthToken } from "@/lib/auth";
 import { registrarAtividade } from "@/lib/activity";
 
@@ -24,7 +24,7 @@ export default function Login() {
     }
   }, []);
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -50,8 +50,9 @@ export default function Login() {
         window.location.href = "/";
       }, 1000);
 
-    } catch (error: any) {
-      toast.error(error.message || "Acesso negado. Verifique suas credenciais.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Acesso negado. Verifique suas credenciais.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

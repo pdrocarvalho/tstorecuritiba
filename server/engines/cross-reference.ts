@@ -85,17 +85,23 @@ export function determinarStatusDemanda(
 // Enriquecimento de Demandas (usado pelo sync.engine.ts)
 // ---------------------------------------------------------------------------
 
+import { DemandaRecord } from "./sheets-parser";
+
 /** Aplica o cross-reference a uma lista de demandas, atualizando o campo `status`. */
-export async function enriquecerDemandas(demandas: any[], sheets?: sheets_v4.Sheets): Promise<void> {
+export async function enriquecerDemandas(demandas: DemandaRecord[], sheets?: sheets_v4.Sheets): Promise<void> {
   try {
     const dbRecords = await fetchDbRecords(sheets);
 
     demandas.forEach(demanda => {
       if (!demanda.referencia || !demanda.data) return;
       const dataRegistro = parseDataLimpa(demanda.data);
-      demanda.status = determinarStatusDemanda(demanda.referencia, dataRegistro, dbRecords);
+      demanda.status = determinarStatusDemanda(String(demanda.referencia), dataRegistro, dbRecords);
     });
-  } catch (e) {
-    console.error("Erro ao cruzar demandas com o BD na nuvem:", e);
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      console.error("Erro ao cruzar demandas com o BD na nuvem:", e.message);
+    } else {
+      console.error("Erro ao cruzar demandas com o BD na nuvem:", e);
+    }
   }
 }

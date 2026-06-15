@@ -5,8 +5,9 @@
  * Centraliza leitura, escrita, atualização e exclusão de dados.
  */
 
-import { google } from "googleapis";
+import { google, sheets_v4 } from "googleapis";
 import { getGoogleAuth } from "./google.helpers";
+import { SheetRow } from "./sheets-parser";
 
 // ---------------------------------------------------------------------------
 // Utilitários de URL
@@ -17,18 +18,18 @@ export function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-export function getSheetInfoFromUrl(url: string, spreadsheet: any) {
+export function getSheetInfoFromUrl(url: string, spreadsheet: sheets_v4.Schema$Spreadsheet) {
   const match = String(url).match(/[#&]gid=([0-9]+)/);
   const gid = match ? parseInt(match[1], 10) : null;
   if (gid !== null) {
-    const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.sheetId === gid);
+    const sheet = spreadsheet.sheets?.find((s: sheets_v4.Schema$Sheet) => s.properties?.sheetId === gid);
     if (sheet?.properties?.title) return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
   }
-  const firstSheet = spreadsheet.data.sheets?.[0]?.properties;
+  const firstSheet = spreadsheet.sheets?.[0]?.properties;
   return { title: firstSheet?.title || "Página1", sheetId: firstSheet?.sheetId || 0 };
 }
 
-export function getSheetNameFromUrl(url: string, spreadsheet: any): string {
+export function getSheetNameFromUrl(url: string, spreadsheet: sheets_v4.Schema$Spreadsheet): string {
   return getSheetInfoFromUrl(url, spreadsheet).title;
 }
 
@@ -43,7 +44,8 @@ export async function readSheetData(sheetsUrl: string, targetTab?: string) {
 
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const spreadsheetResponse = await sheets.spreadsheets.get({ spreadsheetId });
+  const spreadsheet = spreadsheetResponse.data;
 
   const targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
 
@@ -65,11 +67,12 @@ export async function readSheetData(sheetsUrl: string, targetTab?: string) {
 // Escrita
 // ---------------------------------------------------------------------------
 
-export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab?: string) {
+export async function addRowToSheet(sheetsUrl: string, rowData: SheetRow, targetTab?: string) {
   const spreadsheetId = extractSpreadsheetId(sheetsUrl);
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
+  const spreadsheetResponse = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId as string });
+  const spreadsheet = spreadsheetResponse.data;
   const targetSheetName = targetTab || getSheetNameFromUrl(sheetsUrl, spreadsheet);
   await sheets.spreadsheets.values.append({
     spreadsheetId: spreadsheetId as string,
@@ -80,11 +83,12 @@ export async function addRowToSheet(sheetsUrl: string, rowData: any[], targetTab
   });
 }
 
-export async function updateFullRow(url: string, rowNumber: number, rowData: any[]) {
+export async function updateFullRow(url: string, rowNumber: number, rowData: SheetRow) {
   const id = extractSpreadsheetId(url);
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheetResponse = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheet = spreadsheetResponse.data;
   const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
   await sheets.spreadsheets.values.update({
     spreadsheetId: id as string,
@@ -98,7 +102,8 @@ export async function updateSheetRow(url: string, row: number, col: string, val:
   const id = extractSpreadsheetId(url);
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheetResponse = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheet = spreadsheetResponse.data;
   const targetSheetName = getSheetNameFromUrl(url, spreadsheet);
   await sheets.spreadsheets.values.update({
     spreadsheetId: id as string,
@@ -112,7 +117,8 @@ export async function deleteSheetRow(url: string, rowNumber: number) {
   const id = extractSpreadsheetId(url);
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheetResponse = await sheets.spreadsheets.get({ spreadsheetId: id as string });
+  const spreadsheet = spreadsheetResponse.data;
   const sheetInfo = getSheetInfoFromUrl(url, spreadsheet);
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: id as string,

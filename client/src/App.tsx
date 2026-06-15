@@ -21,7 +21,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 // 🛡️ PROTECTED ROUTE: Bloqueia acesso anônimo e verifica inatividade
-const ProtectedRoute = ({ component: Component, path }: { component: any, path: string }) => {
+const ProtectedRoute = ({ component: Component, path }: { component: React.ComponentType<any>, path: string }) => {
   return (
     <Route path={path}>
       {() => {

@@ -95,8 +95,13 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       vendasTemRegistros: vendas.temRegistros,
       mensagem: `Processamento Logístico Concluído. ${alertas.count + vendas.count} estágios evoluídos na planilha.`
     };
-  } catch (error: any) {
-    console.error("❌ Erro fatal no processamento logístico:", error);
-    return { success: false, erro: error.message };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("[NotificationEngine] Erro geral ao disparar webhook:", error.message);
+      return { success: false, erro: error.message };
+    } else {
+      console.error("[NotificationEngine] Erro geral ao disparar webhook:", error);
+      return { success: false, erro: "Erro desconhecido" };
+    }
   }
 }

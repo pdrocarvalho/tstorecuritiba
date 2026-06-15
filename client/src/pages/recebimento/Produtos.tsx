@@ -13,6 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import { MUNDO_COLORS } from "@/constants";
+import { Pedido } from "@/types";
 
 const COR_PADRAO = "#94a3b8";
 
@@ -54,7 +55,7 @@ export default function RecebimentoFuturo() {
   useEffect(() => { if (isVinculado) refetch(); }, [isVinculado]);
 
   const { emTransito, mundos, remetentes, transportadoras, stats } = useMemo(() => {
-    const em = (todosPedidos as any[]).filter(p => !p.dataEntrega);
+    const em = (todosPedidos as Pedido[]).filter(p => !p.dataEntrega);
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
 
@@ -68,9 +69,9 @@ export default function RecebimentoFuturo() {
 
     return {
       emTransito: em,
-      mundos: [...new Set(em.map((p: any) => String(p.mundo || "").toUpperCase().trim()).filter(Boolean))].sort(),
-      remetentes: [...new Set(em.map((p: any) => p.remetente || "").filter(Boolean))].sort(),
-      transportadoras: [...new Set(em.map((p: any) => p.transportadora || "").filter(Boolean))].sort(),
+      mundos: [...new Set(em.map((p: Pedido) => String(p.mundo || "").toUpperCase().trim()).filter(Boolean))].sort(),
+      remetentes: [...new Set(em.map((p: Pedido) => p.remetente || "").filter(Boolean))].sort(),
+      transportadoras: [...new Set(em.map((p: Pedido) => p.transportadora || "").filter(Boolean))].sort(),
       stats: { total: em.length, atrasados, semana },
     };
   }, [todosPedidos]);
@@ -264,9 +265,9 @@ export default function RecebimentoFuturo() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {listaFiltrada.map((item: any, idx: number) => {
-                        const badge = getPrazoBadge(item.previsaoEntrega, !!item.dataEntrega);
+                    <tbody className="divide-y divide-white/5 text-xs text-white/80">
+                      {listaFiltrada.map((item: Pedido, idx: number) => {
+                        const badge = getPrazoBadge(item.previsaoEntrega ? new Date(item.previsaoEntrega) : null, !!item.dataEntrega);
                         const corMundo = MUNDO_COLORS[(item.mundo || "").toUpperCase()] || COR_PADRAO;
                         return (
                           <tr key={idx} className="hover:bg-white/5 transition-colors">
