@@ -15,6 +15,13 @@
       "when": 1781491840069,
       "tag": "0001_wandering_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1781492032655,
+      "tag": "0002_charming_gideon",
+      "breakpoints": true
     }
   ]
 }

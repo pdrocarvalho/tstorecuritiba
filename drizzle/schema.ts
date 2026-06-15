@@ -13,6 +13,14 @@ import {
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const orderStatusEnum = pgEnum("order_status", ["Faturado", "Previsto", "Chegou"]);
 export const syncStatusEnum = pgEnum("sync_status", ["sucesso", "erro"]);
+export const notificationStatusEnum = pgEnum("notification_status", [
+  "PENDING_FATURADO",
+  "PENDING_PREVISTO",
+  "PENDING_CHEGOU",
+  "SENT_FATURADO",
+  "SENT_PREVISTO",
+  "SENT_CHEGOU"
+]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -68,7 +76,7 @@ export const pedidosRastreio = pgTable("pedidos_rastreio", {
   previsaoEntrega: timestamp("previsao_entrega"),
   dataEntrega: timestamp("data_entrega"),
   orderStatus: orderStatusEnum("order_status").notNull(),
-  notificationSentStatus: varchar("notification_sent_status", { length: 50 }).default("PENDING_FATURADO").notNull(),
+  notificationSentStatus: notificationStatusEnum("notification_sent_status").default("PENDING_FATURADO").notNull(),
   consultorId: integer("consultor_id").references(() => consultores.id, { onDelete: "set null" }),
   clienteId: integer("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
 
