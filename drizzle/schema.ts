@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   integer,
   serial,
@@ -67,8 +68,8 @@ export const pedidosRastreio = pgTable("pedidos_rastreio", {
   dataEntrega: timestamp("data_entrega"),
   orderStatus: orderStatusEnum("order_status").notNull(),
   notificationSentStatus: varchar("notification_sent_status", { length: 50 }).default("PENDING_FATURADO").notNull(),
-  consultorId: integer("consultor_id"),
-  clienteId: integer("cliente_id"),
+  consultorId: integer("consultor_id").references(() => consultores.id, { onDelete: "set null" }),
+  clienteId: integer("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
 
   // --- AS NOSSAS NOVAS COLUNAS PARA OS KPIs ---
   remetente: varchar("remetente", { length: 255 }),
@@ -130,3 +131,22 @@ export type NotificationStatus =
   | "SENT_FATURADO"
   | "SENT_PREVISTO"
   | "SENT_CHEGOU";
+
+export const pedidosRastreioRelations = relations(pedidosRastreio, ({ one }) => ({
+  consultor: one(consultores, {
+    fields: [pedidosRastreio.consultorId],
+    references: [consultores.id],
+  }),
+  cliente: one(clientes, {
+    fields: [pedidosRastreio.clienteId],
+    references: [clientes.id],
+  }),
+}));
+
+export const consultoresRelations = relations(consultores, ({ many }) => ({
+  pedidos: many(pedidosRastreio),
+}));
+
+export const clientesRelations = relations(clientes, ({ many }) => ({
+  pedidos: many(pedidosRastreio),
+}));
