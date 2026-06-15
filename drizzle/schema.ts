@@ -4,6 +4,7 @@ import {
   serial,
   pgEnum,
   pgTable,
+  index,
   text,
   timestamp,
   varchar,
@@ -78,7 +79,13 @@ export const pedidosRastreio = pgTable("pedidos_rastreio", {
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  orderStatusIdx: index("pedidos_order_status_idx").on(table.orderStatus),
+  notificationStatusIdx: index("pedidos_notification_status_idx").on(table.notificationSentStatus),
+  produtoSkuIdx: index("pedidos_produto_sku_idx").on(table.produtoSku),
+  consultorIdIdx: index("pedidos_consultor_id_idx").on(table.consultorId),
+  clienteIdIdx: index("pedidos_cliente_id_idx").on(table.clienteId),
+}));
 
 export type PedidoRastreio = typeof pedidosRastreio.$inferSelect;
 export type InsertPedidoRastreio = typeof pedidosRastreio.$inferInsert;

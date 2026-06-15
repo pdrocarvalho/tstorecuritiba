@@ -8,6 +8,13 @@
       "when": 1781491206351,
       "tag": "0000_brave_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1781491840069,
+      "tag": "0001_wandering_rafael_vega",
+      "breakpoints": true
     }
   ]
 }
