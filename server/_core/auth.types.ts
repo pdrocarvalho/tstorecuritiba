@@ -13,7 +13,7 @@ export interface AuthUser {
   name: string | null;
 }
 
-export interface JwtPayload {
+export interface AppJwtPayload {
   sub: number;
   email: string;
   role: UserRole;

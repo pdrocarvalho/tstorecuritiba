@@ -5,7 +5,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import jwt from "jsonwebtoken";
 import { env } from "./env";
-import { JwtPayload } from "./auth.types";
+import { AppJwtPayload } from "./auth.types";
 
 const JWT_SECRET = env.JWT_SECRET;
 
@@ -17,7 +17,7 @@ export function createContext({ req }: CreateExpressContextOptions) {
   if (!token) return { user: null };
 
   try {
-    const user = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const user = jwt.verify(token, JWT_SECRET) as unknown as AppJwtPayload;
     return { user };
   } catch {
     return { user: null };
