@@ -1,17 +1,11 @@
 import { useState, useEffect } from "react";
-import { getAuthToken, clearAuthToken } from "@/lib/auth"; // ← importa as funções centrais
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-}
+import { getAuthToken, clearAuthToken } from "@/lib/auth";
+import type { AuthUser } from "../../../../server/_core/auth.types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

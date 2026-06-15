@@ -113,8 +113,9 @@ app.post("/api/auth/login", async (req, res) => {
     const dbUser = await getUserByOpenId(email);
 
     // 5. Assina o JWT apenas com dados de autorização (SEC-08)
+    const payload: import("./_core/auth.types").JwtPayload = { sub: dbUser!.id, email, role: role as import("./_core/auth.types").UserRole };
     const authToken = jwt.sign(
-      { sub: dbUser?.id ?? email, email, role },
+      payload,
       JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -135,17 +136,18 @@ app.get("/api/auth/me", async (req, res) => {
 
   try {
     const token = authHeader.replace("Bearer ", "");
-    const decoded = jwt.verify(token, JWT_SECRET) as { sub: number | string; email: string; role: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as import("./_core/auth.types").JwtPayload;
 
     // Busca nome atualizado do banco (não armazenado no JWT)
     const dbUser = await getUserByOpenId(decoded.email);
 
-    return res.json({
+    const userResp: import("./_core/auth.types").AuthUser = {
       id: decoded.sub,
       email: decoded.email,
       role: decoded.role,
       name: dbUser?.name ?? "Usuário",
-    });
+    };
+    return res.json(userResp);
   } catch {
     return res.status(401).json({ message: "Token inválido." });
   }
