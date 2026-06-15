@@ -154,15 +154,9 @@ export default function Login() {
               </span>
             </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center py-6 gap-4">
-                <Loader2 className="animate-spin w-9 h-9" style={{ color: "#1A35A0" }} />
-                <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
-                  Validando credenciais...
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-5">
+            {/* Overlay de loading para não desmontar o GoogleLogin */}
+            <div className="relative">
+              <div className={`flex flex-col items-center gap-5 transition-opacity duration-300 ${loading ? 'opacity-0 pointer-events-none absolute inset-0' : 'opacity-100'}`}>
                 <p className="text-xs text-center leading-relaxed" style={{ color: "rgba(255,255,255,0.4)" }}>
                   Apenas contas com domínio <strong style={{ color: "rgba(255,255,255,0.65)" }}>@tramontinastore.com</strong> têm acesso a esta plataforma.
                 </p>
@@ -174,7 +168,16 @@ export default function Login() {
                   size="large"
                 />
               </div>
-            )}
+
+              {loading && (
+                <div className="flex flex-col items-center py-6 gap-4 relative z-10">
+                  <Loader2 className="animate-spin w-9 h-9" style={{ color: "#1A35A0" }} />
+                  <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
+                    Validando credenciais...
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 justify-center">
