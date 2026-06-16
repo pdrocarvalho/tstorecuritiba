@@ -97,12 +97,12 @@ export default function GestaoAvarias() {
     setForm({
       fabrica: formatUpper(av.FABRICA),
       ref: formatUpper(av.REF),
-      descricao: formatUpper(av.DESCRICAO || av.DESCRIÇÃO),
-      qtde: av.QTDE || "1",
+      descricao: formatUpper(av.DESCRICAO),
+      qtde: String(av.QTDE || "1"),
       nfEntrada: formatUpper(av.NOTA_FISCAL_DE_ENTRADA),
       cupomFiscal: formatUpper(av.CUPOM_FISCAL),
       motivo: formatUpper(av.MOTIVO) || "ACIDENTE",
-      responsavel: formatUpper(av.RESPONSAVEL || av.RESPONSÁVEL),
+      responsavel: formatUpper(av.RESPONSAVEL),
       tratativa: formatUpper(av.TRATATIVA) || "PENDENTE",
       status: formatUpper(av.STATUS) || "AGUARDANDO TRATATIVA",
       constaFisicamente: formatUpper(av.CONSTA_FISICAMENTE) || "SIM",
@@ -110,7 +110,7 @@ export default function GestaoAvarias() {
       nfSaida: formatUpper(av.NOTA_FISCAL_DE_SAIDA),
       nfReposicao: formatUpper(av.NOTA_FISCAL_DE_REPOSICAO),
       dataColeta: formatUpper(av.DATA_DA_COLETA),
-      observacoes: formatUpper(av.OBSERVACOES || av.OBSERVAÇÃO || "")
+      observacoes: formatUpper(av.OBSERVACOES)
     });
     setShowModal(true);
   };

@@ -99,6 +99,8 @@ export interface Avaria {
   NOTA_FISCAL_DE_ENTRADA?: string;
   CUPOM_FISCAL?: string;
   OBSERVACOES?: string;
+  RESPONSAVEL?: string;
+  COD__AVARIA?: string;
 }
 
 // =============================================================================

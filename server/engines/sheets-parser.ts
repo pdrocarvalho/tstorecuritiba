@@ -78,6 +78,7 @@ export function mapAvariaRow(
     if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
     if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
     if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
+    if (hLimpo.includes("RESPONSAVEL") || hLimpo.includes("RESPONSVEL")) obj.RESPONSAVEL = val;
   });
 
   return obj;
