@@ -62,7 +62,7 @@ export default function GestaoAvarias() {
     { enabled: isVinculado }
   );
 
-  const formatUpper = (val: string) => String(val || "").toUpperCase();
+  const formatUpper = (val: string | number | undefined | null) => String(val || "").toUpperCase();
 
   const mutationAdd = trpc.notifications.addAvaria.useMutation({
     onSuccess: () => { toast.success("AVARIA REGISTRADA COM SUCESSO!"); fecharTudo(); refetch(); },
@@ -124,7 +124,7 @@ export default function GestaoAvarias() {
   const confirmarPin = () => {
 
     if (pinModal.acao === "delete" && pinModal.alvo) {
-      mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber });
+      mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber! });
     } else if (pinModal.acao === "edit" && editingAvaria) {
       const linhaAtualizada = [
         editingAvaria.DATA_DE_ENTRADA || "", form.fabrica, editingAvaria.COD_AVARIA || "",
@@ -136,7 +136,7 @@ export default function GestaoAvarias() {
       ];
       mutationEdit.mutate({
         url: urlPlanilha,
-        rowNumber: editingAvaria.rowNumber,
+        rowNumber: editingAvaria.rowNumber!,
         row: linhaAtualizada.map(v => typeof v === 'string' ? v.toUpperCase() : v),
       });
     }
