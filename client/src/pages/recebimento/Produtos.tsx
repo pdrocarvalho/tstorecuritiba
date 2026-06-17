@@ -55,7 +55,7 @@ export default function RecebimentoFuturo() {
   useEffect(() => { if (isVinculado) refetch(); }, [isVinculado]);
 
   const { emTransito, mundos, remetentes, transportadoras, stats } = useMemo(() => {
-    const em = (todosPedidos as Pedido[]).filter(p => !p.dataEntrega);
+    const em = (todosPedidos as unknown as Pedido[]).filter(p => !p.dataEntrega);
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
 

@@ -38,7 +38,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="flex h-screen bg-brand-dark text-white overflow-hidden font-sans">
-      <Sidebar userName={user?.name} userEmail={user?.email} userRole={user?.role} />
+      <Sidebar userName={user?.name ?? undefined} userEmail={user?.email} userRole={user?.role} />
 
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         {/* Barra de Topo */}

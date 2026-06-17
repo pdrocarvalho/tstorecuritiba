@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { notificationsRouter } from "./notification.router";
 
-import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../db";
+import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../repositories/config.repository";
 
 export const appRouter = router({
   notifications: notificationsRouter,

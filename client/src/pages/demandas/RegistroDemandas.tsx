@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ClipboardList, AlertTriangle, TrendingUp, Save, User, Phone, PackageSearch, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
+import { useDemandas } from "@/_core/hooks/useDemandas";
 
 export default function RegistroDemandas() {
   const [tipo, setTipo] = useState<"ALERTA" | "VENDA">("ALERTA");
@@ -21,10 +22,10 @@ export default function RegistroDemandas() {
   // Ref para evitar duplo envio em cliques rápidos
   const enviando = useRef(false);
 
-  const salvarDemanda = trpc.notifications.saveDemanda.useMutation();
+  const { saveDemanda, isSaving } = useDemandas(urlPlanilha);
 
   // isSubmitting combina o isPending do tRPC com o ref de controle
-  const isSubmitting = salvarDemanda.isPending || enviando.current;
+  const isSubmitting = isSaving || enviando.current;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -70,7 +71,7 @@ export default function RegistroDemandas() {
     try {
       for (let i = 0; i < refsValidas.length; i++) {
         setProgresso({ atual: i + 1, total: refsValidas.length });
-        await salvarDemanda.mutateAsync({
+        await saveDemanda({
           url: urlPlanilha,
           aba: abaDestino,
           dados: [

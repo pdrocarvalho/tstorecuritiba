@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import MainLayout from "@/components/layout/MainLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useAvarias } from "@/_core/hooks/useAvarias";
 import { Link } from "wouter";
 import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -57,27 +58,13 @@ export default function GestaoAvarias() {
   const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: Avaria }>({ isOpen: false, acao: null });
   const { user } = useAuth();
 
-  const { data: todasAvarias = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
-    { url: urlPlanilha, mode: 'avarias' },
-    { enabled: isVinculado }
-  );
+  const { 
+    avarias: todasAvarias, isFetching, refetch, 
+    addAvaria, editAvaria, deleteAvaria,
+    isAdding, isEditing, isDeleting
+  } = useAvarias(urlPlanilha);
 
   const formatUpper = (val: string | number | undefined | null) => String(val || "").toUpperCase();
-
-  const mutationAdd = trpc.notifications.addAvaria.useMutation({
-    onSuccess: () => { toast.success("AVARIA REGISTRADA COM SUCESSO!"); fecharTudo(); refetch(); },
-    onError: (err) => toast.error("ERRO AO SALVAR: " + err.message)
-  });
-
-  const mutationEdit = trpc.notifications.editAvariaFull.useMutation({
-    onSuccess: () => { toast.success("AVARIA ATUALIZADA COM SUCESSO!"); fecharTudo(); refetch(); },
-    onError: (err) => toast.error("ERRO NA EDIÇÃO: " + err.message)
-  });
-
-  const mutationDelete = trpc.notifications.deleteAvariaRow.useMutation({
-    onSuccess: () => { toast.success("AVARIA EXCLUÍDA PERMANENTEMENTE."); fecharTudo(); refetch(); },
-    onError: (err) => toast.error("ERRO AO EXCLUIR: " + err.message)
-  });
 
   const fecharTudo = () => {
     setShowModal(false);
@@ -124,7 +111,7 @@ export default function GestaoAvarias() {
   const confirmarPin = () => {
 
     if (pinModal.acao === "delete" && pinModal.alvo) {
-      mutationDelete.mutate({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber! });
+      deleteAvaria({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber! }, { onSuccess: fecharTudo });
     } else if (pinModal.acao === "edit" && editingAvaria) {
       const linhaAtualizada = [
         editingAvaria.DATA_DE_ENTRADA || "", form.fabrica, editingAvaria.COD_AVARIA || "",
@@ -134,11 +121,11 @@ export default function GestaoAvarias() {
         "",
         form.observacoes
       ];
-      mutationEdit.mutate({
+      editAvaria({
         url: urlPlanilha,
         rowNumber: editingAvaria.rowNumber!,
         row: linhaAtualizada.map(v => typeof v === 'string' ? v.toUpperCase() : v),
-      });
+      }, { onSuccess: fecharTudo });
     }
   };
 
@@ -162,7 +149,7 @@ export default function GestaoAvarias() {
         form.lancadoSistema, form.tratativa, form.constaFisicamente, form.dataColeta,
         form.nfSaida, form.nfReposicao, form.status, "", form.observacoes
       ];
-      mutationAdd.mutate({ url: urlPlanilha, row: novaLinha.map(v => typeof v === 'string' ? v.toUpperCase() : v) });
+      addAvaria({ url: urlPlanilha, row: novaLinha.map(v => typeof v === 'string' ? v.toUpperCase() : v) }, { onSuccess: fecharTudo });
     }
   };
 
@@ -251,7 +238,7 @@ export default function GestaoAvarias() {
                 <tbody className="divide-y divide-white/5">
                   {avariasFiltradas.map((av: Avaria, idx: number) => {
                     const isExpanded = expandedRow === idx;
-                    const style = getTratativaStyle(av.TRATATIVA);
+                    const style = getTratativaStyle(av.TRATATIVA || "");
                     return (
                       <>
                         <tr key={idx} onClick={() => setExpandedRow(isExpanded ? null : idx)} className={`cursor-pointer ${isExpanded ? 'bg-white/5' : 'hover:bg-white/5'}`}>
@@ -273,9 +260,9 @@ export default function GestaoAvarias() {
                               {user?.role === "admin" && (
                                 <div className="absolute top-4 right-10 flex gap-2">
                                   <button onClick={() => abrirModalEdicao(av)} className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase hover:bg-blue-500/20"><Edit size={14} /> EDITAR</button>
-                                  <button onClick={() => pedirPin("delete", av)} disabled={mutationDelete.isPending}
+                                  <button onClick={() => pedirPin("delete", av)} disabled={isDeleting}
                                     className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm uppercase hover:bg-red-500/20 disabled:opacity-50">
-                                    <Trash2 size={14} /> {mutationDelete.isPending ? 'EXCLUINDO...' : 'EXCLUIR'}
+                                    <Trash2 size={14} /> {isDeleting ? 'EXCLUINDO...' : 'EXCLUIR'}
                                   </button>
                                 </div>
                               )}
@@ -407,7 +394,7 @@ export default function GestaoAvarias() {
 
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50 sticky bottom-0">
               <button onClick={fecharTudo} className="px-4 py-2 text-sm font-bold text-slate-600 uppercase">CANCELAR</button>
-              <button onClick={handleSalvarClicked} disabled={mutationAdd.isPending || mutationEdit.isPending}
+              <button onClick={handleSalvarClicked} disabled={isAdding || isEditing}
                 className={`flex items-center gap-2 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md uppercase disabled:opacity-50 ${editingAvaria ? 'bg-[#2563eb]' : 'bg-red-600'}`}>
                 <Save size={16} /> {editingAvaria ? "SALVAR ALTERAÇÕES" : "REGISTRAR AVARIA"}
               </button>
@@ -421,7 +408,7 @@ export default function GestaoAvarias() {
         acao={pinModal.acao}
         onClose={() => setPinModal({ isOpen: false, acao: null })}
         onConfirm={confirmarPin}
-        isPending={mutationEdit.isPending || mutationDelete.isPending}
+        isPending={isEditing || isDeleting}
       />
     </MainLayout>
   );

@@ -49,7 +49,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
 
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
     onSuccess: (data) => {
-      if (!data.success) return;
+      if (!data.success || !('alertasNotificados' in data)) return;
       setResultadoAutomacao({
         alertas: data.alertasNotificados ?? 0,
         alertasPorConsultor: data.alertasPorConsultor ?? {},
@@ -76,7 +76,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const kpis = useMemo(() => {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const em7Dias = new Date(hoje); em7Dias.setDate(hoje.getDate() + 7);
-    const emTransito = (todosPedidos as Pedido[]).filter(p => !p.dataEntrega);
+    const emTransito = (todosPedidos as unknown as Pedido[]).filter(p => !p.dataEntrega);
 
     let totalCaixas = 0;
     const notasMap = new Map<string, { notaFiscal: string; remetente: string; volumes: number }>();
@@ -121,7 +121,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       volumesPorRemetente,
       chegandoSemana: chegandoSemanaItens.length,
       chegandoSemanaItens: chegandoSemanaItens.sort((a, b) =>
-        new Date(a.previsaoEntrega).getTime() - new Date(b.previsaoEntrega).getTime()
+        new Date(a.previsaoEntrega || "").getTime() - new Date(b.previsaoEntrega || "").getTime()
       ),
       atrasados,
     };

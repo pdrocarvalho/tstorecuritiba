@@ -8,7 +8,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/trpc";
 import { OAuth2Client } from "google-auth-library";
-import { upsertUser, getUserByOpenId, updateUserRole } from "./db";
+import { upsertUser, getUserByOpenId, updateUserRole } from "./repositories/user.repository";
 import { env } from "./_core/env";
 
 const app = express();
@@ -55,103 +55,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const JWT_SECRET = env.JWT_SECRET;
-const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID;
-
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
-
-// Check de saúde do servidor
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+import { login, me } from "./controllers/auth.controller";
 
 /**
- * ENDPOINT: Login via Google
+ * ENDPOINTS DE AUTENTICAÇÃO REST
  */
-app.post("/api/auth/login", async (req, res) => {
-  const { token } = req.body;
-
-  if (!token) {
-    return res.status(400).json({ message: "Token do Google não fornecido." });
-  }
-
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      return res.status(401).json({ message: "E-mail não encontrado na conta Google." });
-    }
-
-    const { email, name, picture } = payload;
-
-    // 1. Valida o domínio — permite @tramontinastore.com e e-mails de exceção
-    if (!email.endsWith(`@${DOMINIO_PERMITIDO}`) && !EMAILS_EXCECAO.includes(email)) {
-      return res.status(403).json({
-        message: `Acesso negado. Apenas contas @${DOMINIO_PERMITIDO} podem acessar esta plataforma.`
-      });
-    }
-
-    // 2. Garante que o usuário existe no banco (cria se for o primeiro login)
-    await upsertUser({
-      openId: email,
-      email,
-      name: name ?? null,
-      loginMethod: "google",
-    });
-
-    // 3. Sincroniza a role com base na lista de administradores
-    const roleEsperada = ADMIN_EMAILS.includes(email) ? "admin" : "user";
-    await updateUserRole(email, roleEsperada);
-
-    const role = roleEsperada;
-
-    // 4. Busca o ID numérico do banco para usar como 'sub' no JWT
-    const dbUser = await getUserByOpenId(email);
-
-    // 5. Assina o JWT apenas com dados de autorização (SEC-08)
-    const jwtData: import("./_core/auth.types").AppJwtPayload = { sub: dbUser!.id, email, role: role as import("./_core/auth.types").UserRole };
-    const authToken = jwt.sign(
-      jwtData,
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    return res.json({ token: authToken, role, name });
-  } catch (error) {
-    console.error("Erro na verificação do Google:", error);
-    return res.status(401).json({ message: "Token do Google inválido ou expirado." });
-  }
-});
-
-/**
- * ENDPOINT: Validação de Sessão
- */
-app.get("/api/auth/me", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ message: "Não autenticado." });
-
-  try {
-    const token = authHeader.replace("Bearer ", "");
-    const decoded = jwt.verify(token, JWT_SECRET) as unknown as import("./_core/auth.types").AppJwtPayload;
-
-    // Busca nome atualizado do banco (não armazenado no JWT)
-    const dbUser = await getUserByOpenId(decoded.email);
-
-    const userResp: import("./_core/auth.types").AuthUser = {
-      id: decoded.sub,
-      email: decoded.email,
-      role: decoded.role,
-      name: dbUser?.name ?? "Usuário",
-    };
-    return res.json(userResp);
-  } catch {
-    return res.status(401).json({ message: "Token inválido." });
-  }
-});
+app.post("/api/auth/login", login);
+app.get("/api/auth/me", me);
 
 // Integração com tRPC — com contexto de autenticação
 export type AppRouter = typeof appRouter;

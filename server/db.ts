@@ -1,12 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, like } from "drizzle-orm";
 import { env } from "./_core/env";
-import {
-  users, consultores, clientes, produtos, pedidosRastreio,
-  syncLogs, googleSheetsConfig, syncHistory,
-  type InsertUser, type InsertProduto, type InsertPedidoRastreio, type InsertSyncLog,
-} from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -37,124 +31,8 @@ export async function getDb() {
   return _db;
 }
 
-async function requireDb(context: string) {
+export async function requireDb(context: string) {
   const db = await getDb();
   if (!db) throw new Error(`[DB:${context}] Banco de dados indisponível.`);
   return db;
-}
-
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("[DB:users] openId é obrigatório.");
-  const db = await requireDb("users");
-  await db.insert(users).values(user).onConflictDoUpdate({
-    target: users.openId,
-    set: { name: user.name, email: user.email, lastSignedIn: new Date() },
-  });
-}
-
-export async function getUserByOpenId(openId: string) {
-  const db = await requireDb("users");
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result[0] ?? undefined;
-}
-
-export async function updateUserRole(openId: string, role: "user" | "admin"): Promise<void> {
-  const db = await requireDb("users");
-  await db.update(users).set({ role }).where(eq(users.openId, openId));
-}
-
-export async function upsertProduto(produto: InsertProduto): Promise<void> {
-  const db = await requireDb("produtos");
-  await db.insert(produtos).values(produto).onConflictDoUpdate({
-    target: produtos.sku,
-    set: { descricao: produto.descricao },
-  });
-}
-
-export async function getPedidosByStatus(status: string) {
-  const db = await requireDb("pedidos");
-  return await db.select().from(pedidosRastreio).where(eq(pedidosRastreio.orderStatus, status as any));
-}
-
-export async function getPedidosPendentes() {
-  const db = await requireDb("pedidos");
-  return await db.select().from(pedidosRastreio).where(like(pedidosRastreio.notificationSentStatus, "PENDING_%"));
-}
-
-export async function insertPedidoRastreio(pedido: InsertPedidoRastreio) {
-  const db = await requireDb("pedidos");
-  return await db.insert(pedidosRastreio).values(pedido);
-}
-
-export async function updatePedidoRastreio(id: number, updates: Partial<InsertPedidoRastreio>): Promise<void> {
-  const db = await requireDb("pedidos");
-  await db.update(pedidosRastreio).set(updates).where(eq(pedidosRastreio.id, id));
-}
-
-export async function getConsultores() {
-  const db = await requireDb("consultores");
-  return await db.select().from(consultores);
-}
-
-export async function getClientes() {
-  const db = await requireDb("clientes");
-  return await db.select().from(clientes);
-}
-
-export async function getGoogleSheetsConfig() {
-  const db = await getDb();
-  if (!db) return null;
-  try {
-    const result = await db.select().from(googleSheetsConfig).limit(1);
-    return result[0] ?? null;
-  } catch (error) {
-    console.error("[DB] Erro ao buscar configuração do Sheets:", error);
-    return null;
-  }
-}
-
-export async function saveGoogleSheetsConfig(
-  sheetsUrl: string, 
-  configuredBy: number, 
-  fileName?: string // Novo parâmetro opcional
-): Promise<boolean> {
-  const db = await requireDb("sheetsConfig");
-  try {
-    const existing = await getGoogleSheetsConfig();
-    if (existing) {
-      await db.update(googleSheetsConfig)
-        .set({ sheetsUrl, fileName: fileName ?? existing.fileName, updatedAt: new Date() })
-        .where(eq(googleSheetsConfig.id, existing.id));
-    } else {
-      await db.insert(googleSheetsConfig).values({ sheetsUrl, configuredBy, fileName });
-    }
-    return true;
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("[Postgres] Erro ao salvar configurações:", error.message);
-      throw new Error(error.message);
-    } else {
-      console.error("[Postgres] Erro ao salvar configurações:", error);
-      throw new Error("Erro desconhecido ao salvar configurações");
-    }
-  }
-}
-
-export async function recordSyncHistory(params: {
-  sheetsUrl: string;
-  syncedBy: number;
-  novosPedidos: number;
-  novasPrevisoes: number;
-  chegadas: number;
-  status: "sucesso" | "erro";
-  mensagemErro?: string;
-}): Promise<boolean> {
-  const db = await requireDb("syncHistory");
-  await db.insert(syncHistory).values(params);
-  return true;
-}
-
-export async function insertSyncLog(log: InsertSyncLog): Promise<void> {
-  const db = await requireDb("syncLogs");
-  await db.insert(syncLogs).values(log);
 }

@@ -32,7 +32,7 @@ export function parseDataLimpa(dataRaw: unknown): Date | null {
       return new Date(p2, p1 - 1, p0); // Padrão BR
     }
   }
-  const d = new Date(dataRaw);
+  const d = new Date(str);
   if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   return null;
 }

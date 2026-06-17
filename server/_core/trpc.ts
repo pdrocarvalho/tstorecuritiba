@@ -9,22 +9,26 @@ import { AppJwtPayload } from "./auth.types";
 
 const JWT_SECRET = env.JWT_SECRET;
 
+import { verifyToken } from "../services/auth.service";
+
 // Contexto criado a cada requisição — lê o token do header Authorization
-export function createContext({ req }: CreateExpressContextOptions) {
+export async function createContext({ req }: CreateExpressContextOptions) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace("Bearer ", "");
 
   if (!token) return { user: null };
 
   try {
-    const user = jwt.verify(token, JWT_SECRET) as unknown as AppJwtPayload;
-    return { user };
+    const user = await verifyToken(token);
+    // Para manter a compatibilidade com o formato esperado pelo TRPC middleware
+    // O trpc.ts esperava user.sub e user.role (AppJwtPayload), então podemos mapear
+    return { user: { sub: user.id, email: user.email, role: user.role } as AppJwtPayload };
   } catch {
     return { user: null };
   }
 }
 
-export type Context = ReturnType<typeof createContext>;
+export type Context = Awaited<ReturnType<typeof createContext>>;
 
 const t = initTRPC.context<Context>().create();
 
