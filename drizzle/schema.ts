@@ -8,6 +8,8 @@ import {
   text,
   timestamp,
   varchar,
+  boolean,
+  date,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
@@ -21,6 +23,69 @@ export const notificationStatusEnum = pgEnum("notification_status", [
   "SENT_PREVISTO",
   "SENT_CHEGOU"
 ]);
+
+// ─── SISTEMA DE TAREFAS ─────────────────────────────────────────────────────
+export const taskCategoryEnum = pgEnum("task_category", [
+  "abertura", "fechamento", "estoque", "geral"
+]);
+
+export const taskPriorityEnum = pgEnum("task_priority", [
+  "alta", "media", "baixa"
+]);
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "pendente", "concluida", "nao_aplicavel"
+]);
+
+export const taskTargetProfileEnum = pgEnum("task_target_profile", [
+  "consultor", "adm", "todos"
+]);
+
+// Templates de tarefas recorrentes (configurados pelo Admin)
+export const taskTemplates = pgTable("task_templates", {
+  id: serial("id").primaryKey(),
+  titulo: text("titulo").notNull(),
+  descricao: text("descricao"),
+  categoria: taskCategoryEnum("categoria").notNull(),
+  perfilAlvo: taskTargetProfileEnum("perfil_alvo").notNull().default("consultor"),
+  diasSemana: text("dias_semana"), // JSON string: "[1,3,5]" = seg/qua/sex. NULL = todos os dias
+  condicional: boolean("condicional").default(false).notNull(),
+  condicaoTexto: text("condicao_texto"),
+  ordem: integer("ordem").default(0).notNull(),
+  ativo: boolean("ativo").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type TaskTemplate = typeof taskTemplates.$inferSelect;
+export type InsertTaskTemplate = typeof taskTemplates.$inferInsert;
+
+// Instâncias concretas de tarefas (geradas diariamente ou criadas como avulsas)
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => taskTemplates.id, { onDelete: "set null" }),
+  titulo: text("titulo").notNull(),
+  descricao: text("descricao"),
+  categoria: taskCategoryEnum("categoria").notNull(),
+  prioridade: taskPriorityEnum("prioridade").default("media"),
+  dataReferencia: date("data_referencia").notNull(),
+  prazo: timestamp("prazo"),
+  atribuidoPara: integer("atribuido_para").references(() => users.id, { onDelete: "set null" }),
+  status: taskStatusEnum("status").default("pendente").notNull(),
+  comentario: text("comentario"),
+  concluidoEm: timestamp("concluido_em"),
+  concluidoPor: integer("concluido_por").references(() => users.id, { onDelete: "set null" }),
+  condicional: boolean("condicional").default(false).notNull(),
+  condicaoTexto: text("condicao_texto"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  dataReferenciaIdx: index("tasks_data_referencia_idx").on(table.dataReferencia),
+  atribuidoParaIdx: index("tasks_atribuido_para_idx").on(table.atribuidoPara),
+  statusIdx: index("tasks_status_idx").on(table.status),
+  categoriaIdx: index("tasks_categoria_idx").on(table.categoria),
+}));
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),

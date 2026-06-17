@@ -17,6 +17,7 @@ import RecebimentoHistorico from "./pages/recebimento/Historico";
 import GestaoAvarias from "./pages/avarias/Avarias";
 import RegistroDemandas from "./pages/demandas/RegistroDemandas";
 import VincularArquivos from "./pages/configuracoes/VincularArquivos";
+import Tarefas from "./pages/tarefas/Tarefas";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -66,6 +67,7 @@ export default function App() {
             <ProtectedRoute path={ROUTES.recebimento.historico} component={RecebimentoHistorico} />
             <ProtectedRoute path={ROUTES.avarias} component={GestaoAvarias} />
             <ProtectedRoute path="/demandas" component={RegistroDemandas} />
+            <ProtectedRoute path="/tarefas" component={Tarefas} />
             <ProtectedRoute path="/configuracoes" component={VincularArquivos} />
 
             <Route component={NotFound} />

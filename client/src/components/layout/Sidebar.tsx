@@ -2,7 +2,7 @@
  * client/src/components/layout/Sidebar.tsx
  */
 import { Link, useLocation } from "wouter";
-import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList, Settings, ShieldCheck, User } from "lucide-react";
+import { PackageSearch, CheckCircle, Store, LogOut, AlertOctagon, ClipboardList, ClipboardCheck, Settings, ShieldCheck, User } from "lucide-react";
 import { clearAuthToken } from "@/lib/auth";
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ export default function Sidebar({ userName, userEmail, userRole }: SidebarProps)
     { path: "/recebimento/produtos", label: "Recebimento Futuro", icon: PackageSearch },
     { path: "/recebimento/historico", label: "Histórico de Entregas", icon: CheckCircle },
     { path: "/demandas", label: "Registro de Demandas", icon: ClipboardList },
+    { path: "/tarefas", label: "Tarefas da Equipe", icon: ClipboardCheck },
     { path: "/avarias", label: "Gestão de Avarias", icon: AlertOctagon },
     { path: "/configuracoes", label: "Configurações", icon: Settings },
   ];

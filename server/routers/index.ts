@@ -5,11 +5,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { notificationsRouter } from "./notification.router";
+import { taskRouter } from "./task.router";
 
 import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../repositories/config.repository";
 
 export const appRouter = router({
   notifications: notificationsRouter,
+  tasks: taskRouter,
 
   admin: router({
     getConfig: adminProcedure.query(async () => {

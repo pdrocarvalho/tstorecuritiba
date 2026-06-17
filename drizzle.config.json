@@ -1,9 +1,0 @@
-{
-  "schema": "./drizzle/schema.ts",
-  "out": "./drizzle/migrations",
-  "dialect": "postgresql",
-  "driver": "pg",
-  "dbCredentials": {
-    "connectionString": "postgresql://postgres:10362701%40Drope@db.twtpdrfnmefkiohilnwz.supabase.co:5432/postgres?sslmode=require"
-  }
-}

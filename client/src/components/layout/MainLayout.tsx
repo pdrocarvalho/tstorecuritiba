@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/recebimento/produtos": "Recebimento Futuro",
   "/recebimento/historico": "Histórico de Entregas",
   "/demandas": "Registro de Demandas",
+  "/tarefas": "Tarefas da Equipe",
   "/avarias": "Gestão de Avarias",
   "/configuracoes": "Configurações do Sistema",
 };
