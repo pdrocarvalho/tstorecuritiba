@@ -29,15 +29,12 @@ export const taskRouter = router({
   /** Busca as tarefas do dia do usuário logado (lazy generation) */
   getMyTasks: protectedProcedure
     .input(z.object({ data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
-    .query(async ({ ctx, input }) => {
-      const userId = ctx.user.sub;
-
+    .query(async ({ input }) => {
       // Lazy generation: se não houver tarefas para o dia, gera automaticamente
-      const existing = await getTasksByDate(input.data, userId);
+      const existing = await getTasksByDate(input.data);
       if (existing.length === 0) {
-        const consultorIds = await getConsultorUserIds();
-        await generateDailyTasks(input.data, consultorIds);
-        return getTasksByDate(input.data, userId);
+        await generateDailyTasks(input.data);
+        return getTasksByDate(input.data);
       }
 
       return existing;
@@ -145,7 +142,6 @@ export const taskRouter = router({
   generateDailyTasks: adminProcedure
     .input(z.object({ data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
     .mutation(async ({ input }) => {
-      const consultorIds = await getConsultorUserIds();
-      return generateDailyTasks(input.data, consultorIds);
+      return generateDailyTasks(input.data);
     }),
 });
