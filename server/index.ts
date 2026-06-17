@@ -63,6 +63,11 @@ import { login, me } from "./controllers/auth.controller";
 app.post("/api/auth/login", login);
 app.get("/api/auth/me", me);
 
+// Health check para o Render
+app.get("/health", (_req, res) => {
+  res.status(200).send("OK");
+});
+
 // Integração com tRPC — com contexto de autenticação
 export type AppRouter = typeof appRouter;
 
