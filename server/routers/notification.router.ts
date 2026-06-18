@@ -10,7 +10,7 @@ import {
   updateFullRow,
   deleteSheetRow
 } from "../engines/sync.engine";
-import { rodarAutomacaoLogistica } from "../engines/notification.engine";
+import { rodarAutomacaoLogistica, aplicarResolucaoConflito } from "../engines/notification.engine";
 
 const SheetRowDTO = z.array(z.union([z.string(), z.number(), z.boolean(), z.null(), z.undefined()]));
 
@@ -23,6 +23,20 @@ export const notificationsRouter = router({
     }))
     .mutation(async ({ input }) => {
       return await rodarAutomacaoLogistica(input.urlRecebimento, input.urlDemandas);
+    }),
+
+  resolverConflitosLogistica: protectedProcedure
+    .input(z.object({
+      urlDemandas: z.string().url(),
+      resolucoes: z.array(z.object({
+        aba: z.string(),
+        rowNumber: z.number(),
+        newStatus: z.string(),
+        payloadWebhook: z.any().optional()
+      }))
+    }))
+    .mutation(async ({ input }) => {
+      return await aplicarResolucaoConflito(input.urlDemandas, input.resolucoes);
     }),
 
   getLiveData: protectedProcedure

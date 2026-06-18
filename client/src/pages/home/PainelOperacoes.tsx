@@ -30,11 +30,14 @@ interface ResultadoAutomacao {
   vendasTemRegistros: boolean;
 }
 
+import { ConflictModal } from "./components/ConflictModal";
+
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
   const [modalAberto, setModalAberto] = useState<ModalTipo>(null);
+  const [conflitosLogistica, setConflitosLogistica] = useState<any[]>([]);
   const isVinculado = !!urlPlanilha;
 
   const { data: todosPedidos = [] } = trpc.notifications.getLiveData.useQuery(
@@ -48,16 +51,24 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   });
 
   const automacao = trpc.notifications.rodarAutomacaoDemandas.useMutation({
-    onSuccess: (data) => {
-      if (!data.success || !('alertasNotificados' in data)) return;
-      setResultadoAutomacao({
-        alertas: data.alertasNotificados ?? 0,
-        alertasPorConsultor: data.alertasPorConsultor ?? {},
-        alertasTemRegistros: data.alertasTemRegistros ?? false,
-        vendas: data.vendasNotificadas ?? 0,
-        vendasPorConsultor: data.vendasPorConsultor ?? {},
-        vendasTemRegistros: data.vendasTemRegistros ?? false,
-      });
+    onSuccess: (data: any) => {
+      if (!data.success) return;
+      if (data.conflitos && data.conflitos.length > 0) {
+        setConflitosLogistica(data.conflitos);
+      }
+      
+      // We will only set the automation results if it was fully successful without manual pauses, 
+      // or we can just ignore the count visualization if there are conflicts.
+      if (data.alertasNotificados !== undefined) {
+        setResultadoAutomacao({
+          alertas: data.alertasNotificados ?? 0,
+          alertasPorConsultor: data.alertasPorConsultor ?? {},
+          alertasTemRegistros: data.alertasTemRegistros ?? false,
+          vendas: data.vendasNotificadas ?? 0,
+          vendasPorConsultor: data.vendasPorConsultor ?? {},
+          vendasTemRegistros: data.vendasTemRegistros ?? false,
+        });
+      }
     }
   });
 

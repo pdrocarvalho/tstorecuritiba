@@ -7,7 +7,7 @@
  */
 
 import { google, sheets_v4 } from "googleapis";
-import { parseDataLimpa } from "./sheets-parser";
+import { parseDataLimpa, parseHeaders, mapRecebimentoRow } from "./sheets-parser";
 import { getGoogleAuth } from "./google.helpers";
 import { env } from "../_core/env";
 
@@ -20,6 +20,12 @@ export interface DbRecord {
   dataEmbarque: Date | null;
   previsao: string;
   dataEntrega: string;
+  quantidade: number;
+  descricao: string;
+  fornecedor: string;
+  nf: string;
+  transportadora: string;
+  volumes: number;
 }
 
 export type StatusDemanda = "AGUARDANDO" | "FATURADA" | "PREVISÃO" | "CHEGOU";
@@ -40,19 +46,38 @@ export async function fetchDbRecords(sheets?: sheets_v4.Sheets): Promise<DbRecor
 
   const dbResponse = await sheets.spreadsheets.values.get({
     spreadsheetId: dbSpreadsheetId,
-    range: "A:O",
+    range: "A:O", // Mantenha A:O ou expanda conforme necessário
   });
 
   const dbRows = dbResponse.data.values || [];
+  if (dbRows.length < 2) return [];
 
-  return dbRows
-    .map(r => ({
-      ref: String(r[0] || "").toUpperCase().trim(),
-      dataEmbarque: parseDataLimpa(r[12]),           // Coluna M
-      previsao: r[13] ? String(r[13]).trim() : "",   // Coluna N
-      dataEntrega: r[14] ? String(r[14]).trim() : "", // Coluna O
-    }))
-    .filter(r => r.ref);
+  const headerRow = dbRows[0];
+  const { originais, limpos } = parseHeaders(headerRow);
+
+  const records: DbRecord[] = [];
+  
+  for (let i = 1; i < dbRows.length; i++) {
+    const row = dbRows[i];
+    const rec = mapRecebimentoRow(originais, limpos, row, i + 1);
+    
+    if (rec.produtoSku) {
+      records.push({
+        ref: String(rec.produtoSku),
+        dataEmbarque: rec.dataEmbarque as Date | null,
+        previsao: rec.previsaoEntrega ? rec.previsaoEntrega.toLocaleDateString('pt-BR') : (String(rec.previsao || "")),
+        dataEntrega: rec.dataEntrega ? rec.dataEntrega.toLocaleDateString('pt-BR') : (String(rec.data_entrega || "")),
+        quantidade: Number(rec.quantidade) || 0,
+        descricao: String(rec.descricao || "-").toUpperCase(),
+        fornecedor: String(rec.remetente || "-").toUpperCase(),
+        nf: String(rec.notaFiscal || "-"),
+        transportadora: String(rec.transportadora || "-").toUpperCase(),
+        volumes: Number(rec.volumesCaixas) || 0
+      });
+    }
+  }
+
+  return records;
 }
 
 // ---------------------------------------------------------------------------

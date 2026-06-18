@@ -103,6 +103,8 @@ export function mapDemandaRow(
     if (hLimpo.includes("CONTATO")) obj.contato = val;
     if (isRefHeader(hLimpo)) obj.referencia = String(val).trim();
     if (hLimpo.includes("STATUS")) obj.status = val;
+    if (hLimpo === "QTDE" || hLimpo.includes("QUANTIDADE")) obj.quantidade = parseInt(String(val).replace(/\D/g, ""), 10) || 1;
+    if (hLimpo.includes("THREAD") || hLimpo === "ID") obj.threadId = val;
   });
 
   return obj;

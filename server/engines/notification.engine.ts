@@ -1,107 +1,265 @@
-/**
- * server/engines/notification.engine.ts
- *
- * Motor de processamento logístico INTELIGENTE.
- * Utiliza a Regra Cronológica (Linha do Tempo) para garantir que
- * demandas só sejam atualizadas com base em cargas faturadas APÓS a data do pedido.
- *
- * Agora utiliza o módulo cross-reference.ts para evitar duplicação (ARCH-03).
- */
-
 import { google } from "googleapis";
 import { extractSpreadsheetId } from "./sheets-client";
 import { getGoogleAuth, parseDataLimpa } from "./google.helpers";
-import { fetchDbRecords, determinarStatusDemanda } from "./cross-reference";
+import { fetchDbRecords, DbRecord } from "./cross-reference";
+import { DemandaRecord, parseHeaders, mapDemandaRow } from "./sheets-parser";
+import { env } from "../_core/env";
 
-// =============================================================================
-// LÓGICA PRINCIPAL DE AUTOMAÇÃO
-// =============================================================================
+export type StatusDemanda = "AGUARDANDO" | "FATURADA" | "PREVISÃO" | "CHEGOU";
+
+const hierarchy = { "AGUARDANDO": 0, "FATURADA": 1, "PREVISÃO": 2, "CHEGOU": 3 };
+const getRank = (s: string) => hierarchy[s as keyof typeof hierarchy] || 0;
+
+function determinarStatusDaCarga(carga: DbRecord): StatusDemanda {
+  if (carga.dataEntrega && carga.dataEntrega !== "-" && carga.dataEntrega !== "") return "CHEGOU";
+  if (carga.previsao && carga.previsao !== "-" && carga.previsao !== "") return "PREVISÃO";
+  return "FATURADA";
+}
 
 export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemandas: string) {
   try {
     const auth = getGoogleAuth();
     const sheets = google.sheets({ version: "v4", auth });
 
-    // 1. LÊ O BANCO DE DADOS BRUTO (usando o módulo compartilhado)
+    // 1. LÊ O BANCO DE DADOS BRUTO E FILTRA CARGAS VÁLIDAS
     const dbRecords = await fetchDbRecords(sheets);
 
-    // 2. FUNÇÃO QUE PROCESSA CADA ABA (ALERTA E VENDA)
-    const processarAba = async (abaNome: string): Promise<{
-      count: number;
-      porConsultor: Record<string, number>;
-      temRegistros: boolean;
-    }> => {
-      let count = 0;
-      const porConsultor: Record<string, number> = {};
+    const demId = extractSpreadsheetId(urlDemandas);
+    if (!demId) throw new Error("URL de Demandas inválida");
 
-      const demId = extractSpreadsheetId(urlDemandas);
-      if (!demId) return { count, porConsultor, temRegistros: false };
+    // 2. LÊ AS DUAS ABAS DE DEMANDA
+    const abas = ["DB-ALERTA_DE_DEMANDA", "DB-VENDA_FUTURA"];
+    let allDemands: (DemandaRecord & { aba: string, originalIndex: number, isVenda: boolean })[] = [];
 
-      const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${abaNome}'!A:G` });
-      const demRows = demRes.data.values || [];
+    for (const aba of abas) {
+      const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${aba}'!A:J` });
+      const rows = demRes.data.values || [];
+      if (rows.length < 2) continue;
 
-      const temRegistros = demRows.length > 1;
+      const { originais, limpos } = parseHeaders(rows[0]);
 
-      for (let i = 1; i < demRows.length; i++) {
-        const row = demRows[i];
-        const dataRegistroRaw = row[0];
-        const consultor = String(row[1] || "SEM CONSULTOR").toUpperCase().trim();
-        const ref = String(row[4] || "").toUpperCase().trim();
-        const statusFisico = String(row[5] || "AGUARDANDO").toUpperCase().trim();
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const dem = mapDemandaRow(originais, limpos, row, i + 1);
+        if (!dem.referencia || !dem.data || String(dem.status).toUpperCase() === "CHEGOU") continue;
 
-        if (!ref || statusFisico === "CHEGOU") continue;
+        allDemands.push({
+          ...dem,
+          aba,
+          originalIndex: i + 1,
+          isVenda: aba === "DB-VENDA_FUTURA",
+          dataParseada: parseDataLimpa(dem.data)
+        } as any);
+      }
+    }
 
-        const dataRegistro = parseDataLimpa(dataRegistroRaw);
-        if (!dataRegistro) continue;
+    // Filtrar apenas com data válida
+    allDemands = allDemands.filter(d => d.dataParseada);
 
-        // Usa a função compartilhada para determinar o status
-        const bestStatus = determinarStatusDemanda(ref, dataRegistro, dbRecords);
+    const conflitos = [];
+    const updatesToApply: any[] = [];
+    const webhookPayloads: any[] = [];
+    
+    let webhookUrl = env.APPS_SCRIPT_WEBHOOK_URL;
 
-        const hierarchy = { "AGUARDANDO": 0, "FATURADA": 1, "PREVISÃO": 2, "CHEGOU": 3 };
-        const currentRank = hierarchy[statusFisico as keyof typeof hierarchy] || 0;
-        const newRank = hierarchy[bestStatus as keyof typeof hierarchy] || 0;
+    // Agrupar por REF
+    const uniqueRefs = Array.from(new Set(allDemands.map(d => String(d.referencia))));
 
-        if (newRank > currentRank) {
-          const rowNumber = i + 1;
-          console.log(`[Engine] Evolução detectada na ref ${ref} (Linha ${rowNumber}): ${statusFisico} -> ${bestStatus} | Consultor: ${consultor}`);
+    for (const ref of uniqueRefs) {
+      const demandsForRef = allDemands.filter(d => d.referencia === ref);
+      
+      // Clona os dbRecords daquela referência para podermos deduzir as quantidades localmente
+      const shipmentsForRef = dbRecords
+        .filter(s => s.ref === ref && s.quantidade > 0)
+        .map(s => ({ ...s }));
 
-          const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      if (shipmentsForRef.length === 0) continue; // Sem oferta
 
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: demId,
-            range: `'${abaNome}'!F${rowNumber}:G${rowNumber}`,
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values: [[bestStatus, hoje]] }
-          });
+      // ORDENAÇÃO: 
+      // 1. Status atual (quem já tem alocação - ex: FATURADA - continua tendo prioridade)
+      // 2. Prioridade (Venda Futura > Alerta)
+      // 3. Data mais antiga (Cronologia)
+      demandsForRef.sort((a, b) => {
+        const rankA = getRank(String(a.status).toUpperCase());
+        const rankB = getRank(String(b.status).toUpperCase());
+        if (rankA !== rankB) return rankB - rankA;
 
-          count++;
-          porConsultor[consultor] = (porConsultor[consultor] || 0) + 1;
+        const prioA = a.isVenda ? 1 : 0;
+        const prioB = b.isVenda ? 1 : 0;
+        if (prioA !== prioB) return prioB - prioA;
+
+        return (a as any).dataParseada.getTime() - (b as any).dataParseada.getTime();
+      });
+
+      // ALOCAR DEMANDAS JÁ EM ANDAMENTO (Rank > 0)
+      for (const dem of demandsForRef.filter(d => getRank(String(d.status).toUpperCase()) > 0)) {
+        const ship = shipmentsForRef.find(s => s.quantidade > 0 && s.dataEmbarque && s.dataEmbarque.getTime() >= (dem as any).dataParseada.getTime());
+        if (ship) {
+          const qty = Number(dem.quantidade) || 1;
+          const take = Math.min(qty, ship.quantidade);
+          ship.quantidade -= take;
+          
+          const newStatus = determinarStatusDaCarga(ship);
+          const currentRank = getRank(String(dem.status).toUpperCase());
+          const newRank = getRank(newStatus);
+          
+          if (newRank > currentRank) {
+            updatesToApply.push({ dem, newStatus, ship });
+          }
         }
       }
 
-      return { count, porConsultor, temRegistros };
-    };
+      // DEMANDAS PENDENTES (Rank === 0 -> AGUARDANDO)
+      const remainingVendas = demandsForRef.filter(d => getRank(String(d.status).toUpperCase()) === 0 && d.isVenda);
+      const remainingAlertas = demandsForRef.filter(d => getRank(String(d.status).toUpperCase()) === 0 && !d.isVenda);
 
-    const alertas = await processarAba("DB-ALERTA_DE_DEMANDA");
-    const vendas = await processarAba("DB-VENDA_FUTURA");
+      const processPending = (group: any[], tipoName: string) => {
+        if (group.length === 0) return true;
+
+        // Calcula oferta válida (total de todos os shipments restantes aplicáveis à demanda mais velha desse grupo)
+        // Simplificação: apenas soma todos os shipments restantes para bater o total.
+        const totalRemainingSupply = shipmentsForRef.reduce((sum, s) => sum + s.quantidade, 0);
+        const totalDemandQty = group.reduce((sum, d) => sum + (Number(d.quantidade) || 1), 0);
+
+        if (totalRemainingSupply > 0 && totalRemainingSupply < totalDemandQty) {
+          // CONFLITO!
+          conflitos.push({
+            ref,
+            tipo: tipoName,
+            demandas: group,
+            ofertaDisponivel: totalRemainingSupply,
+            cargas: shipmentsForRef.filter(s => s.quantidade > 0)
+          });
+          return false; // Pausa este nível para esta ref
+        }
+
+        // Se tem oferta >= demanda, aloca automaticamente
+        for (const dem of group) {
+          const ship = shipmentsForRef.find(s => s.quantidade > 0 && s.dataEmbarque && s.dataEmbarque.getTime() >= dem.dataParseada.getTime());
+          if (ship) {
+            const qty = Number(dem.quantidade) || 1;
+            const take = Math.min(qty, ship.quantidade);
+            ship.quantidade -= take;
+            const newStatus = determinarStatusDaCarga(ship);
+            updatesToApply.push({ dem, newStatus, ship });
+          }
+        }
+        return true;
+      };
+
+      const resolvedVendas = processPending(remainingVendas, "VENDA_FUTURA");
+      if (resolvedVendas) {
+        processPending(remainingAlertas, "ALERTA_DE_DEMANDA");
+      }
+    }
+
+    // APLICAR AS ATUALIZAÇÕES AUTOMÁTICAS NO GOOGLE SHEETS
+    let updatesApplied = 0;
+    const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+    for (const update of updatesToApply) {
+      const { dem, newStatus, ship } = update;
+      const rowNumber = dem.originalIndex;
+      
+      // As colunas são F=QTDE, G=STATUS, H=THREAD_ID
+      // Vamos atualizar a G (Status)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: demId,
+        range: `'${dem.aba}'!G${rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[newStatus]] }
+      });
+      
+      updatesApplied++;
+      
+      // Prepara payload para o Webhook do Apps Script
+      if (webhookUrl) {
+         webhookPayloads.push({
+            tipoDemanda: dem.isVenda ? "VENDA FUTURA" : "ALERTA DE DEMANDA",
+            consultor: dem.consultor,
+            cliente: dem.cliente,
+            contato: dem.contato,
+            referencia: dem.referencia,
+            status: newStatus,
+            ehNovoRegistro: !dem.threadId,
+            statusMudou: true,
+            statusAnterior: String(dem.status).toUpperCase(),
+            threadId: dem.threadId || "",
+            dadosCarga: {
+               descricao: ship.descricao,
+               nf: ship.nf,
+               fornecedor: ship.fornecedor,
+               transportadora: ship.transportadora,
+               volumes: ship.volumes,
+               dataEmbarque: ship.dataEmbarque ? ship.dataEmbarque.toLocaleDateString('pt-BR') : "-",
+               previsao: ship.previsao || "-",
+               dataEntrega: ship.dataEntrega || "-"
+            },
+            aba: dem.aba,
+            rowNumber: rowNumber
+         });
+      }
+    }
+
+    // DISPARAR WEBHOOKS EM BACKGROUND
+    if (webhookUrl && webhookPayloads.length > 0) {
+      Promise.all(webhookPayloads.map(payload => 
+        fetch(webhookUrl!, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }).catch(err => console.log("Erro no Webhook:", err))
+      ));
+    }
 
     return {
       success: true,
-      alertasNotificados: alertas.count,
-      alertasPorConsultor: alertas.porConsultor,
-      alertasTemRegistros: alertas.temRegistros,
-      vendasNotificadas: vendas.count,
-      vendasPorConsultor: vendas.porConsultor,
-      vendasTemRegistros: vendas.temRegistros,
-      mensagem: `Processamento Logístico Concluído. ${alertas.count + vendas.count} estágios evoluídos na planilha.`
+      updatesApplied,
+      conflitos: conflitos,
+      mensagem: `Processamento Concluído. ${updatesApplied} estágios evoluídos. ${conflitos.length} conflitos detectados.`
     };
+
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("[NotificationEngine] Erro geral ao disparar webhook:", error.message);
-      return { success: false, erro: error.message };
-    } else {
-      console.error("[NotificationEngine] Erro geral ao disparar webhook:", error);
-      return { success: false, erro: "Erro desconhecido" };
+      throw new Error(`Erro ao rodar automação: ${error.message}`);
     }
+    throw new Error("Erro desconhecido ao rodar automação");
+  }
+}
+
+export async function aplicarResolucaoConflito(urlDemandas: string, resolucoes: any[]) {
+  try {
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    const demId = extractSpreadsheetId(urlDemandas);
+    if (!demId) throw new Error("URL de Demandas inválida");
+
+    const webhookUrl = env.APPS_SCRIPT_WEBHOOK_URL;
+
+    for (const res of resolucoes) {
+      // Atualiza a Coluna G (Status)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: demId,
+        range: `'${res.aba}'!G${res.rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[res.newStatus]] }
+      });
+
+      // Dispara o Webhook se houver payload
+      if (webhookUrl && res.payloadWebhook) {
+        // Assegura que o status no payload reflita a escolha
+        res.payloadWebhook.status = res.newStatus;
+        fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(res.payloadWebhook)
+        }).catch(err => console.log("Erro no Webhook da resolução:", err));
+      }
+    }
+
+    return { success: true, count: resolucoes.length };
+  } catch (error: any) {
+    throw new Error(`Erro ao aplicar resolução manual: ${error.message}`);
   }
 }

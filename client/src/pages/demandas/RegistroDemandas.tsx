@@ -16,7 +16,7 @@ export default function RegistroDemandas() {
   const [tipo, setTipo] = useState<"ALERTA" | "VENDA">("ALERTA");
   const [urlPlanilha] = useState(() => localStorage.getItem("url_demandas") || "");
   const [form, setForm] = useState({ consultor: "", cliente: "", contato: "" });
-  const [referencias, setReferencias] = useState<string[]>([""]);
+  const [referencias, setReferencias] = useState<{ref: string, qtd: number}[]>([{ref: "", qtd: 1}]);
   const [progresso, setProgresso] = useState<{ atual: number; total: number } | null>(null);
 
   // Ref para evitar duplo envio em cliques rápidos
@@ -39,13 +39,18 @@ export default function RegistroDemandas() {
     setForm({ ...form, contato: v });
   };
 
-  const handleAddRef = () => setReferencias([...referencias, ""]);
+  const handleAddRef = () => setReferencias([...referencias, {ref: "", qtd: 1}]);
   const handleRemoveRef = (index: number) => {
     if (referencias.length > 1) setReferencias(referencias.filter((_, i) => i !== index));
   };
   const handleRefChange = (index: number, value: string) => {
     const newRefs = [...referencias];
-    newRefs[index] = value.toUpperCase();
+    newRefs[index].ref = value.toUpperCase();
+    setReferencias(newRefs);
+  };
+  const handleQtdChange = (index: number, value: string) => {
+    const newRefs = [...referencias];
+    newRefs[index].qtd = parseInt(value, 10) || 1;
     setReferencias(newRefs);
   };
 
@@ -57,7 +62,7 @@ export default function RegistroDemandas() {
 
     if (!urlPlanilha) return toast.error("Vá em Configurações e vincule a planilha de Demandas primeiro.");
 
-    const refsValidas = referencias.filter(r => r.trim() !== "");
+    const refsValidas = referencias.filter(r => r.ref.trim() !== "");
     if (!form.consultor || !form.cliente || refsValidas.length === 0) {
       return toast.warning("Preencha os campos obrigatórios e adicione pelo menos uma referência!");
     }
@@ -71,6 +76,8 @@ export default function RegistroDemandas() {
     try {
       for (let i = 0; i < refsValidas.length; i++) {
         setProgresso({ atual: i + 1, total: refsValidas.length });
+        
+        // A=DATA | B=CONSULTOR | C=CLIENTE | D=CONTATO | E=REF | F=QTDE | G=STATUS | H=THREAD_ID
         await saveDemanda({
           url: urlPlanilha,
           aba: abaDestino,
@@ -79,7 +86,8 @@ export default function RegistroDemandas() {
             form.consultor.toUpperCase(),
             form.cliente.toUpperCase(),
             form.contato,
-            refsValidas[i].trim(),
+            refsValidas[i].ref.trim(),
+            refsValidas[i].qtd,
             "AGUARDANDO",
             ""
           ]
@@ -87,7 +95,7 @@ export default function RegistroDemandas() {
       }
       toast.success(`${tipo === "ALERTA" ? "Alerta(s)" : "Venda(s)"} registrado(s) com sucesso!`);
       setForm({ consultor: "", cliente: "", contato: "" });
-      setReferencias([""]);
+      setReferencias([{ref: "", qtd: 1}]);
     } catch (err: unknown) {
       if (err instanceof Error) {
         toast.error("ERRO: " + err.message);
@@ -186,13 +194,22 @@ export default function RegistroDemandas() {
               </div>
 
               <div className="space-y-3">
-                {referencias.map((ref, index) => (
+                {referencias.map((refObj, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <Input
-                      value={ref}
+                      value={refObj.ref}
                       onChange={(e) => handleRefChange(index, e.target.value)}
                       placeholder="EX: 123456"
-                      className="font-mono bg-black/40 border-white/10 text-white uppercase"
+                      className="font-mono bg-black/40 border-white/10 text-white uppercase flex-1"
+                      disabled={isDisabled}
+                    />
+                    <Input
+                      type="number"
+                      min="1"
+                      value={refObj.qtd || 1}
+                      onChange={(e) => handleQtdChange(index, e.target.value)}
+                      placeholder="Qtd"
+                      className="w-24 bg-black/40 border-white/10 text-white text-center"
                       disabled={isDisabled}
                     />
                     <button
