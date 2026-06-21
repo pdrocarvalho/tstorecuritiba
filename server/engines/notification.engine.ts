@@ -56,7 +56,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     // Filtrar apenas com data válida
     allDemands = allDemands.filter(d => d.dataParseada);
 
-    const conflitos = [];
+    const conflitos: any[] = [];
     const updatesToApply: any[] = [];
     const webhookPayloads: any[] = [];
     

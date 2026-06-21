@@ -65,8 +65,8 @@ export async function fetchDbRecords(sheets?: sheets_v4.Sheets): Promise<DbRecor
       records.push({
         ref: String(rec.produtoSku),
         dataEmbarque: rec.dataEmbarque as Date | null,
-        previsao: rec.previsaoEntrega ? rec.previsaoEntrega.toLocaleDateString('pt-BR') : (String(rec.previsao || "")),
-        dataEntrega: rec.dataEntrega ? rec.dataEntrega.toLocaleDateString('pt-BR') : (String(rec.data_entrega || "")),
+        previsao: rec.previsaoEntrega ? (rec.previsaoEntrega as Date).toLocaleDateString('pt-BR') : (String(rec.previsao || "")),
+        dataEntrega: rec.dataEntrega ? (rec.dataEntrega as Date).toLocaleDateString('pt-BR') : (String(rec.data_entrega || "")),
         quantidade: Number(rec.quantidade) || 0,
         descricao: String(rec.descricao || "-").toUpperCase(),
         fornecedor: String(rec.remetente || "-").toUpperCase(),

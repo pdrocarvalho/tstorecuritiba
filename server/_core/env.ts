@@ -11,6 +11,7 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().optional(),
   DB_SPREADSHEET_ID: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  APPS_SCRIPT_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);
