@@ -56,12 +56,38 @@ app.use(cors({
 app.use(express.json());
 
 import { login, me } from "./controllers/auth.controller";
+import { DataSyncAgent } from "./agents/data-sync.agent";
 
 /**
  * ENDPOINTS DE AUTENTICAÇÃO REST
  */
 app.post("/api/auth/login", login);
 app.get("/api/auth/me", me);
+
+/**
+ * ENDPOINTS DOS AGENTES (TRIGGERS MANUAIS)
+ */
+app.post("/api/agents/data-sync", async (req, res) => {
+  try {
+    const urls = {
+      avarias: process.env.SHEET_ID_AVARIAS,
+      demandas: process.env.SHEET_ID_DEMANDAS,
+      recebimentos: process.env.SHEET_ID_RECEBIMENTOS
+    };
+
+    if (!urls.avarias && !urls.demandas && !urls.recebimentos) {
+      return res.status(400).json({ error: "Nenhum SHEET_ID configurado no .env." });
+    }
+    
+    // Roda o Agente em background (sem aguardar o término para não travar o painel)
+    // Se quiser que aguarde, adicione await e retorne o resultado.
+    const result = await DataSyncAgent.runFullSync(urls);
+    
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Health check para o Render
 app.get("/health", (_req, res) => {

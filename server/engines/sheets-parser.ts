@@ -134,6 +134,13 @@ export function mapRecebimentoRow(
     if (hLimpo.includes("TRANSPORT")) obj.transportadora = val;
     if (hLimpo.includes("DIVERG")) obj.divergencia = String(val).toUpperCase().trim() || "SEM DIVERGÊNCIA";
     if (hLimpo === "MES" || (hLimpo.includes("MES") && !hLimpo.includes("PREVIS"))) obj.mes = val;
+    
+    // Colunas Financeiras
+    if (hLimpo.includes("VALOR") && hLimpo.includes("DESCONTO")) obj.valorDesconto = val;
+    if (hLimpo.includes("DESCONTO") && hLimpo.includes("PROMOCIONAL")) obj.descontoPromocional = val;
+    if (hLimpo.includes("ACRESCIMO")) obj.acrescimoAdicional = val;
+    if (hLimpo.includes("PRECO") || hLimpo.includes("PREO")) obj.precoItem = val;
+    if (hLimpo.includes("SUB") && hLimpo.includes("TOTAL")) obj.subTotal = val;
 
     if (hLimpo.includes("EMBARQUE")) {
       const p = String(val).split("/");

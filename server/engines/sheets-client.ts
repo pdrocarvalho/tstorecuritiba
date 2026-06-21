@@ -14,8 +14,9 @@ import { SheetRow } from "./sheets-parser";
 // ---------------------------------------------------------------------------
 
 export function extractSpreadsheetId(url: string): string | null {
+  if (!url) return null;
   const match = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
+  return match ? match[1] : String(url).trim();
 }
 
 export function getSheetInfoFromUrl(url: string, spreadsheet: sheets_v4.Schema$Spreadsheet) {

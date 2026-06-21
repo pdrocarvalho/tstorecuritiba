@@ -8,10 +8,12 @@ import { notificationsRouter } from "./notification.router";
 import { taskRouter } from "./task.router";
 
 import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from "../repositories/config.repository";
+import { syncRouter } from "./sync.router";
 
 export const appRouter = router({
   notifications: notificationsRouter,
   tasks: taskRouter,
+  sync: syncRouter,
 
   admin: router({
     getConfig: adminProcedure.query(async () => {

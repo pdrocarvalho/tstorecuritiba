@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Settings, Link as LinkIcon, Database, Save, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { Settings, Link as LinkIcon, Database, Save, Trash2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 const SHEETS_REGEX = /https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+/;
 
@@ -27,6 +28,18 @@ export default function VincularArquivos() {
     recebimento: false,
     demandas: false,
     avarias: false
+  });
+
+  const syncMutation = trpc.sync.runFullSync.useMutation({
+    onSuccess: (data) => {
+      toast.success("Sincronização concluída com sucesso!");
+      if (data.logs && data.logs.length > 0) {
+        data.logs.forEach(log => toast.success(log));
+      }
+    },
+    onError: (error) => {
+      toast.error(`Erro na sincronização: ${error.message}`);
+    }
   });
 
   useEffect(() => {
@@ -69,6 +82,19 @@ export default function VincularArquivos() {
     setErros({ ...erros, [tipo]: false });
     localStorage.setItem(`url_${tipo}`, "");
     toast.info(`Vínculo de ${tipo} removido.`);
+  };
+
+  const handleSync = () => {
+    if (!links.recebimento && !links.demandas && !links.avarias) {
+      toast.error("Nenhuma planilha vinculada para sincronizar.");
+      return;
+    }
+    toast.info("Iniciando sincronização... Isso pode demorar alguns segundos.", { duration: 5000 });
+    syncMutation.mutate({
+      recebimentos: links.recebimento || undefined,
+      demandas: links.demandas || undefined,
+      avarias: links.avarias || undefined,
+    });
   };
 
   const getInputIcon = (campo: keyof typeof links) => {
@@ -185,7 +211,17 @@ export default function VincularArquivos() {
         </div>
 
         {/* BOTÃO SALVAR GLOBAL */}
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-4 gap-4">
+          <Button 
+            onClick={handleSync} 
+            disabled={syncMutation.isPending}
+            variant="outline"
+            className="bg-brand-primary/10 border-brand-primary/20 hover:bg-brand-primary/20 text-brand-primary px-8 py-6 text-lg font-bold shadow-lg"
+          >
+            <RefreshCw className={`mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} size={20} />
+            {syncMutation.isPending ? "Sincronizando..." : "Sincronizar Banco de Dados"}
+          </Button>
+
           <Button onClick={handleSave} className="bg-glass border border-glass-border hover:bg-glass-hover text-white px-8 py-6 text-lg font-bold shadow-lg">
             <Save className="mr-2" size={20} />
             Salvar Todas as Configurações
