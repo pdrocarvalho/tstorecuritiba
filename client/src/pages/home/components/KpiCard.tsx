@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 
 export function KpiCard({ label, valor, descricao, cor, icone: Icone, onClick }: {
-  label: string; valor: number; descricao: string;
+  label: string; valor: number | string; descricao: string;
   cor: string; icone: React.ElementType; onClick: () => void;
 }) {
   return (

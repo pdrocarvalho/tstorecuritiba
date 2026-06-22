@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Package, FileText, Layers, Calendar,
   AlertTriangle, TrendingUp, RefreshCw,
-  CheckCircle2, Clock, Truck, PackageOpen
+  CheckCircle2, Clock, Truck, PackageOpen,
+  AlertOctagon, ClipboardCheck
 } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -13,6 +14,8 @@ import { Modal, ModalTipo } from "./components/Modal";
 import { KpiCard } from "./components/KpiCard";
 import { ListaConsultores } from "./components/ListaConsultores";
 import { Pedido } from "@/types";
+import { useAvarias } from "@/_core/hooks/useAvarias";
+import { useMinhasTarefas } from "@/_core/hooks/useTarefas";
 
 const AUTOMACAO_INTERVALO_MS = 60 * 60 * 1000;
 const AUTOMACAO_STORAGE_KEY = "automacao_ultima_execucao";
@@ -36,6 +39,7 @@ import { ConflictModal } from "./components/ConflictModal";
 export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
   const [urlPlanilha] = useState(() => localStorage.getItem("url_recebimento") || "");
   const [urlDemandas] = useState(() => localStorage.getItem("url_demandas") || "");
+  const [urlAvarias] = useState(() => localStorage.getItem("url_avarias") || "");
   const [modalAberto, setModalAberto] = useState<ModalTipo>(null);
   const [conflitosLogistica, setConflitosLogistica] = useState<any[]>([]);
   const isVinculado = !!urlPlanilha;
@@ -44,6 +48,14 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     { url: urlPlanilha, mode: 'recebimento' },
     { enabled: isVinculado, refetchInterval: 60000 }
   );
+
+  const { avarias = [] } = useAvarias(urlAvarias);
+
+  const dataHojeStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+  const { tarefas = [] } = useMinhasTarefas(dataHojeStr);
 
   const [resultadoAutomacao, setResultadoAutomacao] = useState<ResultadoAutomacao>({
     alertas: 0, alertasPorConsultor: {}, alertasTemRegistros: false,
@@ -138,6 +150,33 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
     };
   }, [todosPedidos]);
 
+  const metricasAvarias = useMemo(() => {
+    let pendentes = 0;
+    let resolvidasTotal = 0;
+    avarias.forEach((a: any) => {
+      const tratativa = String(a.TRATATIVA || "").toUpperCase();
+      if (tratativa !== "CONCLUÍDA") {
+        pendentes++;
+      } else {
+        resolvidasTotal++;
+      }
+    });
+    return { pendentes, resolvidasTotal };
+  }, [avarias]);
+
+  const metricasTarefas = useMemo(() => {
+    const total = tarefas.length;
+    let concluidas = 0;
+    tarefas.forEach((t: any) => {
+      if (t.task?.status === "concluida" || t.task?.status === "nao_aplicavel") {
+        concluidas++;
+      }
+    });
+    const progresso = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+    const pendentes = total - concluidas;
+    return { progresso, pendentes, total, concluidas };
+  }, [tarefas]);
+
   const fecharModal = useCallback(() => setModalAberto(null), []);
 
   const renderDemandaCard = (
@@ -206,23 +245,62 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
         </div>
       )}
 
-      {/* 4 KPIs */}
+      {/* 4 KPIs - RECEBIMENTO */}
       {isVinculado && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <KpiCard label="Caixas em Trânsito" valor={kpis.totalCaixas}
-            descricao="volumes sem data de entrega" cor="#3b82f6"
-            icone={Package} onClick={() => setModalAberto("caixas")} />
-          <KpiCard label="Notas Fiscais Ativas" valor={kpis.notasAtivas}
-            descricao="notas únicas em aberto" cor="#8b5cf6"
-            icone={FileText} onClick={() => setModalAberto("notas")} />
-          <KpiCard label="SKUs Diferentes" valor={kpis.skusDiferentes}
-            descricao="referências únicas em trânsito" cor="#10b981"
-            icone={Layers} onClick={() => setModalAberto("skus")} />
-          <KpiCard label="Chegando esta Semana" valor={kpis.chegandoSemana}
-            descricao="notas fiscais nos próximos 7 dias" cor="#f97316"
-            icone={Calendar} onClick={() => setModalAberto("semana")} />
-        </div>
+        <>
+          <h2 className="text-sm font-bold text-white/50 mb-3 uppercase tracking-widest">Recebimento</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <KpiCard label="Caixas em Trânsito" valor={kpis.totalCaixas}
+              descricao="volumes sem data de entrega" cor="#3b82f6"
+              icone={Package} onClick={() => setModalAberto("caixas")} />
+            <KpiCard label="Notas Fiscais Ativas" valor={kpis.notasAtivas}
+              descricao="notas únicas em aberto" cor="#8b5cf6"
+              icone={FileText} onClick={() => setModalAberto("notas")} />
+            <KpiCard label="SKUs Diferentes" valor={kpis.skusDiferentes}
+              descricao="referências únicas em trânsito" cor="#10b981"
+              icone={Layers} onClick={() => setModalAberto("skus")} />
+            <KpiCard label="Chegando esta Semana" valor={kpis.chegandoSemana}
+              descricao="notas fiscais nos próximos 7 dias" cor="#f97316"
+              icone={Calendar} onClick={() => setModalAberto("semana")} />
+          </div>
+        </>
       )}
+
+      {/* KPIs - AVARIAS E TAREFAS */}
+      <h2 className="text-sm font-bold text-white/50 mb-3 uppercase tracking-widest">Avarias e Tarefas Diárias</h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {urlAvarias ? (
+          <>
+            <KpiCard label="Avarias Pendentes" valor={metricasAvarias.pendentes}
+              descricao="aguardando finalização" cor="#ef4444"
+              icone={AlertOctagon} onClick={() => {}} />
+            <KpiCard label="Avarias Resolvidas" valor={metricasAvarias.resolvidasTotal}
+              descricao="total no sistema" cor="#10b981"
+              icone={CheckCircle2} onClick={() => {}} />
+          </>
+        ) : (
+          <div className="col-span-2 p-4 rounded-xl flex items-center justify-between"
+            style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)" }}>
+            <div className="flex items-center gap-3" style={{ color: "#fbbf24" }}>
+              <AlertTriangle size={18} />
+              <p className="text-sm font-bold">Fonte de Avarias não configurada.</p>
+            </div>
+            <Link href="/configuracoes">
+              <button className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                style={{ background: "rgba(245,158,11,0.2)", color: "#fbbf24", border: "1px solid rgba(245,158,11,0.3)" }}>
+                Configurar
+              </button>
+            </Link>
+          </div>
+        )}
+
+        <KpiCard label="Progresso Diário" valor={`${metricasTarefas.progresso}%`}
+          descricao={`${metricasTarefas.concluidas} de ${metricasTarefas.total} concluídas`} cor="#3b82f6"
+          icone={ClipboardCheck} onClick={() => {}} />
+        <KpiCard label="Tarefas Pendentes" valor={metricasTarefas.pendentes}
+          descricao="para finalizar hoje" cor="#f59e0b"
+          icone={Clock} onClick={() => {}} />
+      </div>
 
       {/* ALERTA DE ATRASO */}
       {isVinculado && kpis.atrasados.length > 0 && (
@@ -272,6 +350,7 @@ export default function PainelOperacoes({ userName }: PainelOperacoesProps) {
       )}
 
       {/* CARDS DE DEMANDA */}
+      <h2 className="text-sm font-bold text-white/50 mb-3 uppercase tracking-widest mt-8">Demandas e Alertas</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         <div className="rounded-2xl overflow-hidden" style={{ background: "#0D1526", border: "1px solid rgba(239,68,68,0.2)" }}>
