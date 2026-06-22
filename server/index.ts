@@ -11,6 +11,9 @@ import { OAuth2Client } from "google-auth-library";
 import { upsertUser, getUserByOpenId, updateUserRole } from "./repositories/user.repository";
 import { env } from "./_core/env";
 
+// ─── MULTI-AGENT SYSTEM ──────────────────────────────────────────────────────
+import { bootstrapAgents, getRegistry } from "./agents";
+
 const app = express();
 const PORT = env.PORT;
 
@@ -56,7 +59,6 @@ app.use(cors({
 app.use(express.json());
 
 import { login, me } from "./controllers/auth.controller";
-import { DataSyncAgent } from "./agents/data-sync.agent";
 
 /**
  * ENDPOINTS DE AUTENTICAÇÃO REST
@@ -65,25 +67,102 @@ app.post("/api/auth/login", login);
 app.get("/api/auth/me", me);
 
 /**
- * ENDPOINTS DOS AGENTES (TRIGGERS MANUAIS)
+ * ════════════════════════════════════════════════════════════════════════════
+ *  ENDPOINTS DO SISTEMA MULTI-AGENTE
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * POST /api/agents/:name/execute
+ * Executa um agente específico com parâmetros opcionais.
+ *
+ * Exemplos:
+ *   POST /api/agents/data-sync/execute     { "mode": "full" }
+ *   POST /api/agents/logistics/execute     { "action": "automate" }
+ *   POST /api/agents/analytics/execute     { "action": "kpis" }
+ *   POST /api/agents/task-automation/execute { "action": "check_overdue" }
+ *   POST /api/agents/notification/execute  {}
+ */
+app.post("/api/agents/:name/execute", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const params = req.body || {};
+    const triggeredBy = (req.headers["x-triggered-by"] as string) || "user";
+
+    const registry = getRegistry();
+    const result = await registry.executeAgent(name, params, triggeredBy);
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/agents/data-sync
+ * Endpoint legado — mantido para compatibilidade.
+ * Delega para o novo sistema via AgentRegistry.
  */
 app.post("/api/agents/data-sync", async (req, res) => {
   try {
-    const urls = {
+    const registry = getRegistry();
+    const result = await registry.executeAgent("data-sync", {
       avarias: process.env.SHEET_ID_AVARIAS,
       demandas: process.env.SHEET_ID_DEMANDAS,
-      recebimentos: process.env.SHEET_ID_RECEBIMENTOS
-    };
+      recebimentos: process.env.SHEET_ID_RECEBIMENTOS,
+      mode: "full",
+    }, "user");
 
-    if (!urls.avarias && !urls.demandas && !urls.recebimentos) {
-      return res.status(400).json({ error: "Nenhum SHEET_ID configurado no .env." });
-    }
-    
-    // Roda o Agente em background (sem aguardar o término para não travar o painel)
-    // Se quiser que aguarde, adicione await e retorne o resultado.
-    const result = await DataSyncAgent.runFullSync(urls);
-    
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/agents/health
+ * Retorna o status de saúde de todos os agentes.
+ */
+app.get("/api/agents/health", async (_req, res) => {
+  try {
+    const registry = getRegistry();
+    const report = await registry.getHealthReport();
+    const statusCode = report.overallHealthy ? 200 : 503;
+    res.status(statusCode).json(report);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/agents/list
+ * Lista todos os agentes registrados com seus status e métricas.
+ */
+app.get("/api/agents/list", async (_req, res) => {
+  try {
+    const registry = getRegistry();
+    const agents = registry.listAgents();
+    const eventBusMetrics = registry.getEventBus().getMetrics();
+    res.json({ agents, eventBus: eventBusMetrics });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/agents/events
+ * Retorna o histórico de eventos do EventBus (para debugging).
+ */
+app.get("/api/agents/events", async (_req, res) => {
+  try {
+    const registry = getRegistry();
+    const eventBus = registry.getEventBus();
+    res.json({
+      metrics: eventBus.getMetrics(),
+      history: eventBus.getEventHistory().slice(-50), // Últimos 50
+      deadLetters: eventBus.getDeadLetterQueue(),
+      registeredEvents: eventBus.getRegisteredEvents(),
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -105,9 +184,17 @@ app.use(
   })
 );
 
-// Início do Servidor
-app.listen(PORT, () => {
+// ─── INÍCIO DO SERVIDOR + BOOT DOS AGENTES ──────────────────────────────────
+app.listen(PORT, async () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
   console.log(`🔒 Domínio permitido: @${DOMINIO_PERMITIDO}`);
   console.log(`✉️  E-mails de exceção: ${EMAILS_EXCECAO.join(", ")}`);
+
+  // Boot do sistema multi-agente (não bloqueia o servidor)
+  try {
+    await bootstrapAgents();
+  } catch (err) {
+    console.error("❌ Falha no boot dos agentes:", err instanceof Error ? err.message : err);
+    console.warn("⚠️ O servidor continuará rodando, mas alguns agentes podem estar indisponíveis.");
+  }
 });

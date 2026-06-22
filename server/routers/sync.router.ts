@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure } from "../_core/trpc";
-import { DataSyncAgent } from "../agents/data-sync.agent";
+import { getRegistry } from "../agents";
 
 export const syncRouter = router({
   runFullSync: adminProcedure
@@ -12,7 +12,12 @@ export const syncRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
-        const result = await DataSyncAgent.runFullSync(input);
+        const registry = getRegistry();
+        const result = await registry.executeAgent("data-sync", {
+          ...input,
+          mode: "full",
+        }, "user:trpc");
+
         if (!result.success) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -21,6 +26,7 @@ export const syncRouter = router({
         }
         return { success: true, logs: result.logs };
       } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error.message || "Erro interno ao rodar a sincronização",
