@@ -45,7 +45,7 @@ export default function RecebimentoFuturo() {
   const [filtroMundo, setFiltroMundo] = useState("");
   const [filtroRemetente, setFiltroRemetente] = useState("");
   const [filtroTransportadora, setFiltroTransportadora] = useState("");
-  const [filtroPrazo, setFiltroPrazo] = useState<"todos" | "atrasado" | "semana" | "ok">("todos");
+  const [filtroPrazo, setFiltroPrazo] = useState<"todos" | "em_transito" | "atrasado" | "semana">("todos");
 
   const { data: todosPedidos = [], refetch, isFetching } = trpc.notifications.getLiveData.useQuery(
     { url: urlPlanilha, mode: "recebimento" },
@@ -54,17 +54,43 @@ export default function RecebimentoFuturo() {
 
   useEffect(() => { if (isVinculado) refetch(); }, [isVinculado]);
 
+  const getStartOfWeek = (d: Date) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day;
+    const start = new Date(date.setDate(diff));
+    start.setHours(0, 0, 0, 0);
+    return start;
+  };
+
   const { emTransito, mundos, remetentes, transportadoras, stats } = useMemo(() => {
     const em = (todosPedidos as unknown as Pedido[]).filter(p => !p.dataEntrega);
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
+    
+    const startOfThisWeek = getStartOfWeek(hoje);
+    const endOfThisWeek = new Date(startOfThisWeek);
+    endOfThisWeek.setDate(endOfThisWeek.getDate() + 6);
+    endOfThisWeek.setHours(23, 59, 59, 999);
 
-    let atrasados = 0, semana = 0;
+    let emTransitoCount = 0, atrasados = 0, semana = 0;
+
     em.forEach(p => {
+      const vol = p.volumesCaixas !== undefined ? Number(p.volumesCaixas) : Number(p.quantidade || 0);
+
+      if (p.dataEmbarque && !p.previsaoEntrega) {
+        emTransitoCount += vol;
+      }
+
       if (!p.previsaoEntrega) return;
-      const prev = new Date(p.previsaoEntrega); prev.setHours(0, 0, 0, 0);
-      if (prev < hoje) atrasados++;
-      else if (prev <= em7) semana++;
+      
+      const prev = new Date(p.previsaoEntrega); 
+      prev.setHours(0, 0, 0, 0);
+
+      if (prev < hoje) {
+        atrasados += vol;
+      } else if (prev >= startOfThisWeek && prev <= endOfThisWeek) {
+        semana += vol;
+      }
     });
 
     return {
@@ -72,13 +98,17 @@ export default function RecebimentoFuturo() {
       mundos: [...new Set(em.map((p: Pedido) => String(p.mundo || "").toUpperCase().trim()).filter(Boolean))].sort(),
       remetentes: [...new Set(em.map((p: Pedido) => p.remetente || "").filter(Boolean))].sort(),
       transportadoras: [...new Set(em.map((p: Pedido) => p.transportadora || "").filter(Boolean))].sort(),
-      stats: { total: em.length, atrasados, semana },
+      stats: { emTransitoCount, atrasados, semana },
     };
   }, [todosPedidos]);
 
   const listaFiltrada = useMemo(() => {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const em7 = new Date(hoje); em7.setDate(hoje.getDate() + 7);
+    const startOfThisWeek = getStartOfWeek(hoje);
+    const endOfThisWeek = new Date(startOfThisWeek);
+    endOfThisWeek.setDate(endOfThisWeek.getDate() + 6);
+    endOfThisWeek.setHours(23, 59, 59, 999);
+    
     const q = busca.toLowerCase();
 
     return emTransito
@@ -90,11 +120,14 @@ export default function RecebimentoFuturo() {
         if (filtroRemetente && p.remetente !== filtroRemetente) return false;
         if (filtroTransportadora && (p.transportadora || "") !== filtroTransportadora) return false;
         if (filtroPrazo !== "todos") {
-          if (!p.previsaoEntrega) return filtroPrazo === "ok";
+          if (filtroPrazo === "em_transito") {
+            return p.dataEmbarque && !p.previsaoEntrega;
+          }
+          if (!p.previsaoEntrega) return false;
+          
           const prev = new Date(p.previsaoEntrega); prev.setHours(0, 0, 0, 0);
           if (filtroPrazo === "atrasado" && prev >= hoje) return false;
-          if (filtroPrazo === "semana" && (prev < hoje || prev > em7)) return false;
-          if (filtroPrazo === "ok" && prev <= em7) return false;
+          if (filtroPrazo === "semana" && (prev < startOfThisWeek || prev > endOfThisWeek)) return false;
         }
         return true;
       })
@@ -177,11 +210,11 @@ export default function RecebimentoFuturo() {
           <>
             {/* STATS */}
             <div className="grid grid-cols-3 gap-4">
-              <button onClick={() => setFiltroPrazo("todos")}
-                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "todos" ? "border-blue-500/50 bg-blue-500/10" : "bg-glass hover:bg-glass-hover hover:border-white/20"}`}>
+              <button onClick={() => setFiltroPrazo(filtroPrazo === "em_transito" ? "todos" : "em_transito")}
+                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "em_transito" ? "border-blue-500/50 bg-blue-500/10" : "bg-glass hover:bg-glass-hover hover:border-white/20"}`}>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Em Trânsito</p>
-                <p className="text-4xl font-black text-white mt-1">{stats.total}</p>
-                <p className="text-xs text-white/40 mt-1">produtos sem data de entrega</p>
+                <p className="text-4xl font-black text-white mt-1">{stats.emTransitoCount}</p>
+                <p className="text-xs text-white/40 mt-1">volumes s/ previsão</p>
               </button>
 
               <button onClick={() => setFiltroPrazo(filtroPrazo === "atrasado" ? "todos" : "atrasado")}
@@ -195,7 +228,7 @@ export default function RecebimentoFuturo() {
                 className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "semana" ? "border-amber-500/50 bg-amber-500/10" : "bg-glass hover:bg-glass-hover hover:border-amber-500/30"}`}>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Esta Semana</p>
                 <p className={`text-4xl font-black mt-1 ${stats.semana > 0 ? "text-amber-400" : "text-white"}`}>{stats.semana}</p>
-                <p className="text-xs text-white/40 mt-1">chegando em até 7 dias</p>
+                <p className="text-xs text-white/40 mt-1">previsão nesta semana</p>
               </button>
             </div>
 
