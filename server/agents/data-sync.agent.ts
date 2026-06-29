@@ -13,7 +13,7 @@ import { BaseAgent, AgentContext, AgentResult, HealthStatus } from "./_framework
 import { getDb } from "../db";
 import { fetchLiveGoogleSheet } from "../engines/sync.engine";
 import { avarias, demandas, pedidosRastreio, produtos } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export class DataSyncAgent extends BaseAgent {
   readonly name = "data-sync";
@@ -189,7 +189,15 @@ export class DataSyncAgent extends BaseAgent {
           .values(novaAvaria)
           .onConflictDoUpdate({
             target: avarias.sheetId,
-            set: novaAvaria
+            set: {
+              ...novaAvaria,
+              // Usa SQL CASE: Se a tratativa recebida for diferente da tratativa no banco, salva a data atual.
+              // Se for igual (ou ambas nulas), mantém o valor que já estava em data_mudanca_tratativa.
+              dataMudancaTratativa: sql`CASE
+                WHEN ${avarias.tratativa} IS DISTINCT FROM EXCLUDED.tratativa THEN now()
+                ELSE ${avarias.dataMudancaTratativa}
+              END`,
+            }
           });
         inserted++;
       } catch (err) {

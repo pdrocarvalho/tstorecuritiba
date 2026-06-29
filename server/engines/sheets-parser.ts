@@ -39,9 +39,9 @@ export function parseDataLimpa(val: SheetCell): Date | null {
 }
 
 // Tipos de Registros Mapeados
-export type AvariaRecord = Record<string, string | number | null>;
-export type DemandaRecord = Record<string, string | number | null>;
-export type RecebimentoRecord = Record<string, string | number | Date | null>;
+export type AvariaRecord = Record<string, string | number | null> & { sheetId?: string };
+export type DemandaRecord = Record<string, string | number | null> & { sheetId?: string };
+export type RecebimentoRecord = Record<string, string | number | Date | null> & { sheetId?: string };
 
 // ---------------------------------------------------------------------------
 // Mapeamento por Modo
@@ -60,8 +60,11 @@ export function mapAvariaRow(
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 
+    if (hLimpo === "ID" || hLimpo === "ID_AVARIA" || hLimpo === "IDAVARIA" || (hLimpo.includes("COD") && hLimpo.includes("AVARIA"))) {
+      obj.sheetId = val;
+      obj.COD_AVARIA = val; // Mantém a retrocompatibilidade se precisar
+    }
     if (isRefHeader(hLimpo)) obj.REF = String(val).trim();
-    if (hLimpo.includes("COD") && hLimpo.includes("AVARIA")) obj.COD_AVARIA = val;
     if (hLimpo.includes("FABRICA")) obj.FABRICA = val;
     if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
     if (hLimpo.includes("QTDE")) obj.QTDE = val;
@@ -97,6 +100,9 @@ export function mapDemandaRow(
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 
+    if (hLimpo === "ID" || hLimpo === "ID_DEMANDA" || hLimpo === "IDDEMANDA" || (hLimpo.includes("COD") && hLimpo.includes("DEMANDA"))) {
+      obj.sheetId = val;
+    }
     if (hLimpo === "DATA") obj.data = val;
     if (hLimpo.includes("CONSULTOR")) obj.consultor = val;
     if (hLimpo.includes("CLIENTE")) obj.cliente = val;
@@ -126,6 +132,9 @@ export function mapRecebimentoRow(
     const hLimpo = headersLimpos[idx];
     obj[toKey(header)] = val;
 
+    if (hLimpo === "ID" || hLimpo === "ID_RECEBIMENTO" || hLimpo === "IDRECEBIMENTO" || (hLimpo.includes("COD") && hLimpo.includes("RECEBIMENTO"))) {
+      obj.sheetId = val;
+    }
     if (isRefHeader(hLimpo)) obj.produtoSku = String(val).trim();
     if (hLimpo.includes("DESCRI")) obj.descricao = val;
     if (hLimpo.includes("REMETENTE")) obj.remetente = val;

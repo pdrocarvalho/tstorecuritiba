@@ -1,19 +1,10 @@
-/**
- * server/agents/index.ts
- *
- * Barrel export e função de bootstrap do sistema multi-agente.
- *
- * Uso no server/index.ts:
- *   import { bootstrapAgents, getRegistry } from "./agents";
- *   await bootstrapAgents();
- */
-
 import { AgentRegistry } from "./_framework";
 import { DataSyncAgent } from "./data-sync.agent";
 import { NotificationAgent } from "./notification.agent";
 import { LogisticsAgent } from "./logistics.agent";
 import { AnalyticsAgent } from "./analytics.agent";
 import { TaskAutomationAgent } from "./task-automation.agent";
+import { AvariasAgent } from "./avarias.agent";
 
 // Re-exporta agentes individuais para acesso direto se necessário
 export { DataSyncAgent } from "./data-sync.agent";
@@ -21,6 +12,7 @@ export { NotificationAgent } from "./notification.agent";
 export { LogisticsAgent } from "./logistics.agent";
 export { AnalyticsAgent } from "./analytics.agent";
 export { TaskAutomationAgent } from "./task-automation.agent";
+export { AvariasAgent } from "./avarias.agent";
 
 /**
  * Inicializa todo o sistema multi-agente.
@@ -31,7 +23,8 @@ export { TaskAutomationAgent } from "./task-automation.agent";
  * 2. notification   (sem dependências — escuta eventos passivamente)
  * 3. logistics      (depende de data-sync — escuta sync:completed)
  * 4. analytics      (depende de data-sync — escuta sync:completed)
- * 5. task-automation (depende de analytics — escuta anomaly_detected)
+ * 5. avarias        (depende de data-sync — escuta sync:completed)
+ * 6. task-automation (depende de analytics, avarias — escuta anomaly/stalled)
  */
 export async function bootstrapAgents(): Promise<AgentRegistry> {
   const registry = AgentRegistry.getInstance();
@@ -62,8 +55,13 @@ export async function bootstrapAgents(): Promise<AgentRegistry> {
     circuitBreaker: { failureThreshold: 5, recoveryTimeout: 60_000 },
   });
 
+  registry.register(new AvariasAgent(), {
+    dependencies: ["data-sync"],
+    circuitBreaker: { failureThreshold: 3, recoveryTimeout: 120_000 },
+  });
+
   registry.register(new TaskAutomationAgent(), {
-    dependencies: ["analytics"],
+    dependencies: ["analytics", "avarias"],
     circuitBreaker: { failureThreshold: 5, recoveryTimeout: 60_000 },
   });
 

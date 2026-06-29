@@ -40,6 +40,23 @@ export class TaskAutomationAgent extends BaseAgent {
     });
 
     this.log("info", "Subscribed a analytics:anomaly_detected para criação automática de tarefas.");
+
+    // Escuta avarias paralisadas para criar tarefas de cobrança
+    this.on("avarias:stalled_process", async (payload, meta) => {
+      this.log("warn", `Avaria paralisada detectada (SKU: ${payload.produtoSku}). Criando tarefa de cobrança...`);
+
+      try {
+        await this.createUrgentTask(
+          `🔴 Cobrar Fábrica: Avaria ${payload.produtoSku}`,
+          `A avaria (ID: ${payload.avariaId}) do produto ${payload.produtoSku} está com tratativa "${payload.tratativa}" há ${payload.daysStalled} dias e a NF de reposição ainda não foi emitida.\n\nPor favor, entre em contato com a fábrica para verificar o status.`,
+          payload.produtoSku ? [payload.produtoSku] : []
+        );
+      } catch (err) {
+        this.log("error", `Falha ao criar tarefa para avaria: ${err instanceof Error ? err.message : err}`);
+      }
+    });
+
+    this.log("info", "Subscribed a avarias:stalled_process para cobrança de fábrica.");
   }
 
   // ─── EXECUÇÃO PRINCIPAL ─────────────────────────────────────────────────────

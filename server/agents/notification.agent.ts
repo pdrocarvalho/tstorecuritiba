@@ -85,6 +85,18 @@ export class NotificationAgent extends BaseAgent {
       });
     });
 
+    this.on("avarias:stalled_process", async (payload, meta) => {
+      this.log("warn", `Avaria paralisada: #${payload.avariaId} (SKU: ${payload.produtoSku})`);
+
+      this.pendingNotifications.push({
+        to: "admin",
+        subject: `⚠️ [Qualidade] Avaria Estagnada — SKU: ${payload.produtoSku}`,
+        body: `A avaria (ID: ${payload.avariaId}) do SKU ${payload.produtoSku} está com tratativa "${payload.tratativa}" há ${payload.daysStalled} dias e precisa de atenção para não travar a reposição.`,
+        priority: "high",
+        channel: "webhook",
+      });
+    });
+
     this.log("info", `Webhook URL: ${this.webhookUrl ? "configurado" : "NÃO configurado"}`);
   }
 

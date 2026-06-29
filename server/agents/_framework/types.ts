@@ -172,6 +172,21 @@ export interface AgentEventMap {
     daysOverdue: number;
     timestamp: Date;
   };
+
+  // ─── AvariasAgent ─────────────────────────────────────────────────────────
+  "avarias:stalled_process": {
+    avariaId: number;
+    produtoSku: string | null;
+    status: string | null;
+    tratativa: string | null;
+    daysStalled: number;
+    timestamp: Date;
+  };
+  "avarias:resolution_completed": {
+    avariaId: number;
+    produtoSku: string | null;
+    timestamp: Date;
+  };
 }
 
 /** Chave de qualquer evento válido no sistema */

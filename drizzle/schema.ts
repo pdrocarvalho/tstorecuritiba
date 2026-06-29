@@ -136,6 +136,7 @@ export type InsertProduto = typeof produtos.$inferInsert;
 
 export const pedidosRastreio = pgTable("pedidos_rastreio", {
   id: serial("id").primaryKey(),
+  sheetId: varchar("sheet_id", { length: 255 }).unique(),
   produtoSku: varchar("produto_ref", { length: 255 }).references(() => produtos.sku).notNull(),
   quantidade: integer("quantidade").notNull(),
   qtdePorCaixa: integer("qtde_por_caixa").default(1),
@@ -226,6 +227,7 @@ export type NotificationStatus =
 
 export const avarias = pgTable("avarias", {
   id: serial("id").primaryKey(),
+  sheetId: varchar("sheet_id", { length: 255 }).unique(),
   produtoSku: varchar("produto_sku", { length: 255 }).references(() => produtos.sku, { onDelete: "set null" }),
   codAvaria: varchar("cod_avaria", { length: 255 }),
   fabrica: varchar("fabrica", { length: 255 }),
@@ -245,6 +247,7 @@ export const avarias = pgTable("avarias", {
   cupomFiscal: varchar("cupom_fiscal", { length: 255 }),
   observacoes: text("observacoes"),
   responsavel: varchar("responsavel", { length: 255 }),
+  dataMudancaTratativa: timestamp("data_mudanca_tratativa"), // Campo rastreado pelo DataSyncAgent
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -257,6 +260,7 @@ export type InsertAvaria = typeof avarias.$inferInsert;
 
 export const demandas = pgTable("demandas", {
   id: serial("id").primaryKey(),
+  sheetId: varchar("sheet_id", { length: 255 }).unique(),
   data: varchar("data", { length: 255 }),
   consultorId: integer("consultor_id").references(() => consultores.id, { onDelete: "set null" }),
   clienteId: integer("cliente_id").references(() => clientes.id, { onDelete: "set null" }),

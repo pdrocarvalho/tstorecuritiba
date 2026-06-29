@@ -34,11 +34,12 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     for (const aba of abas) {
       const demRes = await sheets.spreadsheets.values.get({ spreadsheetId: demId, range: `'${aba}'!A:J` });
       const rows = demRes.data.values || [];
-      if (rows.length < 2) continue;
+      if (rows.length < 3) continue;
 
-      const { originais, limpos } = parseHeaders(rows[0]);
+      // A linha 1 é o título da aba; os cabeçalhos reais ficam na linha 2
+      const { originais, limpos } = parseHeaders(rows[1]);
 
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
         const dem = mapDemandaRow(originais, limpos, row, i + 1);
         if (!dem.referencia || !dem.data || String(dem.status).toUpperCase() === "CHEGOU") continue;
@@ -93,7 +94,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
 
       // ALOCAR DEMANDAS JÁ EM ANDAMENTO (Rank > 0)
       for (const dem of demandsForRef.filter(d => getRank(String(d.status).toUpperCase()) > 0)) {
-        const ship = shipmentsForRef.find(s => s.quantidade > 0 && s.dataEmbarque && s.dataEmbarque.getTime() >= (dem as any).dataParseada.getTime());
+        const ship = shipmentsForRef.find(s => s.quantidade > 0);
         if (ship) {
           const qty = Number(dem.quantidade) || 1;
           const take = Math.min(qty, ship.quantidade);
@@ -135,7 +136,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
 
         // Se tem oferta >= demanda, aloca automaticamente
         for (const dem of group) {
-          const ship = shipmentsForRef.find(s => s.quantidade > 0 && s.dataEmbarque && s.dataEmbarque.getTime() >= dem.dataParseada.getTime());
+          const ship = shipmentsForRef.find(s => s.quantidade > 0);
           if (ship) {
             const qty = Number(dem.quantidade) || 1;
             const take = Math.min(qty, ship.quantidade);
