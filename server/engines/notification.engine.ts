@@ -162,11 +162,11 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       const { dem, newStatus, ship } = update;
       const rowNumber = dem.originalIndex;
       
-      // As colunas são F=QTDE, G=STATUS, H=THREAD_ID
-      // Vamos atualizar a G (Status)
+      // As colunas são: F=REF, G=QTDE, H=STATUS, I=THREAD_ID
+      // Vamos atualizar a H (Status)
       await sheets.spreadsheets.values.update({
         spreadsheetId: demId,
-        range: `'${dem.aba}'!G${rowNumber}`,
+        range: `'${dem.aba}'!H${rowNumber}`,
         valueInputOption: "USER_ENTERED",
         requestBody: { values: [[newStatus]] }
       });
@@ -239,10 +239,10 @@ export async function aplicarResolucaoConflito(urlDemandas: string, resolucoes: 
     const webhookUrl = env.APPS_SCRIPT_WEBHOOK_URL;
 
     for (const res of resolucoes) {
-      // Atualiza a Coluna G (Status)
+      // Atualiza a Coluna H (Status)
       await sheets.spreadsheets.values.update({
         spreadsheetId: demId,
-        range: `'${res.aba}'!G${res.rowNumber}`,
+        range: `'${res.aba}'!H${res.rowNumber}`,
         valueInputOption: "USER_ENTERED",
         requestBody: { values: [[res.newStatus]] }
       });
