@@ -164,7 +164,8 @@ export default function RecebimentoFuturo() {
           ? `<span style="background-color:${corMundo};color:#000;padding:3px 6px;border-radius:4px;font-size:9px;font-weight:900;text-transform:uppercase;">${p.mundo}</span>`
           : `—`;
           
-        const badgePrevisaoHtml = `<span style="background-color:${badge.bg};color:${badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${badge.dot};margin-right:6px;"></span>${badge.label}</span>`;
+        const isSemPrevisao = badge.label === "Sem previsão";
+        const badgePrevisaoHtml = `<span style="background-color:${badge.bg};color:${isSemPrevisao ? "#475569" : badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${badge.dot};margin-right:6px;"></span>${badge.label}</span>`;
 
         return `<tr>
           <td>${p.remetente || "—"}</td><td>${p.transportadora || "—"}</td>
