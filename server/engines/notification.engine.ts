@@ -158,6 +158,11 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
     let updatesApplied = 0;
     const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
+    let alertasNotificados = 0;
+    let vendasNotificadas = 0;
+    const alertasPorConsultor: Record<string, number> = {};
+    const vendasPorConsultor: Record<string, number> = {};
+
     for (const update of updatesToApply) {
       const { dem, newStatus, ship } = update;
       const rowNumber = dem.originalIndex;
@@ -172,6 +177,15 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       });
       
       updatesApplied++;
+      
+      // Contabilizar para o Painel de Operações
+      if (dem.isVenda) {
+        vendasNotificadas++;
+        vendasPorConsultor[dem.consultor] = (vendasPorConsultor[dem.consultor] || 0) + 1;
+      } else {
+        alertasNotificados++;
+        alertasPorConsultor[dem.consultor] = (alertasPorConsultor[dem.consultor] || 0) + 1;
+      }
       
       // Prepara payload para o Webhook do Apps Script
       if (webhookUrl) {
@@ -217,7 +231,13 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       success: true,
       updatesApplied,
       conflitos: conflitos,
-      mensagem: `Processamento Concluído. ${updatesApplied} estágios evoluídos. ${conflitos.length} conflitos detectados.`
+      mensagem: `Processamento Concluído. ${updatesApplied} estágios evoluídos. ${conflitos.length} conflitos detectados.`,
+      alertasNotificados,
+      alertasPorConsultor,
+      alertasTemRegistros: allDemands.some(d => !d.isVenda),
+      vendasNotificadas,
+      vendasPorConsultor,
+      vendasTemRegistros: allDemands.some(d => d.isVenda)
     };
 
   } catch (error: unknown) {
