@@ -151,17 +151,28 @@ export default function RecebimentoFuturo() {
     if (!w) return toast.error("Habilite popups.");
     w.document.write(`
       <html><head><title>Recebimento Futuro - T Store</title>
-      <style>@page{size:A4 landscape;margin:1cm}body{font-family:sans-serif;font-size:10px}
+      <style>@page{size:A4 landscape;margin:1cm}body{font-family:sans-serif;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:6px 4px;text-align:left}
       th{background:#eee;font-weight:bold;text-transform:uppercase}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;margin-bottom:15px;padding-bottom:5px}</style></head>
       <body><div class="header"><h1 style="margin:0;font-size:16px">T STORE — RECEBIMENTO FUTURO</h1><span>${new Date().toLocaleString("pt-BR")}</span></div>
       <table><thead><tr><th>Remetente</th><th>Transportadora</th><th>NF</th><th>Ref.</th><th>Descrição</th><th style="text-align:right">Qtde. Unitária</th><th>Mundo</th><th>Previsão</th></tr></thead>
-      <tbody>${listaFiltrada.map(p => `<tr>
-        <td>${p.remetente || "—"}</td><td>${p.transportadora || "—"}</td>
-<td><b>${p.notaFiscal || "—"}</b></td><td style="font-family:monospace">${p.produtoSku || "—"}</td>
-<td>${p.descricao || "—"}</td><td style="text-align:right"><b>${p.quantidade || 0}</b></td>
-<td>${p.mundo || "—"}</td><td>${formatarData(p.previsaoEntrega)}</td>
-      </tr>`).join("")}</tbody></table>
+      <tbody>${listaFiltrada.map(p => {
+        const badge = getPrazoBadge(p.previsaoEntrega ? new Date(p.previsaoEntrega) : null, !!p.dataEntrega);
+        const corMundo = MUNDO_COLORS[(p.mundo || "").toUpperCase()] || COR_PADRAO;
+        
+        const badgeMundoHtml = p.mundo 
+          ? \`<span style="background-color:\${corMundo};color:#000;padding:3px 6px;border-radius:4px;font-size:9px;font-weight:900;text-transform:uppercase;">\${p.mundo}</span>\`
+          : \`—\`;
+          
+        const badgePrevisaoHtml = \`<span style="background-color:\${badge.bg};color:\${badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:\${badge.dot};margin-right:6px;"></span>\${badge.label}</span>\`;
+
+        return \`<tr>
+          <td>\${p.remetente || "—"}</td><td>\${p.transportadora || "—"}</td>
+          <td><b>\${p.notaFiscal || "—"}</b></td><td style="font-family:monospace">\${p.produtoSku || "—"}</td>
+          <td>\${p.descricao || "—"}</td><td style="text-align:right"><b>\${p.quantidade || 0}</b></td>
+          <td style="text-align:center;">\${badgeMundoHtml}</td><td>\${badgePrevisaoHtml}</td>
+        </tr>\`;
+      }).join("")}</tbody></table>
       <script>setTimeout(()=>{window.print();window.close()},500)</script></body></html>
     `);
     w.document.close();
