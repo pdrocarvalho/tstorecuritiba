@@ -77,11 +77,15 @@ export default function RegistroDemandas() {
       for (let i = 0; i < refsValidas.length; i++) {
         setProgresso({ atual: i + 1, total: refsValidas.length });
         
-        // A=DATA | B=CONSULTOR | C=CLIENTE | D=CONTATO | E=REF | F=QTDE | G=STATUS | H=THREAD_ID
+        const prefix = tipo === "ALERTA" ? "ALD" : "VDF";
+        const idDemanda = `${prefix}${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`;
+
+        // A=ID_DEMANDA | B=DATA | C=CONSULTOR | D=CLIENTE | E=CONTATO | F=REF | G=QTDE | H=STATUS | I=THREAD_ID
         await saveDemanda({
           url: urlPlanilha,
           aba: abaDestino,
           dados: [
+            idDemanda,
             dataDeHoje,
             form.consultor.toUpperCase(),
             form.cliente.toUpperCase(),
