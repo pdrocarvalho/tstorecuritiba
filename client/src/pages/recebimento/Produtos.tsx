@@ -161,17 +161,17 @@ export default function RecebimentoFuturo() {
         const corMundo = MUNDO_COLORS[(p.mundo || "").toUpperCase()] || COR_PADRAO;
         
         const badgeMundoHtml = p.mundo 
-          ? \`<span style="background-color:\${corMundo};color:#000;padding:3px 6px;border-radius:4px;font-size:9px;font-weight:900;text-transform:uppercase;">\${p.mundo}</span>\`
-          : \`—\`;
+          ? `<span style="background-color:${corMundo};color:#000;padding:3px 6px;border-radius:4px;font-size:9px;font-weight:900;text-transform:uppercase;">${p.mundo}</span>`
+          : `—`;
           
-        const badgePrevisaoHtml = \`<span style="background-color:\${badge.bg};color:\${badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:\${badge.dot};margin-right:6px;"></span>\${badge.label}</span>\`;
+        const badgePrevisaoHtml = `<span style="background-color:${badge.bg};color:${badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${badge.dot};margin-right:6px;"></span>${badge.label}</span>`;
 
-        return \`<tr>
-          <td>\${p.remetente || "—"}</td><td>\${p.transportadora || "—"}</td>
-          <td><b>\${p.notaFiscal || "—"}</b></td><td style="font-family:monospace">\${p.produtoSku || "—"}</td>
-          <td>\${p.descricao || "—"}</td><td style="text-align:right"><b>\${p.quantidade || 0}</b></td>
-          <td style="text-align:center;">\${badgeMundoHtml}</td><td>\${badgePrevisaoHtml}</td>
-        </tr>\`;
+        return `<tr>
+          <td>${p.remetente || "—"}</td><td>${p.transportadora || "—"}</td>
+          <td><b>${p.notaFiscal || "—"}</b></td><td style="font-family:monospace">${p.produtoSku || "—"}</td>
+          <td>${p.descricao || "—"}</td><td style="text-align:right"><b>${p.quantidade || 0}</b></td>
+          <td style="text-align:center;">${badgeMundoHtml}</td><td>${badgePrevisaoHtml}</td>
+        </tr>`;
       }).join("")}</tbody></table>
       <script>setTimeout(()=>{window.print();window.close()},500)</script></body></html>
     `);
