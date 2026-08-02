@@ -41,4 +41,5 @@ export const FABRICAS_COM_PREFIXO = [
   { nome: "CD SUL",      prefixo: "CDS" },
   { nome: "TEEC",        prefixo: "TEC" },
   { nome: "BELÉM",       prefixo: "BLM" },
+  { nome: "DELTA",       prefixo: "DLT" },
 ] as const;
