@@ -51,6 +51,7 @@ export default function GestaoAvarias() {
 
   const [showModal, setShowModal] = useState(false);
   const [filtroSku, setFiltroSku] = useState("");
+  const [filtroStatusOperacional, setFiltroStatusOperacional] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
   const [editingAvaria, setEditingAvaria] = useState<Avaria | null>(null);
@@ -188,9 +189,10 @@ export default function GestaoAvarias() {
       const search = filtroSku.toLowerCase();
       const matchesSearch = !filtroSku || String(a.REF || "").toLowerCase().includes(search) || String(a.COD_AVARIA || "").toLowerCase().includes(search);
       const matchesStatus = filtrosAtivos.length === 0 || filtrosAtivos.includes(formatUpper(a.TRATATIVA || "PENDENTE"));
-      return matchesSearch && matchesStatus;
+      const matchesOperacional = !filtroStatusOperacional || formatUpper(a.STATUS) === formatUpper(filtroStatusOperacional);
+      return matchesSearch && matchesStatus && matchesOperacional;
     });
-  }, [todasAvarias, filtroSku, filtrosAtivos]);
+  }, [todasAvarias, filtroSku, filtrosAtivos, filtroStatusOperacional]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -206,18 +208,26 @@ export default function GestaoAvarias() {
   return (
     <MainLayout>
       <div className="space-y-6 pb-10">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight uppercase">Gestão de Avarias</h1>
-            <p className="text-white/50 uppercase">Fluxo operacional de produtos danificados</p>
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-50 via-slate-100 to-slate-400 tracking-tight uppercase">
+              Gestão de Avarias
+            </h1>
+            <p className="text-xs font-bold text-slate-400 tracking-wider uppercase mt-1">
+              Fluxo operacional de produtos danificados
+            </p>
           </div>
           {isVinculado && (
-            <div className="flex gap-3">
-              <button onClick={handlePrint} className="flex items-center gap-2 bg-glass border border-glass-border text-white px-4 py-2 rounded-lg font-bold hover:bg-glass-hover shadow-sm transition-colors uppercase text-xs"><Printer size={18}/> Imprimir</button>
-              <button onClick={() => refetch()} className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-lg font-bold hover:bg-emerald-500/20 shadow-sm transition-colors uppercase text-xs">
-                <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} /> Atualizar
+            <div className="flex flex-wrap gap-2.5">
+              <button onClick={handlePrint} className="flex items-center gap-1.5 bg-slate-800/40 hover:bg-slate-800/80 border border-white/10 text-white/90 hover:text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm uppercase text-xs">
+                <Printer size={16}/> Imprimir
               </button>
-              <button onClick={abrirModalNova} className="flex items-center gap-2 bg-red-600/20 border border-red-500/30 text-red-400 px-5 py-2 rounded-lg font-bold shadow-lg hover:bg-red-600/30 transition-colors uppercase text-xs"><Plus size={20}/> Nova Avaria</button>
+              <button onClick={() => refetch()} className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 px-4 py-2 rounded-xl font-bold transition-all shadow-sm uppercase text-xs">
+                <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} /> Atualizar
+              </button>
+              <button onClick={abrirModalNova} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl font-bold transition-all shadow-lg shadow-red-600/20 uppercase text-xs">
+                <Plus size={18}/> Nova Avaria
+              </button>
             </div>
           )}
         </div>
@@ -232,19 +242,44 @@ export default function GestaoAvarias() {
         )}
 
         {isVinculado && (
-          <Card className="overflow-hidden border-glass-border bg-glass backdrop-blur-md shadow-xl rounded-xl">
-            <div className="p-5 border-b border-glass-border bg-white/5 flex flex-col lg:flex-row justify-between gap-4">
-              <div className="relative w-full lg:w-96">
-                <Search className="absolute left-3 top-2.5 text-white/40" size={18} />
-                <Input placeholder="BUSCAR POR REF OU CÓDIGO..." className="pl-10 bg-black/20 border-white/10 text-white uppercase" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value.toUpperCase())} />
+          <Card className="overflow-hidden border-slate-800 bg-slate-900/60 backdrop-blur-md shadow-2xl rounded-2xl">
+            <div className="p-5 border-b border-slate-800 bg-slate-900/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-2.5 text-white/40" size={18} />
+                  <Input placeholder="BUSCAR POR REF OU CÓDIGO..." className="pl-10 bg-black/20 border-white/10 text-white uppercase rounded-xl h-10" value={filtroSku} onChange={(e) => setFiltroSku(e.target.value.toUpperCase())} />
+                </div>
+                <select 
+                  className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-sky-500/50 h-10 cursor-pointer"
+                  value={filtroStatusOperacional}
+                  onChange={(e) => setFiltroStatusOperacional(e.target.value)}
+                >
+                  <option value="" className="bg-slate-950 text-slate-400">TODOS OS STATUS OPERACIONAIS</option>
+                  {OPERACIONAL_OPTIONS.map(opt => (
+                    <option key={opt} value={opt} className="bg-slate-950 text-slate-200">{opt}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map(s => (
-                  <button key={s.id} onClick={() => toggleFiltro(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${filtrosAtivos.includes(s.id) ? (s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent' : `bg-${s.color}-600 text-white border-transparent`) : 'bg-glass text-white/50 border-glass-border hover:text-white'}`}>
-                    {s.label}
-                  </button>
-                ))}
+                {STATUS_OPTIONS.map(s => {
+                  const isActive = filtrosAtivos.includes(s.id);
+                  const activeClass = 
+                    s.color === 'red' ? 'bg-red-600 text-white border-transparent hover:bg-red-700 shadow-md shadow-red-600/20' :
+                    s.color === 'blue' ? 'bg-[#2563eb] text-white border-transparent hover:bg-blue-700 shadow-md shadow-blue-600/20' :
+                    'bg-emerald-600 text-white border-transparent hover:bg-emerald-700 shadow-md shadow-emerald-600/20';
+
+                  return (
+                    <button key={s.id} onClick={() => toggleFiltro(s.id)}
+                      className={`px-4 py-2 rounded-xl text-[10px] tracking-wider font-black uppercase border transition-all ${
+                        isActive 
+                          ? activeClass 
+                          : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
