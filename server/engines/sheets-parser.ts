@@ -138,6 +138,7 @@ export function mapRecebimentoRow(
     if (hLimpo.includes("MUNDO")) obj.mundo = val;
     if (hLimpo.includes("TRANSPORT")) obj.transportadora = val;
     if (hLimpo.includes("DIVERG")) obj.divergencia = String(val).toUpperCase().trim() || "SEM DIVERGÊNCIA";
+    if (hLimpo.includes("NATUREZA") || hLimpo.includes("OPERA")) obj.naturezaOperacao = val;
     if (hLimpo === "MES" || (hLimpo.includes("MES") && !hLimpo.includes("PREVIS"))) obj.mes = val;
     
     // Colunas Financeiras

@@ -165,10 +165,13 @@ export default function RecebimentoFuturo() {
         const isSemPrevisao = badge.label === "Sem previsão";
         const badgePrevisaoHtml = `<span style="background-color:${badge.bg};color:${isSemPrevisao ? "#475569" : badge.text};padding:3px 8px;border-radius:12px;font-size:9px;font-weight:bold;display:inline-flex;align-items:center;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${badge.dot};margin-right:6px;"></span>${badge.label}</span>`;
 
+        const isNotVenda = p.naturezaOperacao && !String(p.naturezaOperacao).toUpperCase().includes("VENDA");
+        const badgeNaturezaHtml = isNotVenda ? `<br><span style="display:inline-block;margin-top:4px;background-color:#fee2e2;color:#b91c1c;padding:2px 4px;border-radius:3px;font-size:8px;font-weight:bold;">⚠️ ${String(p.naturezaOperacao).toUpperCase()}</span>` : "";
+
         return `<tr>
           <td>${p.remetente || "—"}</td><td>${p.transportadora || "—"}</td>
           <td><b>${p.notaFiscal || "—"}</b></td><td style="font-family:monospace">${p.produtoSku || "—"}</td>
-          <td>${p.descricao || "—"}</td><td style="text-align:right"><b>${p.quantidade || 0}</b></td>
+          <td>${p.descricao || "—"}${badgeNaturezaHtml}</td><td style="text-align:right"><b>${p.quantidade || 0}</b></td>
           <td style="text-align:center;">${badgeMundoHtml}</td><td>${badgePrevisaoHtml}</td>
         </tr>`;
       }).join("")}</tbody></table>
@@ -347,6 +350,11 @@ export default function RecebimentoFuturo() {
                             </td>
                             <td className="px-4 py-3 max-w-[220px]">
                               <p className="text-white/80 text-xs leading-snug truncate">{item.descricao || "—"}</p>
+                              {item.naturezaOperacao && !String(item.naturezaOperacao).toUpperCase().includes("VENDA") && (
+                                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-bold uppercase tracking-wider border border-red-500/20">
+                                  <AlertTriangle size={10} /> {item.naturezaOperacao}
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 font-black text-white">{item.quantidade || 0}</td>
                             <td className="px-4 py-3">

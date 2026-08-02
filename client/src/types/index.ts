@@ -30,6 +30,7 @@ export interface Pedido {
   mes?: string;
   volumesCaixas?: number;
   dataEmbarque?: string | null;
+  naturezaOperacao?: string;
   consultorId?: number | null;
   clienteId?: number | null;
 }
