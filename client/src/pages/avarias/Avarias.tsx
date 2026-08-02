@@ -18,6 +18,9 @@ import { FABRICAS_COM_PREFIXO as FABRICAS } from "@/constants";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ConfirmModal, AcaoPin } from "./components/ConfirmModal";
 import { Avaria } from "@/types";
+import { useAvariaHistorico } from "@/_core/hooks/useAvariaHistorico";
+import { trpc } from "@/lib/trpc";
+import { MessageSquarePlus, Clock } from "lucide-react";
 
 const STATUS_OPTIONS = [
   { id: "PENDENTE", label: "PENDENTE", color: "red" },
@@ -53,6 +56,7 @@ export default function GestaoAvarias() {
   const [filtrosAtivos, setFiltrosAtivos] = useState<string[]>([]);
   const [editingAvaria, setEditingAvaria] = useState<Avaria | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
+  const [novaObservacao, setNovaObservacao] = useState("");
 
   // Modal de Confirmação (Antigo PIN)
   const [pinModal, setPinModal] = useState<{ isOpen: boolean; acao: AcaoPin | null; alvo?: Avaria }>({ isOpen: false, acao: null });
@@ -64,6 +68,17 @@ export default function GestaoAvarias() {
     isAdding, isEditing, isDeleting
   } = useAvarias(urlPlanilha);
 
+  // Resolve o ID do banco de dados a partir do COD_AVARIA da planilha
+  const sheetId = editingAvaria?.COD_AVARIA ?? editingAvaria?.COD__AVARIA ?? null;
+  const { data: avariaDb } = trpc.notifications.getAvariaBySheetId.useQuery(
+    { sheetId: sheetId! },
+    { enabled: !!sheetId }
+  );
+  const avariaDbId = avariaDb?.id ?? null;
+
+  const { historico, isFetching: fetchingHistorico, addObservacao, isAdding: isAddingObs } =
+    useAvariaHistorico(avariaDbId);
+
   const formatUpper = (val: string | number | undefined | null) => String(val || "").toUpperCase();
 
   const fecharTudo = () => {
@@ -71,6 +86,7 @@ export default function GestaoAvarias() {
     setPinModal({ isOpen: false, acao: null });
     setEditingAvaria(null);
     setForm(FORM_VAZIO);
+    setNovaObservacao("");
   };
 
   const abrirModalNova = () => {
@@ -390,6 +406,78 @@ export default function GestaoAvarias() {
                   </div>
                 </div>
               </div>
+
+              {/* HISTÓRICO DE OBSERVAÇÕES — só aparece ao editar uma avaria existente */}
+              {editingAvaria && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-800 px-5 py-3 flex items-center gap-2">
+                    <Clock size={15} className="text-slate-300" />
+                    <h4 className="text-xs font-black text-slate-200 uppercase tracking-widest">Histórico de Observações</h4>
+                  </div>
+
+                  {/* Lista de entradas */}
+                  <div className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                    {fetchingHistorico && (
+                      <p className="text-xs text-slate-400 p-4 text-center">Carregando histórico...</p>
+                    )}
+                    {!fetchingHistorico && historico.length === 0 && (
+                      <p className="text-xs text-slate-400 p-4 text-center italic">Nenhuma observação registrada ainda.</p>
+                    )}
+                    {historico.map((entrada) => {
+                      const isAuto = entrada.tipo !== "manual";
+                      return (
+                        <div key={entrada.id} className={`px-4 py-3 flex gap-3 ${isAuto ? "bg-blue-50" : "bg-white"}`}>
+                          <div className="flex-shrink-0 mt-1">
+                            {isAuto
+                              ? <div className="w-2 h-2 rounded-full bg-blue-400" />
+                              : <div className="w-2 h-2 rounded-full bg-emerald-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs leading-relaxed ${isAuto ? "text-blue-700 italic" : "text-slate-700"}`}>
+                              {entrada.conteudo}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              {entrada.autorNome} &bull;{" "}
+                              {new Date(entrada.createdAt).toLocaleString("pt-BR", {
+                                day: "2-digit", month: "2-digit", year: "numeric",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Input de nova observação */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                    <textarea
+                      id="nova-observacao-input"
+                      className="w-full min-h-[64px] rounded-md border border-slate-200 p-2.5 text-xs focus:ring-2 focus:ring-slate-800 outline-none resize-none"
+                      placeholder="Escreva uma nova observação..."
+                      value={novaObservacao}
+                      onChange={(e) => setNovaObservacao(e.target.value)}
+                      maxLength={2000}
+                    />
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-slate-400">{novaObservacao.length}/2000</span>
+                      <button
+                        id="btn-registrar-observacao"
+                        disabled={!novaObservacao.trim() || isAddingObs || !avariaDbId}
+                        onClick={() => {
+                          if (!avariaDbId || !novaObservacao.trim()) return;
+                          addObservacao({ avariaId: avariaDbId, conteudo: novaObservacao.trim() });
+                          setNovaObservacao("");
+                        }}
+                        className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-md disabled:opacity-40 hover:bg-slate-700 transition-colors"
+                      >
+                        <MessageSquarePlus size={13} />
+                        REGISTRAR OBSERVAÇÃO
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50 sticky bottom-0">

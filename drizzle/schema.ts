@@ -340,10 +340,43 @@ export const clientesRelations = relations(clientes, ({ many }) => ({
   demandas: many(demandas),
 }));
 
-export const avariasRelations = relations(avarias, ({ one }) => ({
+export const avariasRelations = relations(avarias, ({ one, many }) => ({
   produto: one(produtos, {
     fields: [avarias.produtoSku],
     references: [produtos.sku],
+  }),
+  historico: many(avariaHistorico),
+}));
+
+// ─── HISTÓRICO DE OBSERVAÇÕES DE AVARIAS ─────────────────────────────────────
+
+export const avariaHistoricoTipoEnum = pgEnum("avaria_historico_tipo", [
+  "manual", "status_change", "tratativa_change",
+]);
+
+export const avariaHistorico = pgTable("avaria_historico", {
+  id: serial("id").primaryKey(),
+  avariaId: integer("avaria_id").references(() => avarias.id, { onDelete: "cascade" }).notNull(),
+  autorId: integer("autor_id").references(() => users.id, { onDelete: "set null" }),
+  autorNome: text("autor_nome"),
+  tipo: avariaHistoricoTipoEnum("tipo").default("manual").notNull(),
+  conteudo: text("conteudo").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  avariaIdIdx: index("avaria_historico_avaria_id_idx").on(table.avariaId),
+}));
+
+export type AvariaHistorico = typeof avariaHistorico.$inferSelect;
+export type InsertAvariaHistorico = typeof avariaHistorico.$inferInsert;
+
+export const avariaHistoricoRelations = relations(avariaHistorico, ({ one }) => ({
+  avaria: one(avarias, {
+    fields: [avariaHistorico.avariaId],
+    references: [avarias.id],
+  }),
+  autor: one(users, {
+    fields: [avariaHistorico.autorId],
+    references: [users.id],
   }),
 }));
 
