@@ -123,10 +123,9 @@ export default function GestaoAvarias() {
   };
 
   // Executa a ação confirmada
-  const confirmarPin = () => {
-
+  const confirmarPin = (password: string) => {
     if (pinModal.acao === "delete" && pinModal.alvo) {
-      deleteAvaria({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber! }, { onSuccess: fecharTudo });
+      deleteAvaria({ url: urlPlanilha, rowNumber: pinModal.alvo.rowNumber!, password }, { onSuccess: fecharTudo });
     } else if (pinModal.acao === "edit" && editingAvaria) {
       const linhaAtualizada = [
         editingAvaria.DATA_DE_ENTRADA || "", form.fabrica, editingAvaria.COD_AVARIA || "",
@@ -140,6 +139,10 @@ export default function GestaoAvarias() {
         url: urlPlanilha,
         rowNumber: editingAvaria.rowNumber!,
         row: linhaAtualizada.map(v => typeof v === 'string' ? v.toUpperCase() : v),
+        password,
+        avariaId: avariaDbId || undefined,
+        tratativaAnterior: editingAvaria.TRATATIVA || "PENDENTE",
+        statusAnterior: editingAvaria.STATUS || "AGUARDANDO TRATATIVA",
       }, { onSuccess: fecharTudo });
     }
   };

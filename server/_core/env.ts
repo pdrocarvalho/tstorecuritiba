@@ -13,6 +13,7 @@ const envSchema = z.object({
   DB_SPREADSHEET_ID: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   APPS_SCRIPT_WEBHOOK_URL: z.string().url().optional(),
+  AVARIA_EDIT_PASSWORD: z.string().optional().default("TSTORE2026"),
 });
 
 export const env = envSchema.parse(process.env);

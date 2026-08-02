@@ -3,6 +3,8 @@
  */
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { env } from "../_core/env";
 import {
   fetchLiveGoogleSheet,
   addRowToSheet,
@@ -107,17 +109,24 @@ export const notificationsRouter = router({
     }),
 
   // Validação de acesso feita no backend via adminProcedure
-  editAvariaFull: adminProcedure
+  editAvariaFull: protectedProcedure
     .input(z.object({
       url: z.string().url(),
       rowNumber: z.number().int().positive(),
       row: SheetRowDTO,
+      password: z.string(),
       // Campos opcionais para auto-log
       avariaId: z.number().int().positive().optional(),
       tratativaAnterior: z.string().optional(),
       statusAnterior: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      if (input.password !== env.AVARIA_EDIT_PASSWORD) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Senha de autorização incorreta.",
+        });
+      }
       const result = await updateFullRow(input.url, input.rowNumber, input.row);
 
       // Auto-log: detecta mudanças de tratativa e/ou status
@@ -151,9 +160,19 @@ export const notificationsRouter = router({
       return result;
     }),
 
-  deleteAvariaRow: adminProcedure
-    .input(z.object({ url: z.string().url(), rowNumber: z.number().int().positive() }))
+  deleteAvariaRow: protectedProcedure
+    .input(z.object({ 
+      url: z.string().url(), 
+      rowNumber: z.number().int().positive(),
+      password: z.string(),
+    }))
     .mutation(async ({ input }) => {
+      if (input.password !== env.AVARIA_EDIT_PASSWORD) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Senha de autorização incorreta.",
+        });
+      }
       return await deleteSheetRow(input.url, input.rowNumber);
     }),
 
