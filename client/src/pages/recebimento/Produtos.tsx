@@ -77,9 +77,7 @@ export default function RecebimentoFuturo() {
     em.forEach(p => {
       const vol = p.volumesCaixas !== undefined ? Number(p.volumesCaixas) : Number(p.quantidade || 0);
 
-      if (p.dataEmbarque && !p.previsaoEntrega) {
-        emTransitoCount += vol;
-      }
+      emTransitoCount += vol; // Total absoluto de todos os não entregues
 
       if (!p.previsaoEntrega) return;
       
@@ -121,7 +119,7 @@ export default function RecebimentoFuturo() {
         if (filtroTransportadora && (p.transportadora || "") !== filtroTransportadora) return false;
         if (filtroPrazo !== "todos") {
           if (filtroPrazo === "em_transito") {
-            return p.dataEmbarque && !p.previsaoEntrega;
+            return true; // Retorna todos, pois a lista base já filtra por não entregues
           }
           if (!p.previsaoEntrega) return false;
           
@@ -221,26 +219,47 @@ export default function RecebimentoFuturo() {
         {isVinculado && (
           <>
             {/* STATS */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button onClick={() => setFiltroPrazo(filtroPrazo === "em_transito" ? "todos" : "em_transito")}
-                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "em_transito" ? "border-blue-500/50 bg-blue-500/10" : "bg-glass hover:bg-glass-hover hover:border-white/20"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Em Trânsito</p>
-                <p className="text-4xl font-black text-white mt-1">{stats.emTransitoCount}</p>
-                <p className="text-xs text-white/40 mt-1">volumes s/ previsão</p>
+                className={`group relative overflow-hidden p-5 rounded-2xl border text-left transition-all backdrop-blur-md flex flex-col justify-between min-h-[130px] shadow-sm ${filtroPrazo === "em_transito" ? "border-blue-500 bg-blue-500/10 shadow-blue-500/10" : "bg-glass border-glass-border hover:bg-glass-hover hover:border-blue-500/50"}`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity group-hover:bg-blue-500/10" />
+                <div>
+                  <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/50 flex items-center gap-2">
+                    <PackageOpen size={14} className={filtroPrazo === "em_transito" ? "text-blue-400" : ""} /> Em Trânsito
+                  </h3>
+                  <p className="text-5xl font-black text-white mt-2 tracking-tighter">{stats.emTransitoCount}</p>
+                </div>
+                <p className="text-xs font-medium text-white/40 mt-3 leading-snug">
+                  Total absoluto de volumes faturados/embarcados aguardando entrega.
+                </p>
               </button>
 
               <button onClick={() => setFiltroPrazo(filtroPrazo === "atrasado" ? "todos" : "atrasado")}
-                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "atrasado" ? "border-red-500/50 bg-red-500/10" : "bg-glass hover:bg-glass-hover hover:border-red-500/30"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Atrasados</p>
-                <p className={`text-4xl font-black mt-1 ${stats.atrasados > 0 ? "text-red-400" : "text-white"}`}>{stats.atrasados}</p>
-                <p className="text-xs text-white/40 mt-1">previsão vencida</p>
+                className={`group relative overflow-hidden p-5 rounded-2xl border text-left transition-all backdrop-blur-md flex flex-col justify-between min-h-[130px] shadow-sm ${filtroPrazo === "atrasado" ? "border-red-500 bg-red-500/10 shadow-red-500/10" : "bg-glass border-glass-border hover:bg-glass-hover hover:border-red-500/50"}`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity group-hover:bg-red-500/10" />
+                <div>
+                  <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/50 flex items-center gap-2">
+                    <AlertTriangle size={14} className={filtroPrazo === "atrasado" ? "text-red-400" : (stats.atrasados > 0 ? "text-red-400/60" : "")} /> Atrasados
+                  </h3>
+                  <p className={`text-5xl font-black mt-2 tracking-tighter ${stats.atrasados > 0 ? "text-red-400" : "text-white"}`}>{stats.atrasados}</p>
+                </div>
+                <p className="text-xs font-medium text-white/40 mt-3 leading-snug">
+                  Volumes cuja data de previsão de chegada já venceu.
+                </p>
               </button>
 
               <button onClick={() => setFiltroPrazo(filtroPrazo === "semana" ? "todos" : "semana")}
-                className={`p-4 rounded-xl border border-glass-border text-left transition-all backdrop-blur-md ${filtroPrazo === "semana" ? "border-amber-500/50 bg-amber-500/10" : "bg-glass hover:bg-glass-hover hover:border-amber-500/30"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Esta Semana</p>
-                <p className={`text-4xl font-black mt-1 ${stats.semana > 0 ? "text-amber-400" : "text-white"}`}>{stats.semana}</p>
-                <p className="text-xs text-white/40 mt-1">previsão nesta semana</p>
+                className={`group relative overflow-hidden p-5 rounded-2xl border text-left transition-all backdrop-blur-md flex flex-col justify-between min-h-[130px] shadow-sm ${filtroPrazo === "semana" ? "border-amber-500 bg-amber-500/10 shadow-amber-500/10" : "bg-glass border-glass-border hover:bg-glass-hover hover:border-amber-500/50"}`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity group-hover:bg-amber-500/10" />
+                <div>
+                  <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/50 flex items-center gap-2">
+                    <Clock size={14} className={filtroPrazo === "semana" ? "text-amber-400" : (stats.semana > 0 ? "text-amber-400/60" : "")} /> Esta Semana
+                  </h3>
+                  <p className={`text-5xl font-black mt-2 tracking-tighter ${stats.semana > 0 ? "text-amber-400" : "text-white"}`}>{stats.semana}</p>
+                </div>
+                <p className="text-xs font-medium text-white/40 mt-3 leading-snug">
+                  Volumes com previsão de entrega de hoje até este domingo.
+                </p>
               </button>
             </div>
 
