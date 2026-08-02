@@ -12,9 +12,8 @@ import {
 } from "../engines/sync.engine";
 import { rodarAutomacaoLogistica, aplicarResolucaoConflito } from "../engines/notification.engine";
 import { getDb } from "../db";
-import { avariaHistorico } from "../../drizzle/schema";
+import { avariaHistorico, users } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
-import { getUserByOpenId } from "../repositories/user.repository";
 
 const SheetRowDTO = z.array(z.union([z.string(), z.number(), z.boolean(), z.null(), z.undefined()]));
 
@@ -90,7 +89,7 @@ export const notificationsRouter = router({
         if (isTratativa || isStatus) {
           const db = await getDb();
           if (db) {
-            const dbUser = await getUserByOpenId(ctx.user.sub);
+            const [dbUser] = await db.select().from(users).where(eq(users.id, ctx.user.sub)).limit(1);
             const tipo = isTratativa ? "tratativa_change" : "status_change";
             const campo = isTratativa ? "TRATATIVA" : "STATUS";
             await db.insert(avariaHistorico).values({
@@ -125,7 +124,7 @@ export const notificationsRouter = router({
       if (input.avariaId) {
         const db = await getDb();
         if (db) {
-          const dbUser = await getUserByOpenId(ctx.user.sub);
+          const [dbUser] = await db.select().from(users).where(eq(users.id, ctx.user.sub)).limit(1);
           const novaTratativa = String(input.row[COL_TRATATIVA] ?? "");
           const novoStatus    = String(input.row[COL_STATUS] ?? "");
 
@@ -181,7 +180,7 @@ export const notificationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Banco de dados não disponível.");
 
-      const dbUser = await getUserByOpenId(ctx.user.sub);
+      const [dbUser] = await db.select().from(users).where(eq(users.id, ctx.user.sub)).limit(1);
       const [entrada] = await db.insert(avariaHistorico).values({
         avariaId: input.avariaId,
         autorId: dbUser?.id ?? null,

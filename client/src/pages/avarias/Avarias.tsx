@@ -19,7 +19,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { ConfirmModal, AcaoPin } from "./components/ConfirmModal";
 import { Avaria } from "@/types";
 import { useAvariaHistorico } from "@/_core/hooks/useAvariaHistorico";
-import { trpc } from "@/lib/trpc";
 import { MessageSquarePlus, Clock } from "lucide-react";
 
 const STATUS_OPTIONS = [

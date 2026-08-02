@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { Avaria } from "@/types";
 
 export function useAvarias(urlPlanilha: string) {
   const isVinculado = !!urlPlanilha;
@@ -36,7 +37,7 @@ export function useAvarias(urlPlanilha: string) {
   });
 
   return {
-    avarias: queryAvarias.data || [],
+    avarias: (queryAvarias.data || []) as unknown as Avaria[],
     isFetching: queryAvarias.isFetching,
     refetch: queryAvarias.refetch,
     addAvaria: mutationAdd.mutate,
