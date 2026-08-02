@@ -134,7 +134,7 @@ export function mapRecebimentoRow(
     if (isRefHeader(hLimpo)) obj.produtoSku = String(val).trim();
     if (hLimpo.includes("DESCRI")) obj.descricao = val;
     if (hLimpo.includes("REMETENTE")) obj.remetente = val;
-    if (hLimpo.includes("NOTAFISCAL")) obj.notaFiscal = val;
+    if (hLimpo.includes("NOTAFISCAL") && !hLimpo.includes("FATURADA")) obj.notaFiscal = val;
     if (hLimpo.includes("MUNDO")) obj.mundo = val;
     if (hLimpo.includes("TRANSPORT")) obj.transportadora = val;
     if (hLimpo.includes("DIVERG")) obj.divergencia = String(val).toUpperCase().trim() || "SEM DIVERGÊNCIA";
@@ -158,6 +158,10 @@ export function mapRecebimentoRow(
     if (hLimpo.includes("ENTREGA") && !hLimpo.includes("PREVIS")) {
       const p = String(val).split("/");
       obj.dataEntrega = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
+    }
+    if (hLimpo.includes("NOTAFISCAL") && hLimpo.includes("FATURADA")) {
+      const p = String(val).split("/");
+      obj.dataNfFaturada = p.length === 3 ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 12) : null;
     }
     if (hLimpo === "VOLUMES") tempVolumes = parseInt(String(val).replace(/\D/g, ""), 10) || 0;
     if (hLimpo.includes("QTDE") && hLimpo.includes("CAIXA")) {

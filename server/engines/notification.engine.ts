@@ -5,15 +5,17 @@ import { fetchDbRecords, DbRecord } from "./cross-reference";
 import { DemandaRecord, parseHeaders, mapDemandaRow } from "./sheets-parser";
 import { env } from "../_core/env";
 
-export type StatusDemanda = "AGUARDANDO" | "FATURADA" | "PREVISÃO" | "CHEGOU";
+export type StatusDemanda = "AGUARDANDO" | "FATURADO" | "EMBARCADO" | "PREVISÃO" | "ENTREGUE";
 
-const hierarchy = { "AGUARDANDO": 0, "FATURADA": 1, "PREVISÃO": 2, "CHEGOU": 3 };
+const hierarchy = { "AGUARDANDO": 0, "FATURADO": 1, "EMBARCADO": 2, "PREVISÃO": 3, "ENTREGUE": 4 };
 const getRank = (s: string) => hierarchy[s as keyof typeof hierarchy] || 0;
 
 function determinarStatusDaCarga(carga: DbRecord): StatusDemanda {
-  if (carga.dataEntrega && carga.dataEntrega !== "-" && carga.dataEntrega !== "") return "CHEGOU";
+  if (carga.dataEntrega && carga.dataEntrega !== "-" && carga.dataEntrega !== "") return "ENTREGUE";
   if (carga.previsao && carga.previsao !== "-" && carga.previsao !== "") return "PREVISÃO";
-  return "FATURADA";
+  if (carga.dataEmbarque) return "EMBARCADO";
+  if (carga.dataNfFaturada && carga.dataNfFaturada !== "-" && carga.dataNfFaturada !== "") return "FATURADO";
+  return "AGUARDANDO";
 }
 
 export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemandas: string) {
@@ -42,7 +44,7 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
         const dem = mapDemandaRow(originais, limpos, row, i + 1);
-        if (!dem.referencia || !dem.data || String(dem.status).toUpperCase() === "CHEGOU") continue;
+        if (!dem.referencia || !dem.data || String(dem.status).toUpperCase() === "ENTREGUE") continue;
 
         allDemands.push({
           ...dem,
@@ -94,11 +96,10 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
 
       // ALOCAR DEMANDAS JÁ EM ANDAMENTO (Rank > 0)
       for (const dem of demandsForRef.filter(d => getRank(String(d.status).toUpperCase()) > 0)) {
-        const ship = shipmentsForRef.find(s => s.quantidade > 0);
+        const qty = Number(dem.quantidade) || 1;
+        const ship = shipmentsForRef.find(s => s.quantidade >= qty);
         if (ship) {
-          const qty = Number(dem.quantidade) || 1;
-          const take = Math.min(qty, ship.quantidade);
-          ship.quantidade -= take;
+          ship.quantidade -= qty;
           
           const newStatus = determinarStatusDaCarga(ship);
           const currentRank = getRank(String(dem.status).toUpperCase());
@@ -117,32 +118,27 @@ export async function rodarAutomacaoLogistica(urlRecebimento: string, urlDemanda
       const processPending = (group: any[], tipoName: string) => {
         if (group.length === 0) return true;
 
-        // Calcula oferta válida (total de todos os shipments restantes aplicáveis à demanda mais velha desse grupo)
-        // Simplificação: apenas soma todos os shipments restantes para bater o total.
-        const totalRemainingSupply = shipmentsForRef.reduce((sum, s) => sum + s.quantidade, 0);
-        const totalDemandQty = group.reduce((sum, d) => sum + (Number(d.quantidade) || 1), 0);
-
-        if (totalRemainingSupply > 0 && totalRemainingSupply < totalDemandQty) {
-          // CONFLITO!
-          conflitos.push({
-            ref,
-            tipo: tipoName,
-            demandas: group,
-            ofertaDisponivel: totalRemainingSupply,
-            cargas: shipmentsForRef.filter(s => s.quantidade > 0)
-          });
-          return false; // Pausa este nível para esta ref
-        }
-
-        // Se tem oferta >= demanda, aloca automaticamente
         for (const dem of group) {
-          const ship = shipmentsForRef.find(s => s.quantidade > 0);
+          const qty = Number(dem.quantidade) || 1;
+          const ship = shipmentsForRef.find(s => s.quantidade >= qty);
+          
           if (ship) {
-            const qty = Number(dem.quantidade) || 1;
-            const take = Math.min(qty, ship.quantidade);
-            ship.quantidade -= take;
+            ship.quantidade -= qty;
             const newStatus = determinarStatusDaCarga(ship);
             updatesToApply.push({ dem, newStatus, ship });
+          } else {
+            const totalRemainingSupply = shipmentsForRef.reduce((sum, s) => sum + s.quantidade, 0);
+            if (totalRemainingSupply > 0) {
+              // CONFLITO: Tem estoque mas não atende a quantidade inteira dessa demanda
+              conflitos.push({
+                ref,
+                tipo: tipoName,
+                demandas: [dem],
+                ofertaDisponivel: totalRemainingSupply,
+                cargas: shipmentsForRef.filter(s => s.quantidade > 0)
+              });
+            }
+            return false; // Pausa este nível para esta ref (não fura fila)
           }
         }
         return true;

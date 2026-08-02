@@ -20,6 +20,7 @@ export interface DbRecord {
   dataEmbarque: Date | null;
   previsao: string;
   dataEntrega: string;
+  dataNfFaturada: string;
   quantidade: number;
   descricao: string;
   fornecedor: string;
@@ -28,7 +29,7 @@ export interface DbRecord {
   volumes: number;
 }
 
-export type StatusDemanda = "AGUARDANDO" | "FATURADA" | "PREVISÃO" | "CHEGOU";
+export type StatusDemanda = "AGUARDANDO" | "FATURADO" | "EMBARCADO" | "PREVISÃO" | "ENTREGUE";
 
 // ---------------------------------------------------------------------------
 // Leitura do Banco na Nuvem
@@ -67,6 +68,7 @@ export async function fetchDbRecords(sheets?: sheets_v4.Sheets): Promise<DbRecor
         dataEmbarque: rec.dataEmbarque as Date | null,
         previsao: rec.previsaoEntrega ? (rec.previsaoEntrega as Date).toLocaleDateString('pt-BR') : (String(rec.previsao || "")),
         dataEntrega: rec.dataEntrega ? (rec.dataEntrega as Date).toLocaleDateString('pt-BR') : (String(rec.data_entrega || "")),
+        dataNfFaturada: rec.dataNfFaturada ? (rec.dataNfFaturada as Date).toLocaleDateString('pt-BR') : "",
         quantidade: Number(rec.quantidade) || 0,
         descricao: String(rec.descricao || "-").toUpperCase(),
         fornecedor: String(rec.remetente || "-").toUpperCase(),
@@ -96,10 +98,12 @@ export function determinarStatusDemanda(
 
   for (let i = dbRecords.length - 1; i >= 1; i--) {
     const rec = dbRecords[i];
-    if (rec.ref === refUpper && rec.dataEmbarque && rec.dataEmbarque.getTime() >= dataRegistro.getTime()) {
-      if (rec.dataEntrega) return "CHEGOU";
-      if (rec.previsao) return "PREVISÃO";
-      return "FATURADA";
+    // Encontra o primeiro registro da referência com quantidade > 0 (simplificação inicial, automação refina)
+    if (rec.ref === refUpper && rec.quantidade > 0) {
+      if (rec.dataEntrega && rec.dataEntrega !== "-" && rec.dataEntrega !== "") return "ENTREGUE";
+      if (rec.previsao && rec.previsao !== "-" && rec.previsao !== "") return "PREVISÃO";
+      if (rec.dataEmbarque) return "EMBARCADO";
+      if (rec.dataNfFaturada && rec.dataNfFaturada !== "-" && rec.dataNfFaturada !== "") return "FATURADO";
     }
   }
 
