@@ -12,6 +12,9 @@
 
 import { BaseAgent, AgentContext, AgentResult, HealthStatus } from "./_framework";
 import { env } from "../_core/env";
+import { getDb } from "../db";
+import { avariaHistorico } from "../../drizzle/schema";
+import { eq, desc } from "drizzle-orm";
 
 interface NotificationPayload {
   to: string;
@@ -88,10 +91,40 @@ export class NotificationAgent extends BaseAgent {
     this.on("avarias:stalled_process", async (payload, meta) => {
       this.log("warn", `Avaria paralisada: #${payload.avariaId} (SKU: ${payload.produtoSku})`);
 
+      // Busca as últimas 5 observações do histórico para enriquecer o e-mail
+      let historicoTexto = "";
+      try {
+        const db = await getDb();
+        if (db && payload.avariaId) {
+          const entradas = await db
+            .select()
+            .from(avariaHistorico)
+            .where(eq(avariaHistorico.avariaId, payload.avariaId))
+            .orderBy(desc(avariaHistorico.createdAt))
+            .limit(5);
+
+          if (entradas.length > 0) {
+            const linhas = entradas.map((e) => {
+              const data = new Date(e.createdAt).toLocaleString("pt-BR", {
+                day: "2-digit", month: "2-digit", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              });
+              const prefixo = e.tipo !== "manual" ? "🔄" : "💬";
+              return `${prefixo} ${data} — ${e.autorNome ?? "Sistema"}: ${e.conteudo}`;
+            });
+            historicoTexto = `\n\n📋 Últimas observações:\n${linhas.join("\n")}`;
+          } else {
+            historicoTexto = "\n\n📋 Nenhuma observação registrada ainda para esta avaria.";
+          }
+        }
+      } catch (err) {
+        this.log("warn", `Não foi possível buscar histórico da avaria #${payload.avariaId}: ${err}`);
+      }
+
       this.pendingNotifications.push({
         to: "admin",
         subject: `⚠️ [Qualidade] Avaria Estagnada — SKU: ${payload.produtoSku}`,
-        body: `A avaria (ID: ${payload.avariaId}) do SKU ${payload.produtoSku} está com tratativa "${payload.tratativa}" há ${payload.daysStalled} dias e precisa de atenção para não travar a reposição.`,
+        body: `A avaria (ID: ${payload.avariaId}) do SKU ${payload.produtoSku} está com tratativa "${payload.tratativa}" há ${payload.daysStalled} dias e a NF de reposição ainda não foi emitida.${historicoTexto}`,
         priority: "high",
         channel: "webhook",
       });
