@@ -53,36 +53,32 @@ export function mapAvariaRow(
   row: SheetRow,
   rowNumber: number
 ): AvariaRecord {
-  const obj: AvariaRecord = { rowNumber };
-
-  headersOriginais.forEach((header, idx) => {
-    const val = row[idx] !== undefined && row[idx] !== null ? String(row[idx]) : "";
-    const hLimpo = headersLimpos[idx];
-    obj[toKey(header)] = val;
-
-    if (hLimpo === "ID" || hLimpo === "ID_AVARIA" || hLimpo === "IDAVARIA" || (hLimpo.includes("COD") && hLimpo.includes("AVARIA"))) {
-      obj.sheetId = val;
-      obj.COD_AVARIA = val; // Mantém a retrocompatibilidade se precisar
-    }
-    if (isRefHeader(hLimpo)) obj.REF = String(val).trim();
-    if (hLimpo.includes("FABRICA")) obj.FABRICA = val;
-    if (hLimpo.includes("DESCRI")) obj.DESCRICAO = val;
-    if (hLimpo.includes("QTDE")) obj.QTDE = val;
-    if (hLimpo.includes("TRATATIVA")) obj.TRATATIVA = val;
-    if (hLimpo === "STATUS") obj.STATUS = val;
-    if (hLimpo.includes("OK") && hLimpo.includes("STATUS")) obj.OK_STATUS = val;
-    if (hLimpo.includes("COLETA")) obj.DATA_DA_COLETA = val;
-    if (hLimpo.includes("SAIDA")) obj.NOTA_FISCAL_DE_SAIDA = val;
-    if (hLimpo.includes("REPOSICAO")) obj.NOTA_FISCAL_DE_REPOSICAO = val;
-    if (hLimpo.includes("SISTEMA")) obj.FOI_LANCADO_NO_SISTEMA = val;
-    if (hLimpo.includes("FISICAMENTE")) obj.CONSTA_FISICAMENTE = val;
-    if (hLimpo.includes("MOTIVO")) obj.MOTIVO = val;
-    if (hLimpo.includes("ENTRADA") && hLimpo.includes("DATA")) obj.DATA_DE_ENTRADA = val;
-    if (hLimpo.includes("ENTRADA") && hLimpo.includes("FISCAL")) obj.NOTA_FISCAL_DE_ENTRADA = val;
-    if (hLimpo.includes("CUPOM")) obj.CUPOM_FISCAL = val;
-    if (hLimpo.includes("OBSERVA")) obj.OBSERVACOES = val;
-    if (hLimpo.includes("RESPONSAVEL") || hLimpo.includes("RESPONSVEL")) obj.RESPONSAVEL = val;
-  });
+  const getVal = (idx: number) => row[idx] !== undefined && row[idx] !== null ? String(row[idx]).trim() : "";
+  
+  const obj: AvariaRecord = {
+    rowNumber,
+    sheetId: getVal(0),
+    COD_AVARIA: getVal(0),
+    DATA_DE_ENTRADA: getVal(1),
+    FABRICA: getVal(2),
+    REF: getVal(3),
+    DESCRICAO: getVal(4),
+    QTDE: getVal(5),
+    NOTA_FISCAL_DE_ENTRADA: getVal(6),
+    CUPOM_FISCAL: getVal(7),
+    MOTIVO: getVal(8),
+    RESPONSAVEL: getVal(9),
+    FOI_LANCADO_NO_SISTEMA: getVal(10),
+    TRATATIVA: getVal(11),
+    CONSTA_FISICAMENTE: getVal(12),
+    DATA_DA_COLETA: getVal(13),
+    NOTA_FISCAL_DE_SAIDA: getVal(14),
+    NOTA_FISCAL_DE_REPOSICAO: getVal(15),
+    STATUS: getVal(16),
+    OK_STATUS: getVal(17),
+    OBSERVACOES: getVal(18),
+    THREAD_ID: getVal(19)
+  };
 
   return obj;
 }
