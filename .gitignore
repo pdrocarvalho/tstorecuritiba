@@ -34,3 +34,5 @@ drizzle/meta
 # Temporários
 *.tmp
 *.swp
+
+.agents/mcp_config.json

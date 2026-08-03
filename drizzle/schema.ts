@@ -11,6 +11,7 @@ import {
   boolean,
   date,
   jsonb,
+  pgView,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
@@ -408,3 +409,22 @@ export const syncHistoryRelations = relations(syncHistory, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ─── VIEW DE KPIS DOS PEDIDOS (CRUZAMENTO DE DADOS) ──────────────────────────
+export const vwPedidosKpis = pgView("vw_pedidos_kpis", {
+  pedidoId: integer("pedido_id"),
+  sheetId: varchar("sheet_id", { length: 255 }),
+  quantidade: integer("quantidade"),
+  qtdePorCaixa: integer("qtde_por_caixa"),
+  previsaoEntrega: date("previsao_entrega"),
+  dataEntrega: date("data_entrega"),
+  orderStatus: varchar("order_status", { length: 255 }),
+  volumesCaixas: integer("volumes_caixas"),
+  remetente: varchar("remetente", { length: 255 }),
+  notaFiscal: varchar("nota_fiscal", { length: 255 }),
+  produtoSku: varchar("produto_sku", { length: 255 }),
+  produtoDescricao: text("produto_descricao"),
+  consultorNome: varchar("consultor_nome", { length: 255 }),
+  consultorEmail: varchar("consultor_email", { length: 320 }),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
+});
